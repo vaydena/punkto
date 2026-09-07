@@ -1,0 +1,16 @@
+# ── Punkto — was NIE ins Repo (und damit nie zu Hostinger) gehört ──────────────
+# ⛔ WICHTIG: Betreiber-/Operator-Schlüssel liegt NUR lokal im Klartext vor.
+#    Niemals committen, niemals deployen (würde den Admin-Bereich öffentlich machen).
+*.local.txt
+OPERATOR-KEY.local.txt
+
+# Deploy-Diagnose (lokaler curl-FTPS-Lauf)
+deploy-local.log
+
+# Betriebssystem / Editor
+.DS_Store
+Thumbs.db
+*.swp
+
+# Node (nur falls je Tools dazukommen)
+node_modules/

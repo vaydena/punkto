@@ -1,0 +1,189 @@
+name: Deploy zu Hostinger
+
+# Loest bei jedem Push auf main (und manuell per workflow_dispatch) ein Deploy aus.
+# Laedt den statischen Seitenbaum per FTPS mit curl nach /punkto/ hoch.
+# Playbook: reference_hostinger_ftps_deploy / feedback_ftps_upload_checkliste.
+#
+# ⛔ NIE mitdeployen (siehe find-Ausschluesse unten):
+#   - *.local.txt  (v. a. OPERATOR-KEY.local.txt) — der Betreiber-Schluessel liegt nur
+#     lokal im Klartext; im oeffentlichen Web-Root wuerde er den Admin-Bereich oeffnen.
+#   - supabase/    (Edge Functions — separat via Supabase deployt, nicht statisch)
+#   - gen_icons.py, .git/, .github/, deploy-local.*, README.md, .gitignore
+#
+# Lehren (uebernommen aus lagerverwaltung/schulungsunterlagen):
+# - "530 Login incorrect" = Secret FTP_PASSWORD falsch (z. B. Benutzername statt Passwort).
+#   Darauf NIE wiederholen: Hostingers Brute-Force-Schutz sperrt sonst die Runner-IP
+#   (danach curl 28 / Connect-Timeout) -> genau EIN Re-Dispatch spaeter (andere IP).
+# - Viele schnelle Einzel-Logins triggern die Upload-Drossel (450/550) ->
+#   mehrere Dateien je curl-Aufruf (EIN Login, mehrere STOR).
+# - Der Linux-Runner (curl + OpenSSL) ist vom Windows-Schannel-Abbruch (450 Link lost)
+#   nicht betroffen; lokal hilft --tlsv1.2 (deploy-local.ps1).
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-hostinger-punkto
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repo auschecken
+        uses: actions/checkout@v4
+
+      # Solange das Passwort-Secret fehlt, wird NICHT deployt (Lauf bleibt gruen).
+      # Liegt FTP_PASSWORD stattdessen als VARIABLE vor (Tab "Variables" statt "Secrets"):
+      # rot mit klarer Anleitung - Variablen sind im Klartext lesbar und fuer
+      # secrets.FTP_PASSWORD unsichtbar. (VAR_MISPLACED ist nur true/false.)
+      - name: Secret pruefen
+        id: guard
+        env:
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          VAR_MISPLACED: ${{ vars.FTP_PASSWORD != '' }}
+        run: |
+          if [ -z "$FTP_PASSWORD" ]; then
+            if [ "$VAR_MISPLACED" = "true" ]; then
+              echo "::error::FTP_PASSWORD wurde als VARIABLE angelegt (Tab 'Variables'). Dort ist es im Klartext lesbar und fuer den Workflow unsichtbar. Bitte die Variable loeschen und unter Settings > Secrets and variables > Actions > Tab 'Secrets' > 'New repository secret' das Passwort als SECRET mit Namen FTP_PASSWORD anlegen."
+              exit 1
+            fi
+            echo "::notice::FTP_PASSWORD fehlt noch - Deploy uebersprungen. Secret im Repo anlegen (Settings > Secrets and variables > Actions > Tab 'Secrets')."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # EIN Login-Versuch. 530 -> sofort abbrechen mit klarer Meldung (kein Retry,
+      # sonst IP-Sperre). Nur bei Netz-Timeout (curl 28) zwei weitere Versuche.
+      - name: FTP-Login pruefen (fast-fail)
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          FTPHOST: ftp.vaydena.de
+          FTPUSER: u424339903.deploy
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          for i in 1 2 3; do
+            rc=0
+            curl --ssl-reqd -k --connect-timeout 20 --max-time 35 \
+                 --fail --silent --show-error \
+                 --user "$FTPUSER:$FTP_PASSWORD" "ftp://$FTPHOST/" -o /dev/null || rc=$?
+            case $rc in
+              0)  echo "FTP-Login OK - fahre mit Upload fort."; exit 0 ;;
+              67) echo "::error::FTP-Login abgelehnt (530 Login incorrect). Das Secret FTP_PASSWORD ist falsch - unter Settings > Secrets and variables > Actions das REINE Passwort des Deploy-FTP-Kontos $FTPUSER eintragen (nicht den Benutzernamen, keine Beschriftungszeilen)."; exit 67 ;;
+              28) echo "Versuch $i/3: Verbindungs-Timeout (Runner-IP gerade von Hostinger gesperrt?)"; sleep 10 ;;
+              *)  echo "::error::curl-Fehler $rc beim FTP-Login."; exit $rc ;;
+            esac
+          done
+          echo "::error::FTP nicht erreichbar (curl 28). Spaeter erneut ausloesen - ein Re-Dispatch bekommt eine andere Runner-IP."
+          exit 28
+
+      # FTPS via curl, gebuendelt: 6 Dateien je curl-Aufruf = EIN Login, mehrere STOR.
+      #   --ssl-reqd          erzwingt AUTH TLS (expliziter FTPS auf Port 21)
+      #   -k                  ignoriert Hostingers *.hstgr.io-Zertifikat (Namensfehler ueber ftp.vaydena.de)
+      #   --ftp-create-dirs   legt Unterordner (assets/, assets/data/) automatisch an
+      #   --user              Passwort als EIN Argument -> Sonderzeichen unkritisch
+      #   -w %{exitcode}      Ergebnis JE Datei innerhalb eines Pakets
+      - name: Deploy via FTPS (curl, gebuendelt, selbstheilend)
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          FTPHOST: ftp.vaydena.de
+          FTPUSER: u424339903.deploy
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTPDIR: punkto
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < <(find . -type f \
+                     -not -path './.git/*' \
+                     -not -path './.github/*' \
+                     -not -path './supabase/*' \
+                     -not -path './test/*' \
+                     -not -path './tools/*' \
+                     -not -path '*/node_modules/*' \
+                     -not -name '*.local.txt' \
+                     -not -name 'gen_icons.py' \
+                     -not -name 'deploy-local.ps1' \
+                     -not -name 'deploy-local.log' \
+                     -not -name 'README.md' \
+                     -not -name '.gitignore' \
+                   | sed 's|^\./||' | sort)
+          n=${#FILES[@]}; echo "Dateien: $n"
+          printf '  %s\n' "${FILES[@]}"
+          ftp() {
+            curl --ssl-reqd -k --connect-timeout 30 --max-time 600 \
+                 --silent --show-error \
+                 --user "$FTPUSER:$FTP_PASSWORD" "$@"
+          }
+          dialog() {   # Server-Dialog eines Fehlversuchs (aus curl -v stderr), PASS maskiert
+            grep -aE '^(< [45]|> (STOR|DELE|RNFR|RNTO|CWD|MKD)|curl: )' "$1" \
+              | sed -E 's/^(> PASS ).*/\1***/' | tail -8 | sed 's/^/      /' || true
+          }
+          failed=()
+          BATCH=6; i=0
+          while [ $i -lt $n ]; do
+            batch=("${FILES[@]:$i:$BATCH}")
+            args=(); for f in "${batch[@]}"; do args+=(-T "$f" "ftp://$FTPHOST/$FTPDIR/$f"); done
+            rc=0; out=$(ftp --ftp-create-dirs -w '%{exitcode} %{url}\n' "${args[@]}" 2>/tmp/batch.err) || rc=$?
+            if [ $rc -eq 67 ]; then echo "::error::FTP-Login abgelehnt (530) - Secret FTP_PASSWORD pruefen."; exit 67; fi
+            for f in "${batch[@]}"; do
+              code=$(printf '%s\n' "$out" | awk -v u="ftp://$FTPHOST/$FTPDIR/$f" '$2==u {print $1; exit}')
+              [ -n "$code" ] || code=$rc
+              if [ "$code" = "0" ]; then echo "  OK   $f"; else echo "  FEHL $f (curl $code)"; failed+=("$f"); fi
+            done
+            [ $rc -eq 0 ] || dialog /tmp/batch.err
+            i=$((i+BATCH)); sleep 1
+          done
+
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "Selbstheilung fuer ${#failed[@]} Datei(en):"
+            still=()
+            for f in "${failed[@]}"; do
+              base=$(basename "$f"); dir=$(dirname "$f")
+              if [ "$dir" = "." ]; then dir=""; else dir="$dir/"; fi
+              tgt="ftp://$FTPHOST/$FTPDIR/$f"
+              echo "  ### $f"
+              echo "    Zielordner (LIST -a, nur Treffer):"
+              ftp -X "LIST -a" "ftp://$FTPHOST/$FTPDIR/$dir" 2>/dev/null | grep -aF "$base" | sed 's/^/      /' || true
+              rc=0; ftp -v --fail -T "$f" "$tgt" -o /dev/null 2>/tmp/r.err || rc=$?
+              if [ $rc -eq 0 ]; then echo "  OK   direkt (einzeln): $f"; continue; fi
+              echo "    direkt rc=$rc"; dialog /tmp/r.err
+              if [ $rc -eq 67 ]; then echo "::error::FTP-Login abgelehnt (530)."; exit 67; fi
+              sleep 2
+              rc=0; ftp -v --fail -Q "*DELE $FTPDIR/${dir}.in.${base}." -T "$f" "$tgt" -o /dev/null 2>/tmp/r.err || rc=$?
+              if [ $rc -eq 0 ]; then echo "  OK   nach DELE .in.${base}. : $f"; continue; fi
+              echo "    nach DELE rc=$rc"; dialog /tmp/r.err; sleep 2
+              rc=0; ftp -v --fail -T "$f" "ftp://$FTPHOST/$FTPDIR/${dir}upl_${base}" -Q "-RNFR upl_${base}" -Q "-RNTO ${base}" -o /dev/null 2>/tmp/r.err || rc=$?
+              if [ $rc -eq 0 ]; then echo "  OK   via upl_${base} + RNTO : $f"; continue; fi
+              echo "    Ersatzname rc=$rc"; dialog /tmp/r.err; sleep 2
+              rc=0; ftp -v --fail -T "$f" "ftp://$FTPHOST/$FTPDIR/${dir}${base}.txt" -Q "-RNFR ${base}.txt" -Q "-RNTO ${base}" -o /dev/null 2>/tmp/r.err || rc=$?
+              if [ $rc -eq 0 ]; then echo "  OK   via ${base}.txt + RNTO : $f"; continue; fi
+              echo "    .txt rc=$rc"; dialog /tmp/r.err
+              still+=("$f")
+            done
+            if [ ${#still[@]} -gt 0 ]; then echo "::error::Nicht hochgeladen: ${still[*]}"; exit 1; fi
+          fi
+          echo "Alle $n Dateien hochgeladen -> /$FTPDIR/"
+
+      # Live-Pruefung ueber HTTPS (mit Cache-Buster): Startseiten-Titel, App-Shell, Marker.
+      - name: Verify (HTTPS)
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          SITE: https://punkto.vaydena.de
+        run: |
+          bad=0
+          want=$(grep -o '<title>[^<]*</title>' index.html | head -1)
+          have=$(curl -s "$SITE/index.html?cb=$RANDOM" | grep -o '<title>[^<]*</title>' | head -1)
+          echo "index.html Titel: lokal=$want live=$have"; [ "$want" = "$have" ] || bad=1
+          for f in anmelden.html app.html konto.html betreiber.html impressum.html datenschutz.html agb.html \
+                   assets/punkto.css assets/pk-app.js assets/pk-engine.js assets/data/punkto-foods.json \
+                   sw.js manifest.webmanifest deploy-version.txt; do
+            loc=$(stat -c %s "$f"); res=$(curl -s -o /dev/null -w '%{http_code} %{size_download}' "$SITE/$f?cb=$RANDOM")
+            echo "$f: lokal=$loc live=$res"; [ "$res" = "200 $loc" ] || bad=1
+          done
+          # Marker gegenpruefen (erste Zeile von deploy-version.txt muss live erscheinen)
+          marker=$(head -1 deploy-version.txt)
+          live_marker=$(curl -s "$SITE/deploy-version.txt?cb=$RANDOM" | head -1)
+          echo "Marker: lokal=$marker live=$live_marker"; [ "$marker" = "$live_marker" ] || bad=1
+          if [ $bad -ne 0 ]; then echo "::error::Live-Stand weicht ab (siehe oben)."; exit 1; fi
+          echo "Live-Stand verifiziert ($marker)."

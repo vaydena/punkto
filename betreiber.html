@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12261c">
+<meta name="color-scheme" content="light">
+<meta name="robots" content="noindex, nofollow">
+<title>Punkto — Betreiber</title>
+
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/punkto.css">
+
+<style>
+  /* Betreiber-spezifische Ergänzungen (network-first, NICHT im SW-Precache) */
+  .b-loading{min-height:100dvh;display:grid;place-items:center;color:var(--muted)}
+  .b-loading .spin{width:34px;height:34px;border:3px solid var(--green-tint-2);border-top-color:var(--green);
+    border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .admin-head .brand .logo{width:30px;height:30px}
+  .admin-head .brand{font-size:1.1rem;gap:9px}
+  .admin-head .tag{background:rgba(255,255,255,.14);color:#cfe0d6}
+
+  .sec-head{display:flex;align-items:center;gap:12px;margin:26px 0 12px}
+  .sec-head h2{font-size:1.15rem;margin:0}
+  .sec-head .sp{margin-left:auto}
+  .muted{color:var(--muted)}
+  .mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+  /* Registrierungs-Sparkline */
+  .spark-card{background:var(--card);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:6px}
+  .spark{display:flex;align-items:flex-end;gap:3px;height:64px;margin-top:12px}
+  .spark .bar{flex:1;min-width:2px;background:var(--green-tint-2);border-radius:3px 3px 0 0;position:relative;transition:background .12s}
+  .spark .bar.has{background:var(--green)}
+  .spark .bar:hover{background:var(--green-700)}
+  .spark-x{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);margin-top:6px}
+
+  /* Suchfeld in Tabellenkopf */
+  .th-search{position:relative;flex:1;max-width:320px}
+  .th-search input{padding:.5em .8em .5em 2.2em;font-size:.9rem}
+  .th-search svg{position:absolute;left:.7em;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--muted)}
+
+  .seg-mini{display:inline-flex;background:var(--line-2);border-radius:var(--r-pill);padding:3px;gap:3px}
+  .seg-mini button{border:0;background:transparent;border-radius:var(--r-pill);padding:.45em .9em;font:inherit;font-weight:700;
+    font-size:.84rem;cursor:pointer;color:var(--muted)}
+  .seg-mini button.on{background:#fff;color:var(--green-700);box-shadow:var(--shadow-sm)}
+
+  .table-foot{padding:14px 20px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .empty{padding:34px 20px;text-align:center;color:var(--muted)}
+
+  .adm-two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  @media(max-width:760px){.adm-two{grid-template-columns:1fr}}
+  .card h3{margin:0 0 4px}
+
+  /* Nutzer-Detail (nutzt .sheet-back/.sheet aus punkto.css) */
+  .icon-btn{background:none;border:0;font-size:1.2rem;line-height:1;color:var(--muted);cursor:pointer;padding:.2em .4em;border-radius:8px}
+  .icon-btn:hover{background:var(--line-2);color:var(--ink)}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.92rem;margin:0 0 4px}
+  .kv dt{color:var(--muted);font-weight:600}
+  .kv dd{margin:0;text-align:right;font-weight:600;word-break:break-word}
+  .sub-box{background:var(--card-2);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin:14px 0}
+  .pay-list{list-style:none;margin:8px 0 0;padding:0;font-size:.88rem}
+  .pay-list li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-2)}
+  .pay-list li:last-child{border-bottom:0}
+  .pay-list .pl-meta{color:var(--muted);font-size:.8rem}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:480px){.form-row{grid-template-columns:1fr}}
+  .divider{height:1px;background:var(--line);margin:20px 0}
+
+  /* Toast */
+  .toast{position:fixed;left:50%;bottom:calc(24px + var(--sab));transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:.8em 1.3em;border-radius:var(--r-pill);font-weight:700;font-size:.92rem;
+    box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:all .25s;z-index:120;max-width:90vw;text-align:center}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:var(--danger)}
+</style>
+</head>
+<body class="admin">
+
+<!-- ========================= LADEZUSTAND ========================= -->
+<div class="b-loading" id="loading">
+  <div>
+    <div class="spin"></div>
+    <div>Betreiber-Bereich wird geladen …</div>
+  </div>
+</div>
+
+<!-- ========================= LOGIN-GATE ========================= -->
+<div class="admin-login hide" id="login">
+  <form class="auth-card" id="loginForm" autocomplete="off">
+    <span class="brand">
+      <svg class="logo" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="32" height="32" rx="10" fill="#0fa958"/>
+        <circle cx="17" cy="17" r="6.6" fill="#ffc555"/>
+      </svg>
+      Punkto
+    </span>
+    <h1>Betreiber-Bereich</h1>
+    <p class="sub">Bitte den Betreiber-Schlüssel eingeben.</p>
+    <div class="alert err hide" id="loginErr"></div>
+    <div class="field">
+      <label for="keyInput">Betreiber-Schlüssel</label>
+      <input type="password" id="keyInput" placeholder="••••••••••••" autocomplete="off" required>
+    </div>
+    <button type="submit" class="btn primary block big" id="loginBtn">Anmelden</button>
+    <p class="muted center" style="margin:16px 0 0;font-size:.82rem">
+      Zugang nur für den Betrieb. Der Schlüssel wird ausschließlich lokal in dieser
+      Sitzung gehalten und beim Schließen des Tabs verworfen.
+    </p>
+  </form>
+</div>
+
+<!-- ========================= DASHBOARD ========================= -->
+<div class="hide" id="dash">
+  <header class="admin-head">
+    <div class="wrap">
+      <span class="brand">
+        <svg class="logo" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="1" y="1" width="32" height="32" rx="10" fill="#0fa958"/>
+          <circle cx="17" cy="17" r="6.6" fill="#ffc555"/>
+        </svg>
+        Punkto <span class="tag" style="margin-left:2px">Betreiber</span>
+      </span>
+      <span class="sp"></span>
+      <a class="btn ghost small" href="app.html">Zur App</a>
+      <button class="btn ghost small" id="logoutBtn">Abmelden</button>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <!-- KPI -->
+    <div class="kpi-grid" id="kpis"></div>
+
+    <!-- Registrierungen -->
+    <div class="spark-card" id="sparkCard" hidden>
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <h3 style="margin:0;font-size:1rem">Registrierungen</h3>
+        <span class="muted" style="font-size:.85rem">letzte 30 Tage</span>
+      </div>
+      <div class="spark" id="spark"></div>
+      <div class="spark-x"><span id="sparkFrom"></span><span id="sparkTo">heute</span></div>
+    </div>
+
+    <!-- NUTZER -->
+    <div class="sec-head">
+      <h2>Nutzer &amp; Abonnements</h2>
+    </div>
+    <div class="table-card">
+      <div class="th">
+        <h3>Konten</h3>
+        <span class="sp" style="flex:1"></span>
+        <div class="th-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" id="userSearch" placeholder="Suchen (E-Mail / Name) …" autocomplete="off">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>E-Mail</th><th>Name</th><th>Status</th><th>Läuft bis</th><th>Zugang</th><th>Registriert</th>
+            </tr>
+          </thead>
+          <tbody id="userRows"></tbody>
+        </table>
+      </div>
+      <div class="empty hide" id="userEmpty">Keine Nutzer gefunden.</div>
+      <div class="table-foot">
+        <span class="muted" id="userCount" style="font-size:.85rem"></span>
+        <span style="flex:1"></span>
+        <button class="btn outline small hide" id="userMore">Mehr laden</button>
+      </div>
+    </div>
+
+    <!-- COMMUNITY -->
+    <div class="sec-head">
+      <h2>Community-Moderation</h2>
+      <span class="sp"></span>
+      <div class="seg-mini" id="postFilter">
+        <button data-f="all" class="on">Alle</button>
+        <button data-f="reported">Gemeldet</button>
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr><th>Autor</th><th>Art</th><th>Beitrag</th><th>❤</th><th>Status</th><th>Datum</th><th></th></tr>
+          </thead>
+          <tbody id="postRows"></tbody>
+        </table>
+      </div>
+      <div class="empty hide" id="postEmpty">Keine Beiträge.</div>
+    </div>
+
+    <!-- WERKZEUGE -->
+    <div class="sec-head"><h2>Werkzeuge</h2></div>
+    <div class="adm-two">
+      <div class="card">
+        <h3>Daten-Export</h3>
+        <p class="muted" style="font-size:.9rem">
+          Lädt alle Nutzer, Abonnements und Zahlungen als JSON-Datei auf dieses Gerät.
+        </p>
+        <button class="btn outline" id="exportBtn">Export herunterladen (JSON)</button>
+      </div>
+      <div class="card">
+        <h3>Schlüssel wechseln</h3>
+        <p class="muted" style="font-size:.9rem">
+          Setzt einen neuen Betreiber-Schlüssel (min. 12 Zeichen). Notiere ihn dir —
+          er wird nicht angezeigt.
+        </p>
+        <div class="alert err hide" id="keyErr"></div>
+        <div class="field"><input type="password" id="newKey" placeholder="Neuer Schlüssel" autocomplete="new-password"></div>
+        <div class="field"><input type="password" id="newKey2" placeholder="Neuer Schlüssel (wiederholen)" autocomplete="new-password"></div>
+        <button class="btn dark" id="setKeyBtn">Schlüssel setzen</button>
+      </div>
+    </div>
+
+    <p class="muted center" style="margin:34px 0 10px;font-size:.82rem">
+      Punkto Betreiber · Vaydena – Softwarelösungen
+    </p>
+  </main>
+</div>
+
+<!-- ========================= NUTZER-DETAIL (Sheet) ========================= -->
+<div class="sheet-back" id="sheetBack" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle">
+    <div class="grab"></div>
+    <div class="sh">
+      <h3 id="shTitle">Nutzer</h3>
+      <button class="icon-btn" id="shClose" aria-label="Schließen">✕</button>
+    </div>
+    <div id="shBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="assets/pk-app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var API = window.PKApi;
+  var SS_KEY = "pk_admin_key";          // Session-Storage-Schlüssel (nur diese Sitzung)
+  var KEY = "";                         // Betreiber-Schlüssel im Speicher
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = { loading: $("loading"), login: $("login"), dash: $("dash") };
+
+  /* --------------------------------------------------------------- helpers */
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtEur(cents) {
+    var v = (Number(cents) || 0) / 100;
+    return v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  }
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso); if (isNaN(d)) return "—";
+    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+  function fmtDateTime(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso); if (isNaN(d)) return "—";
+    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) +
+      " " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  }
+  var ST_LABEL = { trial: "Test", active: "Aktiv", past_due: "Überfällig", canceled: "Gekündigt", blocked: "Gesperrt", expired: "Abgelaufen" };
+  function stLabel(s) { return ST_LABEL[s] || (s || "—"); }
+  function stDotCls(s) {
+    if (s === "active") return "active";
+    if (s === "trial") return "trial";
+    if (s === "past_due" || s === "expired" || s === "canceled" || s === "blocked") return s === "past_due" ? "expired" : s;
+    return "";
+  }
+
+  var toastT = null;
+  function toast(msg, isErr) {
+    var t = $("toast");
+    t.textContent = msg; t.className = "toast on" + (isErr ? " err" : "");
+    clearTimeout(toastT);
+    toastT = setTimeout(function () { t.className = "toast"; }, 2600);
+  }
+
+  /* Zentrale Fehlerbehandlung: 403/401 => Schlüssel ungültig => zurück zum Login. */
+  function handleErr(e, fallbackMsg) {
+    if (e && (e.status === 403 || e.status === 401 || e.code === "forbidden")) {
+      doLogout("Sitzung abgelaufen — bitte erneut anmelden.");
+      return;
+    }
+    toast((e && e.message) ? (fallbackMsg + ": " + e.message) : fallbackMsg, true);
+  }
+
+  /* --------------------------------------------------------------- auth */
+  function getStoredKey() { try { return sessionStorage.getItem(SS_KEY) || ""; } catch (e) { return ""; } }
+  function storeKey(k) { try { if (k) sessionStorage.setItem(SS_KEY, k); else sessionStorage.removeItem(SS_KEY); } catch (e) {} }
+
+  function showView(which) {
+    el.loading.classList.toggle("hide", which !== "loading");
+    el.login.classList.toggle("hide", which !== "login");
+    el.dash.classList.toggle("hide", which !== "dash");
+  }
+
+  function doLogout(msg) {
+    KEY = ""; storeKey("");
+    showView("login");
+    if (msg) { var le = $("loginErr"); le.textContent = msg; le.classList.remove("hide"); }
+    $("keyInput").value = "";
+  }
+
+  /* Prüft den Schlüssel per stats() und rendert bei Erfolg das Dashboard. */
+  async function activate(key) {
+    var stats = await API.admin.stats(key);   // wirft bei ungültigem Schlüssel
+    KEY = key; storeKey(key);
+    showView("dash");
+    renderStats(stats);
+    loadUsers(true);
+    loadPosts();
+  }
+
+  /* --------------------------------------------------------------- stats */
+  function kpi(v, l, cls) {
+    return '<div class="kpi ' + (cls || "") + '"><div class="v mono">' + v + '</div><div class="l">' + esc(l) + '</div></div>';
+  }
+  function renderStats(s) {
+    var signups = s.signups_30d || [];
+    var new30 = signups.reduce(function (a, x) { return a + (Number(x.n) || 0); }, 0);
+    $("kpis").innerHTML =
+      kpi(s.users_total || 0, "Nutzer") +
+      kpi(s.subs_active || 0, "Aktive Abos", "g") +
+      kpi(s.subs_trial || 0, "Im Test", "a") +
+      kpi(s.subs_expired || 0, "Abgelaufen") +
+      kpi(fmtEur(s.revenue_cents), "Umsatz", "g") +
+      kpi(s.payments_count || 0, "Zahlungen") +
+      kpi(s.posts_count || 0, "Beiträge") +
+      kpi(new30, "Neu (30 T.)");
+    renderSpark(signups);
+  }
+  function renderSpark(signups) {
+    var map = {};
+    signups.forEach(function (x) { map[String(x.day).slice(0, 10)] = Number(x.n) || 0; });
+    var days = [], today = new Date();
+    for (var i = 29; i >= 0; i--) {
+      var d = new Date(today); d.setDate(d.getDate() - i);
+      var key = d.toISOString().slice(0, 10);
+      days.push({ day: key, n: map[key] || 0 });
+    }
+    var max = days.reduce(function (m, x) { return Math.max(m, x.n); }, 0);
+    var card = $("sparkCard");
+    if (!max) { card.hidden = true; return; }
+    card.hidden = false;
+    $("spark").innerHTML = days.map(function (x) {
+      var h = x.n ? Math.max(8, Math.round((x.n / max) * 100)) : 3;
+      return '<div class="bar' + (x.n ? " has" : "") + '" style="height:' + h + '%" title="' +
+        fmtDate(x.day) + ": " + x.n + '"></div>';
+    }).join("");
+    $("sparkFrom").textContent = fmtDate(days[0].day);
+  }
+
+  /* --------------------------------------------------------------- users */
+  var uOffset = 0, uLimit = 50, uQuery = "", uTotal = 0;
+
+  async function loadUsers(reset) {
+    if (reset) { uOffset = 0; $("userRows").innerHTML = ""; }
+    try {
+      var d = await API.admin.users(KEY, uQuery, uOffset, uLimit);
+      var rows = d.users || [];
+      uTotal += rows.length;
+      var tb = $("userRows");
+      rows.forEach(function (u) { tb.appendChild(userRow(u)); });
+      $("userEmpty").classList.toggle("hide", !(uOffset === 0 && rows.length === 0));
+      $("userMore").classList.toggle("hide", rows.length < uLimit);
+      $("userCount").textContent = uTotal ? (uTotal + " angezeigt") : "";
+      uOffset += rows.length;
+    } catch (e) { handleErr(e, "Nutzer konnten nicht geladen werden"); }
+  }
+  function userRow(u) {
+    var tr = document.createElement("tr");
+    tr.className = "clk";
+    var until = u.ends_at || u.current_period_end || u.trial_ends_at;
+    tr.innerHTML =
+      "<td>" + esc(u.email) + "</td>" +
+      "<td>" + esc(u.display_name || "—") + "</td>" +
+      '<td><span class="st-dot ' + stDotCls(u.status) + '">' + esc(stLabel(u.status)) + "</span></td>" +
+      "<td class='mono'>" + fmtDate(until) + "</td>" +
+      "<td>" + (u.access ? '<span class="tag">aktiv</span>' : '<span class="tag red">gesperrt</span>') + "</td>" +
+      "<td class='mono'>" + fmtDate(u.created_at) + "</td>";
+    tr.addEventListener("click", function () { openUser(u.id); });
+    return tr;
+  }
+
+  var searchT = null;
+  $("userSearch").addEventListener("input", function (e) {
+    clearTimeout(searchT);
+    var v = e.target.value;
+    searchT = setTimeout(function () { uQuery = v.trim(); uTotal = 0; loadUsers(true); }, 300);
+  });
+  $("userMore").addEventListener("click", function () { loadUsers(false); });
+
+  /* --------------------------------------------------------------- user detail (sheet) */
+  var sheet = $("sheetBack");
+  function openSheet() { sheet.classList.add("on"); sheet.setAttribute("aria-hidden", "false"); }
+  function closeSheet() { sheet.classList.remove("on"); sheet.setAttribute("aria-hidden", "true"); }
+  $("shClose").addEventListener("click", closeSheet);
+  sheet.addEventListener("click", function (e) { if (e.target === sheet) closeSheet(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
+
+  var curUserId = null;
+
+  async function openUser(id) {
+    curUserId = id;
+    $("shTitle").textContent = "Nutzer";
+    $("shBody").innerHTML = '<div class="b-loading" style="min-height:180px"><div class="spin"></div></div>';
+    openSheet();
+    try {
+      var d = await API.admin.user(KEY, id);
+      renderUser(d);
+    } catch (e) {
+      $("shBody").innerHTML = '<div class="alert err">Konnte Nutzer nicht laden.</div>';
+      handleErr(e, "Fehler");
+    }
+  }
+
+  function renderUser(d) {
+    var u = d.user || {}, sub = d.subscription || {}, pays = d.payments || [];
+    $("shTitle").textContent = u.display_name || u.email || "Nutzer";
+
+    var profile =
+      '<dl class="kv">' +
+      row("E-Mail", esc(u.email) + (u.email_verified ? ' <span class="tag" style="margin-left:4px">verifiziert</span>' : "")) +
+      row("Name", esc(u.display_name || "—")) +
+      row("Geschlecht", esc({ m: "männlich", f: "weiblich", d: "divers" }[u.sex] || u.sex || "—")) +
+      row("Geburtsjahr", esc(u.birth_year || "—")) +
+      row("Größe", u.height_cm ? esc(u.height_cm) + " cm" : "—") +
+      row("Start / Ziel", (u.start_weight_kg ? esc(u.start_weight_kg) + " kg" : "—") + " → " + (u.goal_weight_kg ? esc(u.goal_weight_kg) + " kg" : "—")) +
+      row("Tagesbudget", (u.daily_budget != null ? esc(u.daily_budget) + " P." : "—") + (u.weekly_extra != null ? " · Extra " + esc(u.weekly_extra) : "")) +
+      row("Einträge", esc(d.diary_count || 0) + " Tagebuch · " + esc(d.weight_count || 0) + " Gewicht") +
+      row("Registriert", fmtDateTime(u.created_at)) +
+      row("Zuletzt aktiv", fmtDateTime(u.last_login_at)) +
+      "</dl>";
+
+    var subBox =
+      '<div class="sub-box">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+      '<span class="st-dot ' + stDotCls(sub.status) + '" style="font-size:.95rem">' + esc(stLabel(sub.status)) + "</span>" +
+      '<span class="sp" style="flex:1"></span>' +
+      (sub.access ? '<span class="tag">Zugang aktiv</span>' : '<span class="tag red">kein Zugang</span>') +
+      "</div>" +
+      '<dl class="kv">' +
+      row("Plan", esc(sub.plan || "—")) +
+      row("Test bis", fmtDate(sub.trial_ends_at)) +
+      row("Bezahlt bis", fmtDate(sub.current_period_end)) +
+      "</dl>" +
+      (sub.notes ? '<p class="muted" style="font-size:.85rem;margin:8px 0 0;white-space:pre-wrap">' + esc(sub.notes) + "</p>" : "") +
+      "</div>";
+
+    var payList = pays.length
+      ? '<ul class="pay-list">' + pays.map(function (p) {
+          return "<li><span><b>" + fmtEur(p.amount_cents) + "</b> · " + esc(p.months || 1) + " Mon." +
+            '<span class="pl-meta"><br>' + esc({ bank: "Überweisung", paypal: "PayPal", cash: "Bar", other: "Sonstiges" }[p.method] || p.method) +
+            (p.ref ? " · " + esc(p.ref) : "") + "</span></span>" +
+            '<span class="pl-meta">' + fmtDate(p.created_at) + "</span></li>";
+        }).join("") + "</ul>"
+      : '<p class="muted" style="font-size:.88rem">Noch keine Zahlungen erfasst.</p>';
+
+    var actions =
+      '<div class="divider"></div>' +
+      "<h3 style='font-size:1rem'>Zugang verlängern</h3>" +
+      '<div class="form-row">' +
+      '<div class="field"><label>Monate</label><input type="number" id="exMonths" value="1" min="1" max="36"></div>' +
+      '<div class="field"><label>Betrag (€)</label><input type="number" id="exAmount" value="4.99" min="0" step="0.01"></div>' +
+      "</div>" +
+      '<div class="form-row">' +
+      '<div class="field"><label>Methode</label><select id="exMethod">' +
+      '<option value="bank">Überweisung</option><option value="paypal">PayPal</option><option value="cash">Bar</option><option value="other">Sonstiges</option>' +
+      "</select></div>" +
+      '<div class="field"><label>Referenz</label><input type="text" id="exRef" placeholder="z. B. Verwendungszweck"></div>' +
+      "</div>" +
+      '<div class="field"><label>Notiz (optional)</label><input type="text" id="exNote" placeholder="interne Notiz"></div>' +
+      '<button class="btn primary block" id="exBtn">Verlängern &amp; Zahlung erfassen</button>' +
+
+      '<div class="divider"></div>' +
+      "<h3 style='font-size:1rem'>Status setzen</h3>" +
+      '<div class="form-row">' +
+      '<div class="field"><label>Status</label><select id="stSel">' +
+      ["trial", "active", "past_due", "canceled", "blocked"].map(function (s) {
+        return '<option value="' + s + '"' + (s === sub.status ? " selected" : "") + ">" + stLabel(s) + "</option>";
+      }).join("") + "</select></div>" +
+      '<div class="field" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:8px;font-weight:600;margin:0 0 12px">' +
+      '<input type="checkbox" id="stClear" style="width:auto;margin:0"> Zeitraum löschen</label></div>' +
+      "</div>" +
+      '<button class="btn outline block" id="stBtn">Status übernehmen</button>' +
+
+      '<div class="divider"></div>' +
+      "<h3 style='font-size:1rem'>Interne Notiz</h3>" +
+      '<div class="field"><textarea id="ntArea" rows="3" placeholder="Notiz zum Konto …">' + esc(sub.notes || "") + "</textarea></div>" +
+      '<button class="btn outline block" id="ntBtn">Notiz speichern</button>';
+
+    $("shBody").innerHTML =
+      profile + subBox +
+      "<h3 style='font-size:1rem;margin-top:16px'>Zahlungen</h3>" + payList +
+      actions;
+
+    $("exBtn").addEventListener("click", doExtend);
+    $("stBtn").addEventListener("click", doSetStatus);
+    $("ntBtn").addEventListener("click", doAddNote);
+  }
+  function row(k, v) { return "<dt>" + k + "</dt><dd>" + v + "</dd>"; }
+
+  async function doExtend() {
+    var months = Math.max(1, Math.min(36, parseInt($("exMonths").value, 10) || 1));
+    var amtRaw = String($("exAmount").value).replace(",", ".");
+    var cents = Math.round((parseFloat(amtRaw) || 0) * 100);
+    var method = $("exMethod").value;
+    var ref = $("exRef").value.trim();
+    var note = $("exNote").value.trim();
+    var btn = $("exBtn"); btn.disabled = true;
+    try {
+      await API.admin.extend(KEY, curUserId, months, cents, method, ref, note);
+      toast("Verlängert um " + months + " Monat(e).");
+      await openUser(curUserId);      // Detail neu laden
+      refreshStats();
+    } catch (e) { handleErr(e, "Verlängern fehlgeschlagen"); btn.disabled = false; }
+  }
+  async function doSetStatus() {
+    var status = $("stSel").value, clear = $("stClear").checked;
+    var btn = $("stBtn"); btn.disabled = true;
+    try {
+      await API.admin.setStatus(KEY, curUserId, status, clear);
+      toast("Status: " + stLabel(status));
+      await openUser(curUserId);
+      refreshStats();
+    } catch (e) { handleErr(e, "Status fehlgeschlagen"); btn.disabled = false; }
+  }
+  async function doAddNote() {
+    var notes = $("ntArea").value;
+    var btn = $("ntBtn"); btn.disabled = true;
+    try {
+      await API.admin.addNote(KEY, curUserId, notes);
+      toast("Notiz gespeichert.");
+      btn.disabled = false;
+    } catch (e) { handleErr(e, "Notiz fehlgeschlagen"); btn.disabled = false; }
+  }
+
+  async function refreshStats() {
+    try { renderStats(await API.admin.stats(KEY)); } catch (e) { /* leise */ }
+  }
+
+  /* --------------------------------------------------------------- posts */
+  var postFilter = "all";
+  $("postFilter").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    postFilter = b.getAttribute("data-f");
+    [].forEach.call(this.children, function (c) { c.classList.toggle("on", c === b); });
+    loadPosts();
+  });
+
+  async function loadPosts() {
+    try {
+      var d = await API.admin.posts(KEY, postFilter === "reported");
+      var posts = d.posts || [];
+      var tb = $("postRows"); tb.innerHTML = "";
+      $("postEmpty").classList.toggle("hide", posts.length > 0);
+      posts.forEach(function (p) { tb.appendChild(postRow(p)); });
+    } catch (e) { handleErr(e, "Beiträge konnten nicht geladen werden"); }
+  }
+  var KIND = { text: "Text", weight: "Gewicht", milestone: "Meilenstein", meal: "Mahlzeit", activity: "Aktivität" };
+  function postRow(p) {
+    var tr = document.createElement("tr");
+    var body = (p.body || "").replace(/\s+/g, " ").trim();
+    if (body.length > 70) body = body.slice(0, 70) + "…";
+    tr.innerHTML =
+      "<td>" + esc(p.author_name || "—") + "</td>" +
+      "<td>" + esc(KIND[p.kind] || p.kind || "—") + "</td>" +
+      "<td>" + esc(body || "—") + "</td>" +
+      "<td class='mono'>" + (p.likes || 0) + "</td>" +
+      "<td>" + (p.hidden ? '<span class="tag gray">verborgen</span>' : '<span class="tag">sichtbar</span>') + "</td>" +
+      "<td class='mono'>" + fmtDate(p.created_at) + "</td>" +
+      "<td style='text-align:right;white-space:nowrap'></td>";
+    var cell = tr.lastChild;
+    var toggle = document.createElement("button");
+    toggle.className = "btn ghost small"; toggle.style.padding = ".4em .7em";
+    toggle.textContent = p.hidden ? "Zeigen" : "Verbergen";
+    toggle.addEventListener("click", function () { moderate(p.id, p.hidden ? "show" : "hide"); });
+    var del = document.createElement("button");
+    del.className = "btn danger small"; del.style.marginLeft = "6px"; del.style.padding = ".4em .7em";
+    del.textContent = "Löschen";
+    del.addEventListener("click", function () {
+      if (confirm("Diesen Beitrag endgültig löschen?")) moderate(p.id, "delete");
+    });
+    cell.appendChild(toggle); cell.appendChild(del);
+    return tr;
+  }
+  async function moderate(id, op) {
+    try {
+      await API.admin.moderate(KEY, id, op);
+      toast(op === "delete" ? "Beitrag gelöscht." : op === "hide" ? "Beitrag verborgen." : "Beitrag sichtbar.");
+      loadPosts(); refreshStats();
+    } catch (e) { handleErr(e, "Moderation fehlgeschlagen"); }
+  }
+
+  /* --------------------------------------------------------------- export */
+  $("exportBtn").addEventListener("click", async function () {
+    var btn = this; btn.disabled = true;
+    try {
+      var d = await API.admin.export(KEY);
+      var name = "punkto-export-" + new Date().toISOString().slice(0, 10) + ".json";
+      var blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = name; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 200);
+      toast("Export erstellt.");
+    } catch (e) { handleErr(e, "Export fehlgeschlagen"); }
+    btn.disabled = false;
+  });
+
+  /* --------------------------------------------------------------- set key */
+  $("setKeyBtn").addEventListener("click", async function () {
+    var err = $("keyErr"); err.classList.add("hide");
+    var k1 = $("newKey").value, k2 = $("newKey2").value;
+    if (k1.length < 12) { err.textContent = "Mindestens 12 Zeichen."; err.classList.remove("hide"); return; }
+    if (k1 !== k2) { err.textContent = "Die Schlüssel stimmen nicht überein."; err.classList.remove("hide"); return; }
+    if (!confirm("Betreiber-Schlüssel jetzt wechseln? Der alte wird sofort ungültig.")) return;
+    var btn = this; btn.disabled = true;
+    try {
+      await API.admin.setKey(KEY, k1);
+      KEY = k1; storeKey(k1);            // Sitzung mit neuem Schlüssel fortsetzen
+      $("newKey").value = ""; $("newKey2").value = "";
+      toast("Schlüssel gewechselt.");
+    } catch (e) { handleErr(e, "Wechsel fehlgeschlagen"); }
+    btn.disabled = false;
+  });
+
+  /* --------------------------------------------------------------- login form */
+  $("loginForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    $("loginErr").classList.add("hide");
+    var key = $("keyInput").value.trim();
+    if (!key) return;
+    var btn = $("loginBtn"); btn.disabled = true; btn.textContent = "Prüfe …";
+    try {
+      await activate(key);
+    } catch (err) {
+      var le = $("loginErr");
+      le.textContent = (err && err.status === 403) ? "Schlüssel ungültig." : "Anmeldung fehlgeschlagen. Bitte erneut versuchen.";
+      le.classList.remove("hide");
+    }
+    btn.disabled = false; btn.textContent = "Anmelden";
+  });
+  $("logoutBtn").addEventListener("click", function () { doLogout(); });
+
+  /* --------------------------------------------------------------- boot */
+  (async function boot() {
+    var k = getStoredKey();
+    if (!k) { showView("login"); return; }
+    try { await activate(k); }
+    catch (e) { doLogout(); }
+  })();
+})();
+</script>
+</body>
+</html>

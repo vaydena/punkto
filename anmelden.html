@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anmelden · Punkto</title>
+<meta name="description" content="Melde dich bei Punkto an oder starte deine kostenlose 14-Tage-Testphase.">
+<meta name="theme-color" content="#0fa958">
+<meta name="robots" content="noindex">
+
+<!-- ==================== PWA-DIREKTSTART (Kern früh im Head) ==================== -->
+<script>
+  (function(){
+    // beforeinstallprompt feuert nur EINMAL — früh abfangen und stashen.
+    window.__pkDeferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e){
+      e.preventDefault(); window.__pkDeferredPrompt = e;
+    });
+    function isStandalone(){
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    }
+    function savedToken(){
+      try { return localStorage.getItem('hf_saved_token') || ''; } catch(e){ return ''; }
+    }
+    var qs = new URLSearchParams(location.search);
+    // Direktstart: per App-Icon (?app=1) ODER als installierte App gestartet.
+    // Mit gemerktem Token direkt in die App — dort wird der Token geprüft (Selbstheilung).
+    if ((qs.get('app') === '1' || isStandalone()) && !qs.get('reset') && savedToken()) {
+      location.replace('app.html');
+    }
+  })();
+</script>
+
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/punkto.css">
+<style>
+  /* Install-Banner (Einstiegsseite) */
+  #pkInstall{position:fixed;left:0;right:0;bottom:0;z-index:60;padding:0 12px calc(12px + var(--sab));display:none}
+  #pkInstall.show{display:block;animation:fade .25s ease}
+  #pkInstall .in{max-width:460px;margin:0 auto;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r-lg);box-shadow:var(--shadow-lg);padding:14px 16px;display:flex;align-items:center;gap:12px}
+  #pkInstall .ic{width:42px;height:42px;flex:0 0 auto}
+  #pkInstall .tx{flex:1;min-width:0}
+  #pkInstall .tx b{display:block;font-size:.95rem}
+  #pkInstall .tx span{font-size:.82rem;color:var(--muted)}
+  #pkInstall .x{background:none;border:0;color:var(--muted);cursor:pointer;font-size:1.4rem;line-height:1;padding:4px 8px}
+  .welcome-card{background:var(--green-tint);border-radius:var(--r);padding:16px;margin-bottom:18px;text-align:center}
+  .welcome-card b{display:block;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<div class="auth-wrap">
+  <div class="auth-card">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="32" height="32" rx="10" fill="#0fa958"/>
+        <circle cx="17" cy="17" r="6.6" fill="#ffc555"/>
+      </svg>
+      Punkto
+    </a>
+
+    <!-- Willkommen zurück (nur reiner Browser mit gemerktem Token) -->
+    <div id="welcomeBack" class="welcome-card hide">
+      <b>Willkommen zurück! 👋</b>
+      <button class="btn primary block" id="wbOpen">Punkto öffnen</button>
+      <button class="linkbtn" id="wbOther" style="margin-top:10px">Mit anderem Konto anmelden</button>
+    </div>
+
+    <div id="authForms">
+      <!-- ============ LOGIN ============ -->
+      <div id="viewLogin" class="auth-view">
+        <h1>Willkommen zurück</h1>
+        <p class="sub">Melde dich mit deinem Konto an.</p>
+        <div id="loginAlert"></div>
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="loginEmail">E-Mail</label>
+            <input type="email" id="loginEmail" autocomplete="username" required placeholder="du@beispiel.de">
+          </div>
+          <div class="field">
+            <label for="loginPw">Passwort</label>
+            <input type="password" id="loginPw" autocomplete="current-password" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn primary block big" id="loginBtn">Anmelden</button>
+        </form>
+        <div class="auth-switch" style="margin-top:14px">
+          <button class="linkbtn" id="toReset">Passwort vergessen?</button>
+        </div>
+        <div class="auth-switch">
+          Noch kein Konto? <button class="linkbtn" id="toRegister">Kostenlos testen</button>
+        </div>
+      </div>
+
+      <!-- ============ REGISTER ============ -->
+      <div id="viewRegister" class="auth-view hide">
+        <h1>14 Tage gratis</h1>
+        <p class="sub">Leg dein Konto an — ohne Zahlungsdaten.</p>
+        <div id="regAlert"></div>
+        <form id="regForm" novalidate>
+          <div class="field">
+            <label for="regName">Dein Name (Anzeigename)</label>
+            <input type="text" id="regName" autocomplete="nickname" placeholder="z. B. Alex" maxlength="40">
+          </div>
+          <div class="field">
+            <label for="regEmail">E-Mail</label>
+            <input type="email" id="regEmail" autocomplete="username" required placeholder="du@beispiel.de">
+          </div>
+          <div class="field">
+            <label for="regPw">Passwort</label>
+            <input type="password" id="regPw" autocomplete="new-password" required placeholder="mind. 8 Zeichen">
+            <div class="hint">Mindestens 8 Zeichen.</div>
+          </div>
+          <button type="submit" class="btn primary block big" id="regBtn">Konto erstellen &amp; loslegen</button>
+          <p style="font-size:.78rem;color:var(--muted);margin:12px 0 0;text-align:center">
+            Mit dem Erstellen stimmst du den <a href="agb.html">AGB</a> und dem <a href="datenschutz.html">Datenschutz</a> zu.
+          </p>
+        </form>
+        <div class="auth-switch">
+          Schon dabei? <button class="linkbtn" id="toLogin">Anmelden</button>
+        </div>
+      </div>
+
+      <!-- ============ RESET ANFORDERN ============ -->
+      <div id="viewReset" class="auth-view hide">
+        <h1>Passwort zurücksetzen</h1>
+        <p class="sub">Wir schicken dir einen Link per E-Mail.</p>
+        <div id="resetAlert"></div>
+        <form id="resetForm" novalidate>
+          <div class="field">
+            <label for="resetEmail">E-Mail</label>
+            <input type="email" id="resetEmail" autocomplete="username" required placeholder="du@beispiel.de">
+          </div>
+          <button type="submit" class="btn primary block big" id="resetBtn">Link anfordern</button>
+        </form>
+        <div class="auth-switch">
+          <button class="linkbtn" id="resetToLogin">Zurück zur Anmeldung</button>
+        </div>
+      </div>
+
+      <!-- ============ NEUES PASSWORT (aus ?reset=token) ============ -->
+      <div id="viewNewPw" class="auth-view hide">
+        <h1>Neues Passwort</h1>
+        <p class="sub">Wähle ein neues Passwort für dein Konto.</p>
+        <div id="newPwAlert"></div>
+        <form id="newPwForm" novalidate>
+          <div class="field">
+            <label for="newPw">Neues Passwort</label>
+            <input type="password" id="newPw" autocomplete="new-password" required placeholder="mind. 8 Zeichen">
+            <div class="hint">Mindestens 8 Zeichen.</div>
+          </div>
+          <button type="submit" class="btn primary block big" id="newPwBtn">Passwort speichern</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Install-Banner -->
+<div id="pkInstall">
+  <div class="in">
+    <svg class="ic" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="1" y="1" width="32" height="32" rx="10" fill="#0fa958"/>
+      <circle cx="17" cy="17" r="6.6" fill="#ffc555"/>
+    </svg>
+    <div class="tx">
+      <b>Punkto als App</b>
+      <span id="pkInstallHint">Auf dem Startbildschirm ablegen — offline nutzbar.</span>
+    </div>
+    <button class="btn primary small" id="pkInstallBtn">Installieren</button>
+    <button class="x" id="pkInstallX" aria-label="Schließen">×</button>
+  </div>
+</div>
+
+<script src="assets/pk-app.js"></script>
+<script>
+(function(){
+  "use strict";
+  var API = window.PKApi;
+  var qs = new URLSearchParams(location.search);
+
+  /* ---------- View-Umschaltung ---------- */
+  var views = {
+    login: document.getElementById('viewLogin'),
+    register: document.getElementById('viewRegister'),
+    reset: document.getElementById('viewReset'),
+    newpw: document.getElementById('viewNewPw')
+  };
+  function show(name){
+    Object.keys(views).forEach(function(k){ views[k].classList.toggle('hide', k !== name); });
+  }
+  function alertBox(el, kind, msg){
+    el.innerHTML = '<div class="alert ' + kind + '">' + msg + '</div>';
+  }
+  function clearAlert(el){ el.innerHTML = ''; }
+
+  /* ---------- Token merken (Selbstheilung: Variant B) ---------- */
+  function rememberSession(d){
+    // Client speichert Token bereits; hier nur Absicherung.
+    if (d && d.token) API.setToken(d.token);
+  }
+
+  /* ---------- Direktstart / Willkommen zurück ---------- */
+  function isStandalone(){
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+  var hasToken = !!API.getToken();
+
+  if (qs.get('reset')) {
+    // Passwort-Reset per Mail-Link — hat Vorrang.
+    show('newpw');
+  } else if (hasToken && !isStandalone() && qs.get('app') !== '1' && qs.get('tab') !== 'register') {
+    // Reiner Browser mit gemerktem Token → Willkommen-zurück-Karte statt Auto-Redirect.
+    document.getElementById('authForms').classList.add('hide');
+    document.getElementById('welcomeBack').classList.remove('hide');
+  } else if (qs.get('tab') === 'register') {
+    show('register');
+  } else {
+    show('login');
+  }
+
+  document.getElementById('wbOpen').addEventListener('click', function(){ location.href = 'app.html'; });
+  document.getElementById('wbOther').addEventListener('click', function(){
+    API.clearToken();
+    document.getElementById('welcomeBack').classList.add('hide');
+    document.getElementById('authForms').classList.remove('hide');
+    show('login');
+  });
+
+  /* ---------- Navigation zwischen Views ---------- */
+  document.getElementById('toRegister').addEventListener('click', function(){ show('register'); });
+  document.getElementById('toLogin').addEventListener('click', function(){ show('login'); });
+  document.getElementById('toReset').addEventListener('click', function(){ show('reset'); });
+  document.getElementById('resetToLogin').addEventListener('click', function(){ show('login'); });
+
+  function humanErr(e){
+    var c = e && e.code;
+    if (c === 'invalid_credentials' || c === 'invalid_login') return 'E-Mail oder Passwort stimmt nicht.';
+    if (c === 'email_taken' || c === 'email_exists') return 'Diese E-Mail ist bereits registriert. Melde dich an.';
+    if (c === 'weak_password') return 'Das Passwort ist zu kurz (mind. 8 Zeichen).';
+    if (c === 'bad_email') return 'Bitte gib eine gültige E-Mail ein.';
+    if (c === 'rate_limited' || (e && e.status === 429)) return 'Zu viele Versuche. Bitte warte kurz und probiere es erneut.';
+    if (c === 'invalid_token' || c === 'expired_token') return 'Dieser Link ist ungültig oder abgelaufen. Fordere einen neuen an.';
+    if (c === 'network') return 'Keine Verbindung. Bitte prüfe dein Internet.';
+    return 'Etwas ist schiefgelaufen. Bitte versuch es noch einmal.';
+  }
+
+  /* ---------- LOGIN ---------- */
+  document.getElementById('loginForm').addEventListener('submit', async function(e){
+    e.preventDefault(); clearAlert(document.getElementById('loginAlert'));
+    var btn = document.getElementById('loginBtn'); btn.disabled = true; btn.textContent = 'Anmelden…';
+    try {
+      var d = await API.auth.login(document.getElementById('loginEmail').value.trim(), document.getElementById('loginPw').value);
+      rememberSession(d);
+      location.href = 'app.html';
+    } catch (err) {
+      alertBox(document.getElementById('loginAlert'), 'err', humanErr(err));
+      btn.disabled = false; btn.textContent = 'Anmelden';
+    }
+  });
+
+  /* ---------- REGISTER ---------- */
+  document.getElementById('regForm').addEventListener('submit', async function(e){
+    e.preventDefault(); clearAlert(document.getElementById('regAlert'));
+    var pw = document.getElementById('regPw').value;
+    if (pw.length < 8) { alertBox(document.getElementById('regAlert'), 'err', 'Das Passwort braucht mindestens 8 Zeichen.'); return; }
+    var btn = document.getElementById('regBtn'); btn.disabled = true; btn.textContent = 'Konto wird erstellt…';
+    try {
+      var d = await API.auth.register({
+        email: document.getElementById('regEmail').value.trim(),
+        password: pw,
+        display_name: document.getElementById('regName').value.trim() || null
+      });
+      rememberSession(d);
+      location.href = 'app.html';
+    } catch (err) {
+      alertBox(document.getElementById('regAlert'), 'err', humanErr(err));
+      btn.disabled = false; btn.textContent = 'Konto erstellen & loslegen';
+    }
+  });
+
+  /* ---------- RESET ANFORDERN ---------- */
+  document.getElementById('resetForm').addEventListener('submit', async function(e){
+    e.preventDefault(); clearAlert(document.getElementById('resetAlert'));
+    var btn = document.getElementById('resetBtn'); btn.disabled = true; btn.textContent = 'Wird gesendet…';
+    try {
+      await API.auth.requestReset(document.getElementById('resetEmail').value.trim());
+      alertBox(document.getElementById('resetAlert'), 'ok', 'Wenn ein Konto existiert, ist eine E-Mail unterwegs. Schau in dein Postfach.');
+      btn.textContent = 'Gesendet';
+    } catch (err) {
+      // request_reset gibt immer ok zurück; nur Netzfehler landen hier.
+      alertBox(document.getElementById('resetAlert'), 'err', humanErr(err));
+      btn.disabled = false; btn.textContent = 'Link anfordern';
+    }
+  });
+
+  /* ---------- NEUES PASSWORT (aus Mail-Link) ---------- */
+  document.getElementById('newPwForm').addEventListener('submit', async function(e){
+    e.preventDefault(); clearAlert(document.getElementById('newPwAlert'));
+    var pw = document.getElementById('newPw').value;
+    if (pw.length < 8) { alertBox(document.getElementById('newPwAlert'), 'err', 'Mindestens 8 Zeichen.'); return; }
+    var btn = document.getElementById('newPwBtn'); btn.disabled = true; btn.textContent = 'Speichern…';
+    try {
+      await API.auth.reset(qs.get('reset'), pw);
+      alertBox(document.getElementById('newPwAlert'), 'ok', 'Passwort geändert! Du kannst dich jetzt anmelden.');
+      setTimeout(function(){ location.href = 'anmelden.html'; }, 1400);
+    } catch (err) {
+      alertBox(document.getElementById('newPwAlert'), 'err', humanErr(err));
+      btn.disabled = false; btn.textContent = 'Passwort speichern';
+    }
+  });
+})();
+</script>
+
+<!-- ==================== INSTALL-AFFORDANZ (Einstiegsseite) ==================== -->
+<script>
+(function(){
+  "use strict";
+  var SNOOZE_KEY = 'hf_install_snooze', SNOOZE_DAYS = 14;
+  var banner = document.getElementById('pkInstall');
+  var btn = document.getElementById('pkInstallBtn');
+  var xBtn = document.getElementById('pkInstallX');
+  var hint = document.getElementById('pkInstallHint');
+
+  function isStandalone(){
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+  function snoozed(){
+    try { var t = +localStorage.getItem(SNOOZE_KEY) || 0; return Date.now() - t < SNOOZE_DAYS*864e5; } catch(e){ return false; }
+  }
+  function snooze(){ try { localStorage.setItem(SNOOZE_KEY, String(Date.now())); } catch(e){} }
+  function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream; }
+
+  // „installiert" = Live-Zustand, KEIN Dauer-Flag (Kern-Lehre 2). Kein Alt-Flag persistieren.
+  if (isStandalone() || snoozed()) return;
+
+  function showBanner(){ banner.classList.add('show'); }
+
+  // Kern-Lehre 1: nie allein auf beforeinstallprompt verlassen — timed Fallback.
+  var offered = false;
+  function offerManual(){
+    if (offered || isStandalone() || snoozed()) return;
+    offered = true;
+    if (window.__pkDeferredPrompt) {
+      btn.style.display = '';
+      hint.textContent = 'Auf dem Startbildschirm ablegen — offline nutzbar.';
+    } else if (isIOS()) {
+      btn.style.display = 'none';
+      hint.textContent = 'Teilen-Symbol ⬆️ tippen, dann „Zum Home-Bildschirm".';
+    } else {
+      btn.style.display = 'none';
+      hint.textContent = 'Über das Browser-Menü ⋮ → „App installieren" / „Zum Startbildschirm".';
+    }
+    showBanner();
+  }
+
+  window.addEventListener('beforeinstallprompt', function(){
+    // Event kam doch → Button aufwerten.
+    if (offered && banner.classList.contains('show')) {
+      btn.style.display = ''; hint.textContent = 'Auf dem Startbildschirm ablegen — offline nutzbar.';
+    }
+  });
+
+  btn.addEventListener('click', async function(){
+    var dp = window.__pkDeferredPrompt;
+    if (dp) {
+      dp.prompt();
+      try { await dp.userChoice; } catch(e){}
+      window.__pkDeferredPrompt = null;
+      banner.classList.remove('show');
+    }
+  });
+  xBtn.addEventListener('click', function(){ snooze(); banner.classList.remove('show'); });
+
+  window.addEventListener('appinstalled', function(){ banner.classList.remove('show'); });
+
+  setTimeout(offerManual, 1600);
+
+  /* Service Worker registrieren */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+  }
+})();
+</script>
+</body>
+</html>

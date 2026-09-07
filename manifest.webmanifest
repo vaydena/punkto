@@ -1,0 +1,29 @@
+{
+  "name": "Punkto — Abnehmen mit Punkten",
+  "short_name": "Punkto",
+  "description": "Abnehmen mit einem einfachen Punkte-System. Iss, was du magst — behalte dein Tagesbudget im Blick.",
+  "lang": "de",
+  "dir": "ltr",
+  "id": "/punkto-app",
+  "start_url": "./anmelden.html?app=1",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f8f4",
+  "theme_color": "#0fa958",
+  "categories": ["health", "lifestyle", "productivity"],
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "App öffnen",
+      "short_name": "App",
+      "description": "Direkt zum Tagebuch",
+      "url": "./anmelden.html?app=1",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

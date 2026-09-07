@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0fa958">
+<meta name="color-scheme" content="light">
+<title>Punkto — Abo & Zahlung</title>
+
+<!-- Direktstart / beforeinstallprompt früh abfangen (Kern-Lehre 1): das Event
+     feuert nur EINMAL. Auch hier, falls die App direkt über das Icon landet. -->
+<script>
+  window.__pkDeferredPrompt = null;
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    window.__pkDeferredPrompt = e;
+    window.dispatchEvent(new CustomEvent("pk-can-install"));
+  });
+  // Token-Wächter: ohne Session sofort zurück zur Anmeldung.
+  (function () {
+    try {
+      var t = localStorage.getItem("hf_saved_token");
+      if (!t) location.replace("anmelden.html");
+    } catch (e) { location.replace("anmelden.html"); }
+  })();
+</script>
+
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/punkto.css">
+
+<style>
+  /* Diese Seite hat keine Tab-Leiste -> weniger Boden-Abstand. */
+  body.app{padding-bottom:calc(28px + var(--sab))}
+
+  .app-loading{min-height:60dvh;display:grid;place-items:center;color:var(--muted)}
+  .app-loading .spin{width:34px;height:34px;border:3px solid var(--green-tint-2);border-top-color:var(--green);
+    border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .konto-main{max-width:640px;margin:0 auto;padding:18px 16px 24px}
+  .konto-main > .card{margin-bottom:16px}
+
+  /* Status-Hero */
+  .sub-hero{display:flex;align-items:flex-start;gap:14px}
+  .sub-hero .ic{flex:0 0 auto;width:50px;height:50px;border-radius:16px;display:grid;place-items:center}
+  .sub-hero .ic svg{width:26px;height:26px}
+  .sub-hero.ok .ic{background:var(--green-tint);color:var(--green-700)}
+  .sub-hero.trial .ic{background:var(--amber-tint);color:#8a5c05}
+  .sub-hero.expired .ic{background:var(--danger-tint);color:var(--danger)}
+  .sub-hero .tx{flex:1;min-width:0}
+  .sub-hero .tx h2{margin:0 0 3px;font-size:1.24rem}
+  .sub-hero .tx p{margin:0;color:var(--ink-2);font-size:.94rem}
+  .sub-days{margin-top:12px}
+
+  /* Preis-Zeile */
+  .price-line{display:flex;align-items:baseline;gap:.5em;margin:2px 0 4px}
+  .price-line .amt{font-size:2rem;font-weight:900;color:var(--ink);letter-spacing:-.02em}
+  .price-line .per{color:var(--muted);font-weight:600}
+
+  /* Zahl-Wege Umschalter */
+  .pay-seg{display:flex;gap:8px;margin:2px 0 18px}
+  .pay-seg button{flex:1;background:#fff;border:1.6px solid var(--line);border-radius:var(--r);padding:.7em .6em;
+    font-weight:700;font-size:.95rem;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;
+    justify-content:center;gap:.5em;transition:all .12s ease}
+  .pay-seg button svg{width:1.15em;height:1.15em}
+  .pay-seg button.on{border-color:var(--green);background:var(--green-tint);color:var(--green-800)}
+
+  /* Kopier-Zeilen */
+  .pay-row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .pay-row:last-child{border-bottom:0}
+  .pay-row .pr-l{flex:1;min-width:0}
+  .pay-row .pr-lbl{display:block;font-size:.76rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .pay-row .pr-val{display:block;font-size:1.02rem;font-weight:700;color:var(--ink);word-break:break-word}
+  .pay-row .pr-val.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.01em}
+  .pr-copy{flex:0 0 auto;background:#fff;border:1.6px solid var(--line);border-radius:var(--r-pill);
+    width:40px;height:40px;display:grid;place-items:center;cursor:pointer;color:var(--green-700)}
+  .pr-copy:hover{background:var(--green-tint);border-color:var(--green-tint-2)}
+  .pr-copy svg{width:19px;height:19px}
+  .pr-copy.done{color:var(--green);border-color:var(--green)}
+
+  /* GiroCode */
+  .giro-wrap{text-align:center;margin-top:18px}
+  .giro-box{display:inline-block;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:14px}
+  .giro-box svg{width:210px;height:210px;max-width:60vw;display:block}
+  .giro-cap{margin-top:10px;color:var(--muted);font-size:.86rem}
+
+  .step-list{list-style:none;margin:12px 0 0;padding:0;counter-reset:st}
+  .step-list li{position:relative;padding:0 0 14px 40px;color:var(--ink-2);font-size:.94rem}
+  .step-list li:last-child{padding-bottom:0}
+  .step-list li::before{counter-increment:st;content:counter(st);position:absolute;left:0;top:-2px;
+    width:27px;height:27px;border-radius:var(--r-pill);background:var(--green);color:#fff;font-weight:800;
+    font-size:.86rem;display:grid;place-items:center}
+  .step-list li b{color:var(--ink)}
+
+  .foot-legal{text-align:center;margin-top:22px;color:var(--muted);font-size:.82rem;line-height:1.7}
+  .foot-legal a{color:var(--green-700);font-weight:600}
+  .foot-legal .sep{opacity:.5;margin:0 .3em}
+
+  /* Install-Hinweis (Kern-Lehre 3: auf der Verweil-Seite, dauerhaft) */
+  #pkInstall{position:fixed;left:12px;right:12px;bottom:calc(16px + var(--sab));z-index:45;display:none;
+    background:var(--card);border-radius:var(--r);box-shadow:var(--shadow-lg);border:1px solid var(--line);
+    padding:12px 14px;max-width:600px;margin:0 auto}
+  #pkInstall.on{display:block;animation:fade .25s ease}
+  #pkInstall .in{display:flex;align-items:center;gap:12px}
+  #pkInstall .logo{width:34px;height:34px;flex:0 0 auto}
+  #pkInstall .tx{flex:1;min-width:0}
+  #pkInstall .tx b{display:block;font-size:.92rem}
+  #pkInstall .tx span{font-size:.8rem;color:var(--muted)}
+  #pkInstall .x{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;flex:0 0 auto}
+  #pkInstall .btn{flex:0 0 auto}
+  @media(max-width:420px){#pkInstall .tx span{display:none}}
+
+  .toast{position:fixed;left:50%;bottom:calc(24px + var(--sab));transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:.7em 1.2em;border-radius:var(--r-pill);font-size:.9rem;font-weight:600;
+    opacity:0;pointer-events:none;transition:all .2s ease;z-index:60;max-width:90vw}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body class="app">
+
+<header class="app-head">
+  <div class="bar">
+    <a class="icon-btn" href="app.html" aria-label="Zurück zur App" title="Zurück">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </a>
+    <span class="brand">
+      <svg class="logo" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:26px;height:26px;vertical-align:-5px">
+        <rect x="1" y="1" width="32" height="32" rx="10" fill="#0fa958"/>
+        <circle cx="17" cy="17" r="6.6" fill="#ffc555"/>
+      </svg>
+      Abo &amp; Zahlung
+    </span>
+    <span class="sp"></span>
+  </div>
+</header>
+
+<main class="konto-main">
+  <div id="loading" class="app-loading"><div><div class="spin"></div>Lädt…</div></div>
+  <div id="kontoBody" hidden></div>
+</main>
+
+<!-- ====================== INSTALL-HINWEIS (Verweil-Seite) ====================== -->
+<div id="pkInstall" role="dialog" aria-label="Punkto installieren">
+  <div class="in">
+    <svg class="logo" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="1" y="1" width="32" height="32" rx="10" fill="#0fa958"/>
+      <circle cx="17" cy="17" r="6.6" fill="#ffc555"/>
+    </svg>
+    <div class="tx">
+      <b>Punkto aufs Handy legen</b>
+      <span id="pkInstallHint">Als App installieren — startet direkt.</span>
+    </div>
+    <button class="btn primary small" id="pkInstallBtn">Installieren</button>
+    <button class="x" id="pkInstallX" aria-label="Später">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="assets/pk-app.js"></script>
+<script>
+/* ============================================================================
+   Punkto — Konto/Abo-Seite. Zeigt den Abo-Status und die manuellen Zahlwege
+   (Überweisung mit GiroCode oder PayPal). Der Betreiber schaltet den Zugang
+   nach Zahlungseingang manuell frei/verlängert ihn. Kein automatisches Abo.
+   ============================================================================ */
+(function () {
+  "use strict";
+  var API = window.PKApi;
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (m) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m];
+    });
+  }
+  function fmtDate(iso) {
+    if (!iso) return "–";
+    var d = new Date(iso); if (isNaN(d.getTime())) return "–";
+    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" });
+  }
+  function daysLeft(iso) {
+    if (!iso) return null;
+    return Math.ceil((new Date(iso).getTime() - Date.now()) / 864e5);
+  }
+  function fmtEuro(a) { return (Number(a) || 0).toFixed(2).replace(".", ",") + " €"; }
+
+  var toastEl = $("#toast");
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add("on");
+    clearTimeout(toastEl._t); toastEl._t = setTimeout(function () { toastEl.classList.remove("on"); }, 1800);
+  }
+
+  async function copyText(text, label, btn) {
+    var ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; }
+    catch (e) {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        ok = document.execCommand("copy"); document.body.removeChild(ta);
+      } catch (_e) { ok = false; }
+    }
+    if (ok) {
+      toast((label || "Wert") + " kopiert");
+      if (btn) { btn.classList.add("done"); setTimeout(function () { btn.classList.remove("done"); }, 1400); }
+    } else { toast("Kopieren nicht möglich"); }
+  }
+
+  var ICON = {
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    bank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M4 10h16M5 10l7-6 7 6M6 10v11M18 10v11M10 10v11M14 10v11"/></svg>',
+    paypal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20l1.5-9M7 20H4l2.2-14h6.3c3 0 4.7 1.6 4.2 4.4-.5 3-2.8 4.6-6 4.6H8.5"/></svg>'
+  };
+
+  /* Abo-Status -> Darstellung */
+  function heroView(sub) {
+    var access = !!(sub && sub.access);
+    var status = sub && sub.status;
+    var ends = sub && sub.ends_at;
+    var dl = daysLeft(ends);
+
+    if (status === "blocked") {
+      return { cls: "expired", ic: ICON.lock, h: "Konto gesperrt",
+        p: "Dein Zugang wurde gesperrt. Bitte wende dich an kontakt@vaydena.de." };
+    }
+    if (access && status === "trial") {
+      return { cls: "trial", ic: ICON.clock, h: "Testphase läuft",
+        p: "Deine kostenlose Testphase endet am " + fmtDate(ends) + ".", dl: dl,
+        cta: "Nach der Testphase weitermachen? So verlängerst du:" };
+    }
+    if (access) {
+      return { cls: "ok", ic: ICON.check, h: "Zugang aktiv",
+        p: "Dein Zugang ist freigeschaltet bis " + fmtDate(ends) + ".", dl: dl,
+        cta: "Früher verlängern? Zahl einfach erneut — die Zeit wird angehängt:" };
+    }
+    return { cls: "expired", ic: ICON.lock, h: "Zugang abgelaufen",
+      p: (ends ? "Dein Zugang ist am " + fmtDate(ends) + " ausgelaufen. " : "") + "Zahl, um Punkto wieder freizuschalten:",
+      cta: null };
+  }
+
+  function daysBadge(dl) {
+    if (dl == null || dl < 0) return "";
+    var txt = dl === 0 ? "Läuft heute ab" : (dl === 1 ? "noch 1 Tag" : "noch " + dl + " Tage");
+    return '<div class="sub-days"><span class="pill amber">' + txt + '</span></div>';
+  }
+
+  function payRow(lbl, val, copyVal, mono) {
+    return '<div class="pay-row">' +
+      '<div class="pr-l"><span class="pr-lbl">' + esc(lbl) + '</span>' +
+      '<span class="pr-val' + (mono ? " mono" : "") + '">' + esc(val) + '</span></div>' +
+      '<button class="pr-copy" type="button" data-copy="' + esc(copyVal) + '" data-label="' + esc(lbl) + '" aria-label="' + esc(lbl) + ' kopieren">' + ICON.copy + '</button>' +
+      '</div>';
+  }
+
+  function bankCard(d) {
+    var b = d.bank || {};
+    var giroSvg = "";
+    if (d.giro && d.giro.path) {
+      giroSvg = '<div class="giro-wrap"><div class="giro-box">' +
+        '<svg viewBox="0 0 ' + d.giro.size + ' ' + d.giro.size + '" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GiroCode zum Scannen">' +
+        '<rect width="' + d.giro.size + '" height="' + d.giro.size + '" fill="#fff"/>' +
+        '<path d="' + d.giro.path + '" fill="#12261c"/></svg>' +
+        '</div><div class="giro-cap">Mit der Banking-App scannen — Daten sind schon eingetragen.</div></div>';
+    }
+    return '<div class="card" data-pay="bank">' +
+      '<div class="card-h"><h3>Per Überweisung</h3></div>' +
+      payRow("Empfänger", b.holder, b.holder, false) +
+      payRow("IBAN", b.iban_pretty || b.iban, (b.iban || ""), true) +
+      payRow("BIC", b.bic, b.bic, true) +
+      payRow("Betrag", fmtEuro(d.amount), (Number(d.amount) || 0).toFixed(2), false) +
+      payRow("Verwendungszweck", d.reference, d.reference, false) +
+      giroSvg +
+      '<p style="color:var(--muted);font-size:.84rem;margin:16px 0 0">Wichtig: Gib den <b>Verwendungszweck</b> genau so an — daran erkennen wir deine Zahlung und schalten dich frei.</p>' +
+      '</div>';
+  }
+
+  function paypalCard(d) {
+    var pp = d.paypal || {};
+    var btn = pp.link
+      ? '<a class="btn primary block big" href="' + esc(pp.link) + '" target="_blank" rel="noopener">Mit PayPal bezahlen</a>'
+      : '';
+    return '<div class="card" data-pay="paypal" hidden>' +
+      '<div class="card-h"><h3>Per PayPal</h3></div>' +
+      '<p style="color:var(--ink-2);font-size:.94rem;margin:0 0 4px">Sende ' + esc(fmtEuro(d.amount)) +
+      ' an unsere PayPal-Adresse und gib deine Konto-E-Mail als Verwendungszweck an:</p>' +
+      payRow("PayPal-Empfänger", pp.email, pp.email, false) +
+      payRow("Betrag", fmtEuro(d.amount), (Number(d.amount) || 0).toFixed(2), false) +
+      payRow("Verwendungszweck", d.reference, d.reference, false) +
+      btn +
+      '<p style="color:var(--muted);font-size:.84rem;margin:16px 0 0">Wähle bei PayPal <b>„An Freunde &amp; Familie"</b>, wenn möglich — so kommt der volle Betrag an. Gib den Verwendungszweck genau so an.</p>' +
+      '</div>';
+  }
+
+  function render(d) {
+    var hv = heroView(d.subscription);
+    var html = "";
+
+    // Status
+    html += '<div class="card">' +
+      '<div class="sub-hero ' + hv.cls + '">' +
+      '<div class="ic">' + hv.ic + '</div>' +
+      '<div class="tx"><h2>' + esc(hv.h) + '</h2><p>' + esc(hv.p) + '</p>' + daysBadge(hv.dl) + '</div>' +
+      '</div></div>';
+
+    // Preis + Zahlweg-Umschalter
+    html += '<div class="card">' +
+      (hv.cta ? '<p style="color:var(--ink-2);font-weight:600;margin:0 0 6px">' + esc(hv.cta) + '</p>' : '') +
+      '<div class="price-line"><span class="amt">' + esc(fmtEuro(d.amount)) + '</span><span class="per">/ Monat</span></div>' +
+      '<p style="color:var(--muted);font-size:.88rem;margin:0 0 4px">Ein Monat Vollzugang. Keine automatische Abbuchung — du entscheidest jedes Mal neu.</p>' +
+      '<div class="pay-seg">' +
+      '<button type="button" data-seg="bank" class="on">' + ICON.bank + ' Überweisung</button>' +
+      '<button type="button" data-seg="paypal">' + ICON.paypal + ' PayPal</button>' +
+      '</div>' +
+      '<div id="paySlot"></div>' +
+      '</div>';
+
+    // So geht es weiter
+    html += '<div class="card">' +
+      '<div class="card-h"><h3>So geht es weiter</h3></div>' +
+      '<ol class="step-list">' +
+      '<li><b>Betrag überweisen</b> oder per PayPal senden — mit dem angegebenen Verwendungszweck.</li>' +
+      '<li><b>Wir ordnen deine Zahlung zu</b> (am Verwendungszweck) und schalten deinen Zugang frei bzw. verlängern ihn um einen Monat.</li>' +
+      '<li><b>Fertig</b> — in der Regel innerhalb von 24 Stunden. Deine Daten bleiben die ganze Zeit erhalten.</li>' +
+      '</ol></div>';
+
+    // Rechtliches / Kontakt
+    var iss = d.issuer || {};
+    html += '<div class="foot-legal">' +
+      '<p>' + esc(iss.name || "Vaydena") + (iss.owner ? " · " + esc(iss.owner) : "") +
+      (iss.street ? "<br>" + esc(iss.street) + ", " + esc(iss.zip || "") + " " + esc(iss.city || "") : "") +
+      (iss.email ? '<br><a href="mailto:' + esc(iss.email) + '">' + esc(iss.email) + "</a>" : "") + "</p>" +
+      (d.tax_note ? "<p>" + esc(d.tax_note) + "</p>" : "") +
+      '<p>Punkto berechnet eine eigene Kennzahl aus Nährwerten und ist kein Medizinprodukt und kein Ersatz für ärztliche oder ernährungsmedizinische Beratung.</p>' +
+      '<p><a href="agb.html">AGB</a><span class="sep">·</span><a href="datenschutz.html">Datenschutz</a><span class="sep">·</span><a href="impressum.html">Impressum</a></p>' +
+      '</div>';
+
+    var host = $("#kontoBody");
+    host.innerHTML = html;
+
+    // Zahlweg-Karten einsetzen
+    var slot = $("#paySlot", host);
+    slot.innerHTML = bankCard(d) + paypalCard(d);
+
+    // Umschalter
+    $$(".pay-seg [data-seg]", host).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var seg = b.dataset.seg;
+        $$(".pay-seg [data-seg]", host).forEach(function (x) { x.classList.toggle("on", x === b); });
+        $$("[data-pay]", slot).forEach(function (c) { c.hidden = (c.dataset.pay !== seg); });
+      });
+    });
+
+    // Kopier-Buttons
+    $$(".pr-copy", host).forEach(function (b) {
+      b.addEventListener("click", function () { copyText(b.dataset.copy, b.dataset.label, b); });
+    });
+
+    $("#loading").hidden = true;
+    host.hidden = false;
+  }
+
+  async function load() {
+    var d;
+    try { d = await API.data.billing(); }
+    catch (e) {
+      if (e && e.status === 401) { API.clearToken(); location.replace("anmelden.html"); return; }
+      $("#loading").hidden = true;
+      var host = $("#kontoBody");
+      host.innerHTML = '<div class="alert err">Verbindung fehlgeschlagen. Bitte prüfe deine Internetverbindung und lade die Seite neu.</div>' +
+        '<a class="btn ghost block" href="app.html">Zurück zur App</a>';
+      host.hidden = false;
+      return;
+    }
+    render(d);
+  }
+
+  load();
+})();
+</script>
+
+<script>
+/* Kern-Lehre 2/3: Install-Hinweis auf der Verweil-Seite, „installiert" = Live-Zustand,
+   „×" nur zeitboxen (14 Tage). SW-Registrierung. */
+(function () {
+  "use strict";
+  var SNOOZE_KEY = "hf_install_snooze", SNOOZE_DAYS = 14;
+  function isStandalone() {
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  }
+  function snoozed() {
+    try { var v = +localStorage.getItem(SNOOZE_KEY) || 0; return v && (Date.now() - v) < SNOOZE_DAYS * 864e5; } catch (e) { return false; }
+  }
+  function snooze() { try { localStorage.setItem(SNOOZE_KEY, String(Date.now())); } catch (e) {} }
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+
+  var banner = document.getElementById("pkInstall");
+  var btn = document.getElementById("pkInstallBtn");
+  var hint = document.getElementById("pkInstallHint");
+  var xBtn = document.getElementById("pkInstallX");
+  var shown = false;
+
+  function showBanner() {
+    if (shown || isStandalone() || snoozed()) return;
+    shown = true; banner.classList.add("on");
+  }
+  function hideBanner() { banner.classList.remove("on"); }
+
+  function offerManual() {
+    if (isStandalone() || snoozed()) return;
+    var dp = window.__pkDeferredPrompt;
+    if (dp) {
+      btn.hidden = false;
+      hint.textContent = "Als App installieren — startet direkt.";
+    } else if (isIOS) {
+      btn.hidden = true;
+      hint.textContent = "In Safari: Teilen ↑ → „Zum Home-Bildschirm\".";
+    } else {
+      btn.hidden = true;
+      hint.textContent = "Browser-Menü ⋮ → „App installieren / Zum Startbildschirm\".";
+    }
+    showBanner();
+  }
+
+  btn.addEventListener("click", async function () {
+    var dp = window.__pkDeferredPrompt;
+    if (!dp) { hint.textContent = "Browser-Menü ⋮ → „App installieren\""; return; }
+    dp.prompt();
+    try { await dp.userChoice; } catch (e) {}
+    window.__pkDeferredPrompt = null;
+    hideBanner();
+  });
+  xBtn.addEventListener("click", function () { snooze(); hideBanner(); });
+
+  window.addEventListener("pk-can-install", function () { if (!isStandalone() && !snoozed()) offerManual(); });
+  window.addEventListener("appinstalled", function () { hideBanner(); });
+
+  // Zeitgesteuerter Fallback (Kern-Lehre 1): auch ohne beforeinstallprompt zeigen.
+  setTimeout(offerManual, 1600);
+
+  // Service Worker
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () { /* offline ohne SW ok */ });
+    });
+  }
+})();
+</script>
+</body>
+</html>

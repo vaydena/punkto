@@ -1,0 +1,24 @@
+# Punkto – Hostinger/Apache
+AddType application/manifest+json .webmanifest
+AddType application/javascript .js
+AddType image/svg+xml .svg
+AddDefaultCharset UTF-8
+<IfModule mod_headers.c>
+  # Reihenfolge wichtig: bei mehreren Treffern gewinnt die letzte Regel.
+  <FilesMatch "\.(css|js|png|svg|woff2?)$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  # Service Worker, Manifest und Deploy-Marker immer frisch holen (schlaegt die .js-Regel oben)
+  <FilesMatch "^(sw\.js|manifest\.webmanifest|deploy-version\.txt)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
+# JSON-Lebensmitteldatenbank ausliefern, aber nur diese eine Datei im Datenordner
+<IfModule mod_headers.c>
+  <FilesMatch "\.json$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+</IfModule>
