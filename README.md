@@ -28,7 +28,7 @@ eigene Lebensmittel/Rezepte, Gewichtsverlauf und Aktivität.
 Zugang ist **zeitlich begrenzt** und läuft einfach ab. Nutzer zahlt im Voraus per
 **Banküberweisung (GiroCode-QR)** oder **PayPal**; der Betreiber verlängert das Konto
 über den Admin-Bereich um N Monate. Keine automatische Verlängerung, keine gespeicherten
-Zahlungsmittel. 14 Tage kostenlose Testphase, danach 4,99 €/Monat.
+Zahlungsmittel. 14 Tage kostenlose Testphase, danach 2,99 €/Monat.
 
 ## Seiten
 

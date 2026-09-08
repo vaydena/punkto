@@ -19,7 +19,7 @@ const num = (v: any, d = 0) => { const n = Number(v); return Number.isFinite(n) 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 // --- Zahlung (manuell): feste Betreiber-Bankdaten + Preis --------------------
-const PRICE_CENTS = 499; // 4,99 EUR / Monat
+const PRICE_CENTS = 299; // 2,99 EUR / Monat
 const BANK = { holder: "Karl-Heinz Bicker", iban: "DE95700510030000785303", bic: "BYLADEM1FSI" };
 const PAYPAL = { email: "kontakt@vaydena.de", link: "" }; // link leer => "an E-Mail senden"-Weg
 const ISSUER = {

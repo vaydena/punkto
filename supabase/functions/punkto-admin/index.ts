@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
     if (action === "extend") {
       const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
       const months = clamp(Number(body.months) || 1, 1, 36);
-      const amount = clamp(Number(body.amount_cents) ?? 499, 0, 1000000);
+      const amount = clamp(Number(body.amount_cents) ?? 299, 0, 1000000);
       const method = ["bank", "paypal", "cash", "other"].includes(String(body.method)) ? String(body.method) : "bank";
       const ref = body.ref ? String(body.ref).slice(0, 120) : null;
       const note = body.note ? String(body.note).slice(0, 300) : null;
