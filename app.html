@@ -1603,7 +1603,11 @@
           var blob = await downscaleImage(file, maxDim, 0.82);
           photos[key] = blob;
           markTile(key, blob);
-          if (key === "nutrition") { runOcr(blob); }
+          // OCR bekommt bewusst das ORIGINAL (nicht das klein gespeicherte JPEG):
+          // PKOcr rechnet selbst auf ~2200 px hoch + Graustufen/Kontrast herunter.
+          // Auf 1280 verkleinert schrumpft die Etikettschrift sonst unter Tesseracts
+          // lesbare Groesse (Einheit „g" wird „9"), s. prepForOcr in pk-ocr.js.
+          if (key === "nutrition") { runOcr(file); }
           if (key === "barcode") {
             var box = $("#cpOcr", root);
             var code = await decodeBarcodeFromBlob(file);   // Original fürs Dekodieren (schärfer)

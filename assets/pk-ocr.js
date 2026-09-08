@@ -46,13 +46,16 @@
         gzip: true,
         logger: function (m) { if (onProgress) { try { onProgress(m); } catch (e) {} } }
       });
-      // Zeichenmenge auf das eingrenzen, was auf Naehrwerttabellen vorkommt.
+      // BEWUSST KEINE tessedit_char_whitelist: A/B-Tests an realen (kleinen,
+      // gewoelbten) Etiketten zeigten, dass eine Whitelist NICHT hilft — sie
+      // zwingt mehrdeutige Glyphen in die erlaubte Menge (z. B. Einheit „g"
+      // hinter einer Zahl -> „9", aus „2,4 g" wird „249") und die Punktzahl
+      // wird falsch. Der Parser unten arbeitet ohnehin stichwort-/zahlbasiert
+      // und ist gegen Rauschen robust. preserve_interword_spaces haelt Stichwort
+      // und Wert (mehrere Leerzeichen als Spalte) in derselben Zeile zusammen.
       try {
-        await w.setParameters({
-          tessedit_char_whitelist: "0123456789.,:/%()gkJcalKJkcalEnergieBrennwertFettdavongesättigtesäurenKohlenhydrateZuckerEiweißProteinBallaststoffeSalzproPortionml gäöüÄÖÜß-",
-          preserve_interword_spaces: "1"
-        });
-      } catch (e) { /* Whitelist ist nur Optimierung */ }
+        await w.setParameters({ preserve_interword_spaces: "1" });
+      } catch (e) { /* Parameter ist nur Optimierung */ }
       _worker = w;
       return w;
     })();
@@ -60,10 +63,52 @@
     return _loading;
   }
 
-  /* Rohtext aus einem Bild-Blob. */
+  /* Bild fuer OCR aufbereiten — der entscheidende Hebel fuer reale Handyfotos.
+     (1) Aufloesung: die App speichert das Etikettfoto klein (~1280 px JPEG),
+         doch fuer OCR ist das zu wenig — die winzige Etikettschrift schrumpft
+         unter Tesseracts lesbare x-Hoehe (~20 px) und die Einheit „g" wird als
+         „9" gelesen (aus „2,4 g" -> „249"). Darum hier bis ~2200 px verwenden.
+     (2) Kontrast: Graustufen (Rec. 601) + Kontrast-Stretch um 128 (×1.7) +
+         leichte Aufhellung — rettet kontraktarme/cremefarbene Verpackungen
+         (z. B. Obatzter-Deckel) und gewoelbte Etiketten.
+     A/B gemessen: 1280+Whitelist -> Werte verstuemmelt (Ballaststoffe „249",
+     Eiweiss „98"); 2200+Graustufen+Kontrast, ohne Whitelist -> exakt.
+     Faellt bei jedem Fehler auf den Original-Blob zurueck (nie schlechter). */
+  var OCR_MAXDIM = 2200;
+  async function prepForOcr(blob) {
+    try {
+      if (typeof createImageBitmap !== "function" || typeof document === "undefined") return blob;
+      var bmp = await createImageBitmap(blob);
+      var w = bmp.width, h = bmp.height;
+      if (!w || !h) { try { bmp.close && bmp.close(); } catch (e) {} return blob; }
+      var scale = Math.min(1, OCR_MAXDIM / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+      var cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
+      var cx = cv.getContext("2d");
+      cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = "high";
+      cx.drawImage(bmp, 0, 0, cw, ch);
+      try { bmp.close && bmp.close(); } catch (e) {}
+      try {
+        var img = cx.getImageData(0, 0, cw, ch), d = img.data;
+        for (var i = 0; i < d.length; i += 4) {
+          var v = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          v = (v - 128) * 1.7 + 128 + 6;
+          d[i] = d[i + 1] = d[i + 2] = v < 0 ? 0 : v > 255 ? 255 : v;
+        }
+        cx.putImageData(img, 0, 0);
+      } catch (e) { /* getImageData kann bei sehr grossem Canvas scheitern -> ungefiltert weiter */ }
+      var out = await new Promise(function (resolve) {
+        cv.toBlob(function (b) { resolve(b || blob); }, "image/png");
+      });
+      return out || blob;
+    } catch (e) { return blob; }
+  }
+
+  /* Rohtext aus einem Bild-Blob (mit OCR-Vorverarbeitung, s. prepForOcr). */
   async function recognize(blob, onProgress) {
     var w = await getWorker(onProgress);
-    var res = await w.recognize(blob);
+    var prepped = await prepForOcr(blob);
+    var res = await w.recognize(prepped);
     return (res && res.data && res.data.text) || "";
   }
 

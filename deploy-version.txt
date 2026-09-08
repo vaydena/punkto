@@ -1,4 +1,4 @@
-pk-v11-2c9a
+pk-v12-7b3e
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -66,5 +66,24 @@ v11-2c9a: Monatspreis von 4,99 € auf 2,99 € gesenkt. Zentrale Quelle ist PRI
          „Jetzt freischalten"), agb.html (§ 5 Preise). Betreiber-Vorgaben mitgezogen:
          betreiber.html Vorgabebetrag 2.99, punkto-admin extend-Default 299 (v4). Reine
          Preis-/Textaenderung, kein Datenmodell-Change. SW-CACHE auf pk-app-v11 angehoben.
+v12-7b3e: OCR-Nährwertauslesen zuverlaessig gemacht (Fotos wurden bei Nutzern gar nicht
+         erkannt -> „Konnte nichts sicher lesen"). Ursache empirisch (A/B an schwer
+         lesbaren Etiketten) gefunden: das Nährwertfoto wurde vor der Erkennung auf
+         1280 px verkleinert — die kleine Etikettschrift schrumpfte damit unter Tesseracts
+         lesbare Groesse, die Einheit „g" hinter Zahlen wurde als „9" gelesen (aus „2,4 g"
+         wurde „249", aus „9,8 g" -> „98") und die Punktzahl entweder grob falsch ODER auf
+         gewoelbten/kontrastarmen Etiketten (Deckel, Becher) gar nichts. Fix in zwei Teilen:
+         (1) app.html gibt der OCR jetzt das ORIGINALFOTO (nicht mehr das klein gespeicherte
+             1280-JPEG); das gespeicherte Produktfoto bleibt weiterhin klein.
+         (2) pk-ocr.js bereitet das Bild selbst auf (neue prepForOcr): bis ~2200 px statt
+             1280, Graustufen (Rec. 601) + Kontrast-Stretch (×1.7) + leichte Aufhellung,
+             und OHNE tessedit_char_whitelist (die zwang mehrdeutige Glyphen wie „g"->„9").
+             PSM bleibt automatisch (bei realen Fotos mit Hintergrund sicherer als PSM 6).
+         Messung an einem absichtlich schweren synthetischen Etikett (kleine graue Schrift,
+         cremefarbener Verlauf, 3,5° schraeg, im grossen Frame): ALT = 0/verstuemmelte Werte,
+         NEU = alle 5 Werte exakt (kcal/ges. Fett/Zucker/Eiweiss/Ballaststoffe) + Bezug/
+         Einheit erkannt. Reine Client-Aenderung (app.html + assets/pk-ocr.js), kein Backend-,
+         kein Datenmodell-Change. SW-CACHE auf pk-app-v12 angehoben, damit installierte PWAs
+         den neuen OCR-Code laden (pk-ocr.js ist im Shell-Precache -> Cache-Purge noetig).
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
