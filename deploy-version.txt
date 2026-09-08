@@ -1,4 +1,4 @@
-pk-v5-7e2b
+pk-v6-b3a9
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -8,5 +8,12 @@ v5-7e2b: Install-Hinweis („Punkto als App") bleibt sichtbar, BIS die App wirkl
          kein 14-Tage-Snooze mehr (hf_install_snooze entfernt), einziger dauerhafter Ausblender ist der
          Live-Zustand „installiert" (isStandalone/appinstalled); „×" blendet nur die aktuelle Ansicht aus
          und kommt beim nächsten Laden wieder. Geändert in anmelden/app/konto.html. SW-CACHE pk-app-v5.
+v6-b3a9: Selbstheilung nach Deploy auch fuer PAUSIERTE PWAs — beim Sichtbarwerden
+         (visibilitychange -> visible) prueft die App SOFORT auf eine neue Version
+         (reg.update()); zusammen mit controllerchange laedt ein aus dem Hintergrund
+         geholter Tab genau einmal neu, ohne auf den Stundentakt-Timer zu warten
+         (der im Hintergrund oft eingefroren ist). Geaendert in anmelden/app/konto.html.
+         SW-CACHE pk-app-v6. Hinweis: rettet KEIN Geraet, das noch auf einer Version
+         VOR v6 haengt — dort hilft nur App komplett schliessen + neu oeffnen.
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

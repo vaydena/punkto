@@ -2019,6 +2019,14 @@
         try { reg.update(); } catch (e) { /* egal */ }
         // Lange offene Tabs regelmaessig auf eine neue Version pruefen.
         setInterval(function () { try { reg.update(); } catch (e) { /* egal */ } }, 3600000);
+        // Wichtigster Fall auf dem Handy: die PWA lag im Hintergrund und wird
+        // wieder in den Vordergrund geholt (kein echter Kaltstart). Timer sind
+        // dann oft eingefroren -> beim Sichtbarwerden SOFORT auf eine neue
+        // Version pruefen. Findet sich eine, uebernimmt der neue Worker
+        // (skipWaiting/clients.claim) und controllerchange laedt genau einmal neu.
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "visible") { try { reg.update(); } catch (e) { /* egal */ } }
+        });
       }).catch(function () { /* offline ohne SW ok */ });
     });
   }

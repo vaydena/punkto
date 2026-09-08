@@ -464,6 +464,11 @@
       navigator.serviceWorker.register("sw.js").then(function (reg) {
         try { reg.update(); } catch (e) { /* egal */ }
         setInterval(function () { try { reg.update(); } catch (e) { /* egal */ } }, 3600000);
+        // PWA aus dem Hintergrund geholt: sofort auf neue Version pruefen
+        // (Timer im Hintergrund oft eingefroren -> sonst bleibt der alte Stand).
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "visible") { try { reg.update(); } catch (e) { /* egal */ } }
+        });
       }).catch(function () { /* offline ohne SW ok */ });
     });
   }
