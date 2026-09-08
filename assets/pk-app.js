@@ -1,6 +1,6 @@
 /* ============================================================================
    Punkto — API-Client + Sync (Browser).
-   Spricht die Edge Functions punkto-auth / -data / -community an, verwaltet den
+   Spricht die Edge Functions punkto-auth / -data an, verwaltet den
    Session-Token geraetelokal und kapselt die Barcode-Suche (Open Food Facts).
    Kein Framework, kein Build. Global: window.PKApi.
    ============================================================================ */
@@ -95,16 +95,6 @@
     recipeDel(id) { return call("data", "recipe_del", { id: id }); }
   };
 
-  /* ----------------------------------------------------------- COMMUNITY ---- */
-  var community = {
-    feed(before, limit) { return call("community", "feed", { before: before || null, limit: limit || 30 }); },
-    post(p) { return call("community", "post", p); },
-    like(id) { return call("community", "like", { id: id }); },
-    unlike(id) { return call("community", "unlike", { id: id }); },
-    del(id) { return call("community", "delete", { id: id }); },
-    report(id) { return call("community", "report", { id: id }); }
-  };
-
   /* ---------------------------------------------------------------- ADMIN --- */
   var admin = {
     login(key) { return call("admin", "login", {}, { token: null, adminKey: key }); },
@@ -116,8 +106,6 @@
     },
     setStatus(key, id, status, clear_period) { return call("admin", "set_status", { id: id, status: status, clear_period: !!clear_period }, { token: null, adminKey: key }); },
     addNote(key, id, notes) { return call("admin", "add_note", { id: id, notes: notes }, { token: null, adminKey: key }); },
-    posts(key, reported) { return call("admin", "posts", { reported: !!reported }, { token: null, adminKey: key }); },
-    moderate(key, id, op) { return call("admin", "moderate", { id: id, op: op }, { token: null, adminKey: key }); },
     export(key) { return call("admin", "export", {}, { token: null, adminKey: key }); },
     setKey(key, new_key) { return call("admin", "set_key", { new_key: new_key }, { token: null, adminKey: key }); }
   };
@@ -179,7 +167,7 @@
 
   var API = {
     cfg: CFG, getToken: getToken, setToken: setToken, clearToken: clearToken,
-    call: call, auth: auth, data: data, community: community, admin: admin, foods: foods
+    call: call, auth: auth, data: data, admin: admin, foods: foods
   };
   root.PKApi = API;
 })(typeof window !== "undefined" ? window : globalThis);

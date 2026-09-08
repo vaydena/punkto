@@ -176,27 +176,6 @@
       </div>
     </div>
 
-    <!-- COMMUNITY -->
-    <div class="sec-head">
-      <h2>Community-Moderation</h2>
-      <span class="sp"></span>
-      <div class="seg-mini" id="postFilter">
-        <button data-f="all" class="on">Alle</button>
-        <button data-f="reported">Gemeldet</button>
-      </div>
-    </div>
-    <div class="table-card">
-      <div class="table-wrap">
-        <table class="data">
-          <thead>
-            <tr><th>Autor</th><th>Art</th><th>Beitrag</th><th>❤</th><th>Status</th><th>Datum</th><th></th></tr>
-          </thead>
-          <tbody id="postRows"></tbody>
-        </table>
-      </div>
-      <div class="empty hide" id="postEmpty">Keine Beiträge.</div>
-    </div>
-
     <!-- WERKZEUGE -->
     <div class="sec-head"><h2>Werkzeuge</h2></div>
     <div class="adm-two">
@@ -322,7 +301,6 @@
     showView("dash");
     renderStats(stats);
     loadUsers(true);
-    loadPosts();
   }
 
   /* --------------------------------------------------------------- stats */
@@ -339,7 +317,6 @@
       kpi(s.subs_expired || 0, "Abgelaufen") +
       kpi(fmtEur(s.revenue_cents), "Umsatz", "g") +
       kpi(s.payments_count || 0, "Zahlungen") +
-      kpi(s.posts_count || 0, "Beiträge") +
       kpi(new30, "Neu (30 T.)");
     renderSpark(signups);
   }
@@ -551,59 +528,6 @@
 
   async function refreshStats() {
     try { renderStats(await API.admin.stats(KEY)); } catch (e) { /* leise */ }
-  }
-
-  /* --------------------------------------------------------------- posts */
-  var postFilter = "all";
-  $("postFilter").addEventListener("click", function (e) {
-    var b = e.target.closest("button"); if (!b) return;
-    postFilter = b.getAttribute("data-f");
-    [].forEach.call(this.children, function (c) { c.classList.toggle("on", c === b); });
-    loadPosts();
-  });
-
-  async function loadPosts() {
-    try {
-      var d = await API.admin.posts(KEY, postFilter === "reported");
-      var posts = d.posts || [];
-      var tb = $("postRows"); tb.innerHTML = "";
-      $("postEmpty").classList.toggle("hide", posts.length > 0);
-      posts.forEach(function (p) { tb.appendChild(postRow(p)); });
-    } catch (e) { handleErr(e, "Beiträge konnten nicht geladen werden"); }
-  }
-  var KIND = { text: "Text", weight: "Gewicht", milestone: "Meilenstein", meal: "Mahlzeit", activity: "Aktivität" };
-  function postRow(p) {
-    var tr = document.createElement("tr");
-    var body = (p.body || "").replace(/\s+/g, " ").trim();
-    if (body.length > 70) body = body.slice(0, 70) + "…";
-    tr.innerHTML =
-      "<td>" + esc(p.author_name || "—") + "</td>" +
-      "<td>" + esc(KIND[p.kind] || p.kind || "—") + "</td>" +
-      "<td>" + esc(body || "—") + "</td>" +
-      "<td class='mono'>" + (p.likes || 0) + "</td>" +
-      "<td>" + (p.hidden ? '<span class="tag gray">verborgen</span>' : '<span class="tag">sichtbar</span>') + "</td>" +
-      "<td class='mono'>" + fmtDate(p.created_at) + "</td>" +
-      "<td style='text-align:right;white-space:nowrap'></td>";
-    var cell = tr.lastChild;
-    var toggle = document.createElement("button");
-    toggle.className = "btn ghost small"; toggle.style.padding = ".4em .7em";
-    toggle.textContent = p.hidden ? "Zeigen" : "Verbergen";
-    toggle.addEventListener("click", function () { moderate(p.id, p.hidden ? "show" : "hide"); });
-    var del = document.createElement("button");
-    del.className = "btn danger small"; del.style.marginLeft = "6px"; del.style.padding = ".4em .7em";
-    del.textContent = "Löschen";
-    del.addEventListener("click", function () {
-      if (confirm("Diesen Beitrag endgültig löschen?")) moderate(p.id, "delete");
-    });
-    cell.appendChild(toggle); cell.appendChild(del);
-    return tr;
-  }
-  async function moderate(id, op) {
-    try {
-      await API.admin.moderate(KEY, id, op);
-      toast(op === "delete" ? "Beitrag gelöscht." : op === "hide" ? "Beitrag verborgen." : "Beitrag sichtbar.");
-      loadPosts(); refreshStats();
-    } catch (e) { handleErr(e, "Moderation fehlgeschlagen"); }
   }
 
   /* --------------------------------------------------------------- export */

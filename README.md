@@ -2,7 +2,7 @@
 
 Statische PWA-SaaS: Ernährungstagebuch mit einem **eigenen** Punktesystem (keine Kopie
 eines fremden Programms), Tagesbudget & Wochenextra, Barcode-Scanner (Open Food Facts),
-eigene Lebensmittel/Rezepte, Gewichtsverlauf, Aktivität und einer optionalen Community.
+eigene Lebensmittel/Rezepte, Gewichtsverlauf und Aktivität.
 
 - **Live:** https://punkto.vaydena.de
 - **Anbieter:** Vaydena – Softwarelösungen, Karl-Heinz Bicker, Freising
@@ -15,10 +15,9 @@ eigene Lebensmittel/Rezepte, Gewichtsverlauf, Aktivität und einer optionalen Co
   (`assets/pk-app.js` → `window.PKApi`). Rechen-Engine in `assets/pk-engine.js`.
 - **Backend:** Supabase-Projekt `xeuexovdipdiiuzjpzkj` (eu-central-1), Schema **`punkto`**
   (bewusst **nicht** über PostgREST exponiert — nur Edge Functions greifen zu).
-  Vier Functions (`verify_jwt=false`, eigene Auth):
+  Drei Functions (`verify_jwt=false`, eigene Auth):
   - `punkto-auth` — Registrierung/Login (bcrypt via pgcrypto, opake Tokens SHA-256-gehasht).
   - `punkto-data` — Tagebuch, Lebensmittel, Rezepte, Gewicht, Aktivität, Billing/GiroCode.
-  - `punkto-community` — Connect-Feed.
   - `punkto-admin` — Betreiber-Bereich, per `x-admin-key` gegatet (unabhängig vom Nutzer-Token).
 - **PWA:** `manifest.webmanifest` + `sw.js` (network-first für Dokumente, cache-first für
   Assets; POST/fremde Herkunft unangetastet). Installierbar, Direktstart über
@@ -37,7 +36,7 @@ Zahlungsmittel. 14 Tage kostenlose Testphase, danach 4,99 €/Monat.
 |---|---|
 | `index.html` | Öffentliche Verkaufsseite |
 | `anmelden.html` | Login/Registrierung + PWA-Direktstart (`?app=1`) |
-| `app.html` | Die App (Tagebuch, Scanner, Rezepte, Gewicht, Community …) |
+| `app.html` | Die App (Tagebuch, Scanner, Rezepte, Gewicht …) |
 | `konto.html` | Abo & Zahlung (GiroCode/PayPal) |
 | `betreiber.html` | Betreiber-/Admin-Bereich (`x-admin-key`, **network-first, nicht im SW-Cache**) |
 | `impressum/datenschutz/agb.html` | Rechtstexte |

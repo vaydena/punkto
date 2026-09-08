@@ -1,7 +1,7 @@
 // Punkto - Betreiber-Bereich (Operator). Zugang nur mit Betreiber-Schluessel
 // (SHA-256-Hash in punkto.admin_auth id=1, constant-time). Kein Konto noetig.
-// Aktionen: stats, users, user, extend (Abo verlaengern), set_status, add_payment,
-// moderate (Post ein-/ausblenden, loeschen), export, set_key (Schluessel rotieren).
+// Aktionen: stats, users, user, extend (Abo verlaengern), set_status, add_note,
+// export, set_key (Schluessel rotieren).
 import postgres from "npm:postgres@3";
 
 const cors = {
@@ -51,13 +51,12 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "stats") {
-      const [tot, active, trial, expired, rev, posts, recent] = await Promise.all([
+      const [tot, active, trial, expired, rev, recent] = await Promise.all([
         sql`select count(*)::int as n from punkto.users`,
         sql`select count(*)::int as n from punkto.subscriptions where current_period_end > now()`,
         sql`select count(*)::int as n from punkto.subscriptions where (current_period_end is null or current_period_end <= now()) and trial_ends_at > now()`,
         sql`select count(*)::int as n from punkto.subscriptions where coalesce(current_period_end, trial_ends_at) <= now()`,
         sql`select coalesce(sum(amount_cents),0)::int as c, count(*)::int as n from punkto.payments`,
-        sql`select count(*)::int as n from punkto.community_posts where hidden = false`,
         sql`select date_trunc('day', created_at)::date::text as day, count(*)::int as n
               from punkto.users where created_at > now() - interval '30 days'
               group by 1 order by 1`,
@@ -65,7 +64,7 @@ Deno.serve(async (req: Request) => {
       return json({
         ok: true,
         users_total: tot[0].n, subs_active: active[0].n, subs_trial: trial[0].n, subs_expired: expired[0].n,
-        revenue_cents: rev[0].c, payments_count: rev[0].n, posts_count: posts[0].n, signups_30d: recent,
+        revenue_cents: rev[0].c, payments_count: rev[0].n, signups_30d: recent,
       });
     }
 
@@ -156,27 +155,6 @@ Deno.serve(async (req: Request) => {
       const upd = await sql`insert into punkto.subscriptions (user_id, notes, updated_at) values (${id}, ${note}, now())
                      on conflict (user_id) do update set notes = ${note}, updated_at = now() returning notes`;
       return json({ ok: true, notes: upd[0]?.notes ?? null });
-    }
-
-    if (action === "moderate") {
-      const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
-      const op = String(body.op || "");
-      if (op === "hide") await sql`update punkto.community_posts set hidden = true where id = ${id}`;
-      else if (op === "show") await sql`update punkto.community_posts set hidden = false where id = ${id}`;
-      else if (op === "delete") { await sql`delete from punkto.community_likes where post_id = ${id}`; await sql`delete from punkto.community_posts where id = ${id}`; }
-      else return json({ error: "bad_op" }, 400);
-      return json({ ok: true });
-    }
-
-    if (action === "posts") {
-      const limit = clamp(Number(body.limit) || 50, 1, 200);
-      const onlyReported = body.reported === true;
-      const rows = onlyReported
-        ? await sql`select id, author_name, kind, body, meta, likes, hidden, created_at from punkto.community_posts
-                     where (meta->>'reported') = 'true' order by created_at desc limit ${limit}`
-        : await sql`select id, author_name, kind, body, meta, likes, hidden, created_at from punkto.community_posts
-                     order by created_at desc limit ${limit}`;
-      return json({ ok: true, posts: rows });
     }
 
     if (action === "export") {

@@ -1,4 +1,4 @@
-pk-v1-eaf2
+pk-v2-7e0c
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

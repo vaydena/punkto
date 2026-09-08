@@ -343,6 +343,7 @@ body.app{background:var(--bg);padding-bottom:calc(76px + var(--sab))}
 .tabbar .fab .plus{width:46px;height:46px;border-radius:var(--r-pill);background:var(--green);color:#fff;
   display:grid;place-items:center;box-shadow:0 6px 16px rgba(15,169,88,.4);margin-top:-18px}
 .tabbar .fab .plus svg{width:26px;height:26px}
+.tabbar .tab-sp{flex:1}          /* leerer Ausgleichsslot: hält den FAB mittig */
 
 /* Tages-Budget-Ring */
 .budget-hero{background:linear-gradient(160deg,var(--green),var(--green-700));border-radius:var(--r-lg);
@@ -398,23 +399,6 @@ body.app{background:var(--bg);padding-bottom:calc(76px + var(--sab))}
 .chart-card{background:var(--card);border-radius:var(--r-lg);padding:20px;box-shadow:var(--shadow);margin-top:16px}
 .chart-wrap{position:relative;width:100%;height:210px}
 .chart-wrap svg{width:100%;height:100%;overflow:visible}
-
-/* Community */
-.post{background:var(--card);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--shadow-sm);margin-bottom:12px}
-.post .ph{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.post .av{width:38px;height:38px;border-radius:var(--r-pill);background:var(--green-tint);color:var(--green-700);
-  display:grid;place-items:center;font-weight:800;flex:0 0 auto}
-.post .ph .nm{font-weight:700;font-size:.95rem}
-.post .ph .tm{font-size:.78rem;color:var(--muted)}
-.post .body{font-size:.98rem;color:var(--ink);margin:0 0 12px;white-space:pre-wrap;word-break:break-word}
-.post .kindcard{background:var(--green-tint);border-radius:var(--r);padding:12px 14px;margin:0 0 12px;display:flex;align-items:center;gap:12px}
-.post .kindcard .big{font-size:1.5rem}
-.post .acts{display:flex;gap:6px;align-items:center}
-.post .acts button{background:none;border:0;display:inline-flex;align-items:center;gap:.4em;color:var(--muted);
-  cursor:pointer;font:inherit;font-weight:700;font-size:.88rem;padding:.4em .7em;border-radius:var(--r-pill);transition:all .12s}
-.post .acts button:hover{background:var(--line-2)}
-.post .acts button.liked{color:var(--berry)}
-.post .acts .sp{margin-left:auto}
 
 /* Sheet / Modal (bottom-sheet mobil) */
 .sheet-back{position:fixed;inset:0;background:rgba(12,31,22,.5);z-index:50;display:none;align-items:flex-end;justify-content:center}

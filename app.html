@@ -55,7 +55,7 @@
   .day-nav button:disabled{opacity:.4;cursor:not-allowed}
   .day-nav .lbl{font-weight:800;font-size:1.05rem}
 
-  /* Segment innerhalb der Essen-/Community-Ansicht */
+  /* Segment innerhalb der Essen-Ansicht */
   .sub-seg{margin-bottom:16px}
 
   /* Amount-Stepper im Food-Detail */
@@ -364,31 +364,6 @@
         <div id="recipeList"></div>
       </div>
     </section>
-
-    <!-- ---------- COMMUNITY ---------- -->
-    <section class="view" id="viewCommunity">
-      <div class="card-h" style="margin-bottom:14px">
-        <h2 style="font-size:1.5rem;margin:0">Community</h2>
-        <button class="icon-btn" id="btnRefreshFeed" aria-label="Aktualisieren" title="Aktualisieren">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        </button>
-      </div>
-
-      <div class="card" style="margin-bottom:16px">
-        <textarea id="postBody" rows="2" placeholder="Teile deinen Fortschritt, ein Rezept oder Motivation …" maxlength="800"></textarea>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:.4em;margin:0;font-weight:600;font-size:.88rem;cursor:pointer">
-            <input type="checkbox" id="postAnon" style="width:auto"> Anonym posten
-          </label>
-          <button class="btn primary small" id="btnPost" style="margin-left:auto">Posten</button>
-        </div>
-      </div>
-
-      <div id="feedList"></div>
-      <div class="center" style="margin-top:8px">
-        <button class="btn ghost small" id="btnMoreFeed" hidden>Mehr laden</button>
-      </div>
-    </section>
   </main>
 
   <!-- Tab-Leiste -->
@@ -409,10 +384,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2M5 2v20M17 2c-1.7 0-3 2-3 5s1.3 5 3 5v10"/></svg>
         Essen
       </button>
-      <button data-tab="viewCommunity">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Community
-      </button>
+      <div class="tab-sp" aria-hidden="true"></div>
     </div>
   </nav>
 </div>
@@ -469,7 +441,6 @@
     today: null,               // Server-„heute"
     data: null,                // letzte state()-Antwort
     localFoods: [],
-    feed: { posts: [], next: null, loading: false },
     camStream: null
   };
 
@@ -1542,97 +1513,6 @@
   }
 
   /* ======================================================================
-     COMMUNITY
-     ====================================================================== */
-  async function loadFeed(reset) {
-    if (S.feed.loading) return;
-    S.feed.loading = true;
-    if (reset) { S.feed.posts = []; S.feed.next = null; }
-    try {
-      var d = await API.community.feed(S.feed.next, 20);
-      S.feed.posts = S.feed.posts.concat(d.posts || []);
-      S.feed.next = d.next || null;
-    } catch (e) { toast(humanErr(e)); }
-    S.feed.loading = false;
-    renderFeed();
-  }
-
-  function kindCard(p) {
-    var m = p.meta || {};
-    var map = {
-      weight: ["⚖️", "Gewicht aktualisiert"], meal: ["🍽️", "Mahlzeit"], activity: ["🏃", "Aktivität"],
-      milestone: ["🏆", "Meilenstein"]
-    };
-    if (!map[p.kind]) return "";
-    var big = map[p.kind][0], txt = m.text || map[p.kind][1];
-    return '<div class="kindcard"><span class="big">' + big + '</span><span>' + esc(txt) + '</span></div>';
-  }
-
-  function timeAgo(iso) {
-    var s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-    if (s < 60) return "gerade eben";
-    if (s < 3600) return Math.floor(s / 60) + " Min";
-    if (s < 86400) return Math.floor(s / 3600) + " Std";
-    if (s < 604800) return Math.floor(s / 86400) + " T";
-    var d = new Date(iso); return d.getDate() + "." + (d.getMonth() + 1) + ".";
-  }
-
-  function renderFeed() {
-    var host = $("#feedList");
-    if (!S.feed.posts.length) { host.innerHTML = '<div class="list-empty">Noch keine Beiträge. Sei die/der Erste! 🌱</div>'; }
-    else {
-      host.innerHTML = S.feed.posts.map(function (p) {
-        var initial = (p.author_name || "?").trim().charAt(0).toUpperCase() || "?";
-        return '<div class="post" data-id="' + esc(p.id) + '">' +
-          '<div class="ph"><div class="av">' + esc(initial) + '</div>' +
-          '<div><div class="nm">' + esc(p.author_name || "Anonym") + '</div>' +
-          '<div class="tm">' + timeAgo(p.created_at) + '</div></div></div>' +
-          (p.body ? '<p class="body">' + esc(p.body) + '</p>' : '') +
-          kindCard(p) +
-          '<div class="acts">' +
-          '<button data-like="' + esc(p.id) + '" class="' + (p.liked ? "liked" : "") + '">' +
-          '<svg viewBox="0 0 24 24" width="18" height="18" fill="' + (p.liked ? "currentColor" : "none") + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>' +
-          '<span>' + (p.likes || 0) + '</span></button>' +
-          '<span class="sp"></span>' +
-          (p.mine ?
-            '<button data-del-post="' + esc(p.id) + '"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>' :
-            '<button data-report="' + esc(p.id) + '" title="Melden"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></svg></button>') +
-          '</div></div>';
-      }).join("");
-    }
-    $("#btnMoreFeed").hidden = !S.feed.next;
-    wireFeedActions(host);
-  }
-
-  function wireFeedActions(host) {
-    $$("[data-like]", host).forEach(function (b) {
-      b.addEventListener("click", async function () {
-        var id = b.dataset.like;
-        var p = S.feed.posts.find(function (x) { return x.id === id; });
-        if (!p) return;
-        try {
-          var r = p.liked ? await API.community.unlike(id) : await API.community.like(id);
-          p.liked = r.liked; p.likes = r.likes; renderFeed();
-        } catch (e) { if (isNoAccess(e)) openPaywall(); else toast(humanErr(e)); }
-      });
-    });
-    $$("[data-del-post]", host).forEach(function (b) {
-      b.addEventListener("click", async function () {
-        if (!confirm("Beitrag löschen?")) return;
-        try { await API.community.del(b.dataset.delPost); S.feed.posts = S.feed.posts.filter(function (x) { return x.id !== b.dataset.delPost; }); renderFeed(); toast("Gelöscht."); }
-        catch (e) { toast(humanErr(e)); }
-      });
-    });
-    $$("[data-report]", host).forEach(function (b) {
-      b.addEventListener("click", async function () {
-        if (!confirm("Diesen Beitrag melden?")) return;
-        try { await API.community.report(b.dataset.report); toast("Danke, wird geprüft."); }
-        catch (e) { toast(humanErr(e)); }
-      });
-    });
-  }
-
-  /* ======================================================================
      TAG WECHSELN / AKTUALISIEREN
      ====================================================================== */
   async function refreshDay() {
@@ -1653,7 +1533,6 @@
     $$(".view").forEach(function (v) { v.classList.toggle("on", v.id === id); });
     $$(".tabbar [data-tab]").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === id); });
     window.scrollTo(0, 0);
-    if (id === "viewCommunity" && !S.feed.posts.length) loadFeed(true);
     if (id === "viewFood") { if (!$("#foodResults").innerHTML) runFoodSearch(); }
   }
 
@@ -1694,30 +1573,10 @@
     $("#btnNewFood").addEventListener("click", function () { openCustomFoodSheet(); });
     $("#btnNewRecipe").addEventListener("click", openRecipeSheet);
 
-    // Community
-    $("#btnPost").addEventListener("click", submitPost);
-    $("#btnRefreshFeed").addEventListener("click", function () { loadFeed(true); });
-    $("#btnMoreFeed").addEventListener("click", function () { loadFeed(false); });
-
     // Sheet schließen
     $("#sheetClose").addEventListener("click", closeSheet);
     $("#sheetBack").addEventListener("click", function (e) { if (e.target === this) closeSheet(); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("#sheetBack").hidden) closeSheet(); });
-  }
-
-  async function submitPost() {
-    var body = $("#postBody").value.trim();
-    if (!body) return toast("Bitte etwas schreiben.");
-    var btn = $("#btnPost"); btn.disabled = true;
-    try {
-      await API.community.post({ body: body, kind: "text", anon: $("#postAnon").checked });
-      $("#postBody").value = "";
-      await loadFeed(true);
-      toast("Beitrag veröffentlicht.");
-    } catch (e) {
-      if (isNoAccess(e)) openPaywall(); else toast(humanErr(e));
-    }
-    btn.disabled = false;
   }
 
   /* ---- Utility: debounce ---- */
