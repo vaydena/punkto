@@ -2,6 +2,10 @@
 AddType application/manifest+json .webmanifest
 AddType application/javascript .js
 AddType image/svg+xml .svg
+# WASM korrekt ausliefern, damit Tesseract-OCR die .wasm direkt per
+# WebAssembly.instantiateStreaming laedt (statt ueber den langsameren
+# ArrayBuffer-Fallback bei falschem text/plain-MIME).
+AddType application/wasm .wasm
 AddDefaultCharset UTF-8
 <IfModule mod_headers.c>
   # Reihenfolge wichtig: bei mehreren Treffern gewinnt die letzte Regel.
