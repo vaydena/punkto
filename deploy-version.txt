@@ -1,4 +1,4 @@
-pk-v12-7b3e
+pk-v13-e5a1
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -85,5 +85,29 @@ v12-7b3e: OCR-Nährwertauslesen zuverlaessig gemacht (Fotos wurden bei Nutzern g
          Einheit erkannt. Reine Client-Aenderung (app.html + assets/pk-ocr.js), kein Backend-,
          kein Datenmodell-Change. SW-CACHE auf pk-app-v12 angehoben, damit installierte PWAs
          den neuen OCR-Code laden (pk-ocr.js ist im Shell-Precache -> Cache-Purge noetig).
+v13-e5a1: Punkte-Rechner (Taschenrechner) — in der App UND oeffentlich auf der Landingpage.
+         App (app.html): sechste Kachel „Punkte-Rechner" im Hinzufuegen-Sheet oeffnet
+         openCalcSheet: Anzeige oben (Punkte gross + „≈ kcal · Menge"), tippbare
+         Wert-Kacheln (Kalorien/ges. Fett/Zucker/Eiweiss/Ballaststoffe/Bezug, Vorgabe
+         100 g) + breite Menge-Kachel mit Presets 50/100/150/200 g, darunter ein eigener
+         Ziffernblock im Taschenrechner-Stil (7-8-9-⌫ / 4-5-6-C / 1-2-3-→ / 0-,).
+         Die Felder sind echte Inputs mit inputmode="none": die Bildschirmtastatur
+         bleibt zu (Rechner-Gefuehl), Hardware-Tastaturen tippen weiter (Enter = naechstes
+         Feld, Komma ODER Punkt als Dezimaltrenner). Erste Ziffer nach Feldwechsel
+         ersetzt den Inhalt (Taschenrechner-Konvention). „Zum Tagebuch" reicht ein auf
+         die Menge skaliertes synthetisches Lebensmittel (source="calc") an das bekannte
+         openFoodDetail weiter — Mahlzeitwahl, Mengen-Stepper und die v9-Punkte-
+         Anpassung inklusive, Startpunktzahl identisch mit der Rechner-Anzeige.
+         „Als Lebensmittel speichern" fuellt openCustomFoodSheet vor (neue rueckwaerts-
+         kompatible Vorbelegung pre.base/kcal/sat_fat_g/sugar_g/protein_g/fiber_g
+         + sofortiges recalc). Landingpage (index.html): neue Sektion #rechner
+         („Der Punkte-Rechner", 5 Felder je 100 g, Live-Punktemuenze + Einordnungstext,
+         CTA „Kostenlos testen") als Marketing-Teaser mit derselben Engine
+         (pk-engine.js wird jetzt auch auf der Startseite geladen); Nav- und Footer-
+         Link ergaenzt, #features dafuer von tint auf hell gewechselt (Abwechslung).
+         Server unangetastet: punkto-data akzeptiert source-Strings generisch
+         (Slice auf 20 Zeichen), „calc" faellt darunter. Reine Client-Aenderung
+         (app.html + index.html). SW-CACHE auf pk-app-v13 angehoben, damit
+         installierte PWAs den neuen Inline-Code laden.
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
