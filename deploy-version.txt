@@ -1,4 +1,4 @@
-pk-v6-b3a9
+pk-v7-1d5f
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -15,5 +15,13 @@ v6-b3a9: Selbstheilung nach Deploy auch fuer PAUSIERTE PWAs — beim Sichtbarwer
          (der im Hintergrund oft eingefroren ist). Geaendert in anmelden/app/konto.html.
          SW-CACHE pk-app-v6. Hinweis: rettet KEIN Geraet, das noch auf einer Version
          VOR v6 haengt — dort hilft nur App komplett schliessen + neu oeffnen.
+v7-1d5f: Fix „ewiger Ladeschirm" (echte Ursache) — der Spinner „Laedt …" blieb nach
+         erfolgreichem Boot SICHTBAR stehen, obwohl die App darunter fertig geladen war.
+         Grund: `.app-loading{display:grid}` ueberstimmt das Browser-Standard
+         [hidden]{display:none} (gleiche Spezifitaet, Autor-CSS schlaegt UA), deshalb
+         hatte $("#loading").hidden = true keine optische Wirkung; der 20-s-Watchdog
+         prueft !l.hidden und griff darum ebenfalls nicht. Fix: Regel
+         `.app-loading[hidden]{display:none}` in app.html UND konto.html. SW-CACHE
+         pk-app-v7 (purged alten Cache; Selbstheilung v4/v6 laedt installierte PWAs neu).
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

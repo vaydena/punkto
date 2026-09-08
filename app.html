@@ -37,6 +37,11 @@
 <style>
   /* Ladezustand / kleine App-spezifische Ergänzungen */
   .app-loading{min-height:100dvh;display:grid;place-items:center;color:var(--muted)}
+  /* WICHTIG: `.app-loading` setzt display:grid und würde damit das Standard-
+     [hidden]{display:none} des Browsers überstimmen (gleiche Spezifität, Autor
+     schlägt UA-Stylesheet). Ohne diese Zeile bleibt der Ladeschirm nach
+     $("#loading").hidden = true SICHTBAR stehen → „ewiger Ladeschirm". */
+  .app-loading[hidden]{display:none}
   .app-loading .spin{width:34px;height:34px;border:3px solid var(--green-tint-2);border-top-color:var(--green);
     border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
   @keyframes spin{to{transform:rotate(360deg)}}
