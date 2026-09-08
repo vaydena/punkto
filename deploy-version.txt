@@ -1,4 +1,4 @@
-pk-v9-2a7d
+pk-v10-f4b1
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -42,5 +42,22 @@ v9-2a7d: Eigener Punktwert beim Eintragen — im „Zum Tagebuch"-Dialog (openFo
          entry.points in den Tagebucheintrag (Server clamped ohnehin auf 0–200, kein
          Backend-Change noetig). Reine Client-Aenderung in app.html; SW-CACHE auf
          pk-app-v9 angehoben, damit installierte PWAs den neuen Inline-Code laden.
+v10-f4b1: Gemeinschafts-Produktdatenbank (Crowdsourcing, moderiert). Beim Anlegen eines
+         eigenen Produkts (3-Foto-Erfassung) gibt es ein Opt-in „Fuer die Gemeinschaft
+         freigeben" (standardmaessig AUS). Nur bei aktivem Haekchen werden NUR
+         Name/Marke/Naehrwerte/Barcode an die zentrale DB uebertragen — NIE Fotos, keine
+         PII. Der Vorschlag landet als status='pending' und wird erst nach Betreiber-
+         Freigabe fuer alle sichtbar. Freigegebene Produkte werden geladen, gecacht und in
+         Suche + Barcode-Scan gemischt (Barcode-Treffer lokal > Gemeinschaft > Open Food
+         Facts; Dubletten nach Barcode entfernt). Offline/kein Zugang beim Erfassen ->
+         Vorschlag bleibt „pending" und wird beim naechsten Online-Start automatisch
+         nachgereicht (syncPending). Neu: DB-Tabelle punkto.community_products; Edge-
+         Actions punkto-data product_submit/product_list (product_submit WRITE-gated) und
+         punkto-admin products_pending/product_moderate (+ stats.community_pending). Neuer
+         Betreiber-Bereich „Gemeinschaftsprodukte" (Liste offener Vorschlaege, Werte vor
+         Freigabe korrigierbar, Freigeben/Ablehnen mit Grund). Datenschutz Abschnitt 8
+         ergaenzt (Einwilligung, Widerruf). Client: app.html (Opt-in/Merge/Lookup),
+         pk-app.js (community-Namespace mit Feld-Whitelist + admin-Moderation), betreiber.html,
+         datenschutz.html. SW-CACHE auf pk-app-v10 angehoben.
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

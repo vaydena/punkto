@@ -172,6 +172,11 @@
   .filled-flag{color:var(--green-700);font-weight:700}
   .badge-off{display:inline-block;font-size:.66rem;font-weight:800;letter-spacing:.02em;background:var(--green-tint);
     color:var(--green-800);border-radius:999px;padding:1px 7px;vertical-align:middle;margin-left:4px}
+  /* Gemeinschafts-Freigabe (Opt-in) im Erfassen-Sheet */
+  .cap-share{display:flex;gap:10px;align-items:flex-start;background:var(--green-tint);border:1px solid var(--green-tint-2);
+    border-radius:var(--r);padding:11px 13px;margin:2px 0 14px;cursor:pointer;font-size:.9rem;line-height:1.4}
+  .cap-share input[type=checkbox]{margin-top:3px;width:18px;height:18px;flex:0 0 auto;accent-color:var(--green)}
+  .cap-share-note{color:var(--muted);font-size:.82rem}
 
   /* Offline-Hinweis oben in der App */
   .offline-banner{background:#eef3ef;color:var(--ink-2);border-radius:var(--r);padding:.6em 1em;margin-bottom:14px;
@@ -495,6 +500,7 @@
     data: null,                // letzte state()-Antwort
     localFoods: [],
     localProducts: [],         // eigene Produkte aus PKStore (IndexedDB, offline)
+    communityFoods: [],        // freigegebene Gemeinschaftsprodukte (gecacht, offline)
     offline: false,            // true = aus Cache geladen (kein Netz beim Start)
     camStream: null
   };
@@ -612,6 +618,7 @@
     // Lokale Datenbanken (Such-DB + eigene Offline-Produkte) parallel vorladen.
     API.foods.loadLocal().then(function (l) { S.localFoods = l || []; });
     refreshLocalProducts();
+    initCommunity();  // Gemeinschaftsprodukte (Cache sofort, frisch im Hintergrund)
 
     try {
       await loadState();
@@ -663,6 +670,43 @@
       return !q || (p.name || "").toLowerCase().indexOf(q) >= 0 ||
         (p.brand || "").toLowerCase().indexOf(q) >= 0 || (p.barcode || "").indexOf(q) >= 0;
     }).map(productToFood);
+  }
+
+  /* Ein freigegebenes Gemeinschaftsprodukt (Server) in das Food-Schema bringen.
+     numeric-Spalten kommen vom postgres-Treiber als Strings -> mit + coercen. */
+  function communityToFood(p) {
+    return {
+      id: "comm-" + p.id, barcode: p.barcode || "", name: p.name, brand: p.brand || "",
+      cat: "Gemeinschaft", unit: p.unit || "g", base_g: +p.base_g || 100,
+      kcal: +p.kcal || 0, sat_fat_g: +p.sat_fat_g || 0, sugar_g: +p.sugar_g || 0,
+      protein_g: +p.protein_g || 0, fiber_g: +p.fiber_g || 0,
+      free: false, points: undefined, source: "community",
+      per: (+p.base_g || 100) + " " + (p.unit || "g")
+    };
+  }
+  /* Gemeinschaftsprodukte passend zur Anfrage. Produkte, deren Barcode bereits als
+     eigenes Produkt existiert, werden übersprungen (lokal gewinnt -> keine Dubletten). */
+  function communityMatches(q) {
+    q = (q || "").trim().toLowerCase();
+    var localBarcodes = {};
+    (S.localProducts || []).forEach(function (p) { if (p.barcode) localBarcodes[p.barcode] = 1; });
+    return (S.communityFoods || []).filter(function (p) {
+      if (p.barcode && localBarcodes[p.barcode]) return false;
+      return !q || (p.name || "").toLowerCase().indexOf(q) >= 0 ||
+        (p.brand || "").toLowerCase().indexOf(q) >= 0 || (p.barcode || "").indexOf(q) >= 0;
+    }).map(communityToFood);
+  }
+
+  /* Gemeinschafts-DB initialisieren: sofort aus dem Cache (offline-fähig), dann im
+     Hintergrund frisch laden und eigene freigegebene Vorschläge nachreichen. */
+  function initCommunity() {
+    if (!API.community) return;
+    try { S.communityFoods = API.community.cached() || []; } catch (e) { S.communityFoods = []; }
+    API.community.list().then(function (d) {
+      S.communityFoods = (d && d.products) || [];
+    }).catch(function () { /* offline -> Cache bleibt */ });
+    // Als „shared" markierte, noch nicht synchronisierte eigene Produkte nachreichen.
+    Promise.resolve().then(function () { return API.community.syncPending(); }).catch(function () {});
   }
 
   function showApp() {
@@ -1063,7 +1107,7 @@
           var own = (S.data.custom_foods || []).filter(function (f) {
             return !q || f.name.toLowerCase().indexOf(q.toLowerCase()) >= 0;
           });
-          renderFoodResults(out, localProductMatches(q).concat(own, res), preMeal);
+          renderFoodResults(out, localProductMatches(q).concat(own, communityMatches(q), res), preMeal);
         }, 180);
         input.addEventListener("input", run); run();
       });
@@ -1274,6 +1318,10 @@
     var local = null;
     try { local = window.PKStore ? await PKStore.get(norm) : null; } catch (e) { local = null; }
     if (local) { openFoodDetail(productToFood(local)); return; }
+
+    // 1b) Gemeinschaftsprodukt per Barcode (gecacht -> auch offline).
+    var comm = (S.communityFoods || []).filter(function (p) { return p.barcode && p.barcode === norm; })[0];
+    if (comm) { openFoodDetail(communityToFood(comm)); return; }
 
     // 2) Online: Open Food Facts.
     var food = null;
@@ -1489,6 +1537,10 @@
       '<div class="field"><label for="cpFiber">Ballaststoffe (g)</label><input type="number" id="cpFiber" inputmode="decimal" step="0.1" placeholder="0" min="0"></div></div>' +
       '<div class="field"><label for="cpBarcode">Barcode</label><input type="text" id="cpBarcode" inputmode="numeric" placeholder="wird aus Foto 3 gelesen" value="' + esc(pre.barcode || "") + '"></div>' +
       '<div class="detail-points"><span class="coin" id="cpPts">0</span><span>Punkte je Bezugsmenge</span></div>' +
+      '<label class="cap-share"><input type="checkbox" id="cpShare">' +
+      '<span><b>Für die Gemeinschaft freigeben</b><br>' +
+      '<span class="cap-share-note">Teile nur <b>Name, Marke, Nährwerte & Barcode</b> – <b>keine Fotos</b>. ' +
+      'Nach Prüfung durch uns hilfst du damit anderen. Standard: bleibt nur auf deinem Gerät.</span></span></label>' +
       '<button class="btn primary block big" id="cpSave">Produkt speichern</button>',
       function (root) {
         function vals() {
@@ -1582,22 +1634,38 @@
           var v = vals();
           var unit = $("#cpUnit", root).value === "ml" ? "ml" : "g";
           var base = +$("#cpBase", root).value || 100;
+          var share = !!($("#cpShare", root) && $("#cpShare", root).checked);
           var rec = {
             barcode: barcode, name: name, brand: $("#cpBrand", root).value.trim(),
             unit: unit, base_g: base,
             kcal: v.kcal, sat_fat_g: v.sat_fat_g, sugar_g: v.sugar_g, protein_g: v.protein_g, fiber_g: v.fiber_g,
             free: false, source: "local", points: recalc(),
+            // Gemeinschaft: Opt-in merken. "pending" -> beim nächsten Online-Start
+            // reicht syncPending() den Vorschlag nach (falls hier offline/kein Zugang).
+            shared: share, sync_status: share ? "pending" : undefined,
             photos: { product: photos.product, nutrition: photos.nutrition, barcode: photos.barcode }
           };
           this.disabled = true;
           try {
             var existing = await PKStore.get(barcode);
-            if (existing) rec.created_at = existing.created_at;
+            if (existing) {
+              rec.created_at = existing.created_at;
+              // Einmal freigegeben bleibt freigegeben (Häkchen nicht heimlich zurücknehmen).
+              if (existing.shared && !share) { rec.shared = true; rec.sync_status = existing.sync_status || "pending"; }
+            }
             await PKStore.put(rec);
             await refreshLocalProducts();
             closeSheet();
             toast("Produkt gespeichert · " + rec.points + " P je " + base + " " + unit);
             switchTab("viewFood"); switchFoodSub("own");
+            // Freigabe: nur Whitelist (Name/Marke/Nährwerte/Barcode) — NIE Fotos.
+            if (rec.shared && API.community) {
+              API.community.submit(rec).then(async function () {
+                rec.sync_status = "synced"; rec.synced_at = Date.now();
+                try { await PKStore.put(rec); } catch (e) {}
+                toast("Danke! Dein Vorschlag wird von uns geprüft.");
+              }).catch(function () { /* bleibt pending -> später erneut */ });
+            }
           } catch (e) {
             this.disabled = false;
             toast("Speichern fehlgeschlagen. Bitte erneut versuchen.");
@@ -1820,7 +1888,7 @@
     var q = $("#foodSearchInput").value.trim();
     var res = await API.foods.search(q);
     var own = (S.data.custom_foods || []).filter(function (f) { return !q || f.name.toLowerCase().indexOf(q.toLowerCase()) >= 0; });
-    renderFoodResults($("#foodResults"), localProductMatches(q).concat(own, res));
+    renderFoodResults($("#foodResults"), localProductMatches(q).concat(own, communityMatches(q), res));
   }, 180);
 
   var DEL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>';

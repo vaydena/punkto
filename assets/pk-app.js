@@ -127,7 +127,11 @@
     setStatus(key, id, status, clear_period) { return call("admin", "set_status", { id: id, status: status, clear_period: !!clear_period }, { token: null, adminKey: key }); },
     addNote(key, id, notes) { return call("admin", "add_note", { id: id, notes: notes }, { token: null, adminKey: key }); },
     export(key) { return call("admin", "export", {}, { token: null, adminKey: key }); },
-    setKey(key, new_key) { return call("admin", "set_key", { new_key: new_key }, { token: null, adminKey: key }); }
+    setKey(key, new_key) { return call("admin", "set_key", { new_key: new_key }, { token: null, adminKey: key }); },
+    productsPending(key, limit) { return call("admin", "products_pending", { limit: limit || 200 }, { token: null, adminKey: key }); },
+    productModerate(key, id, decision, patch, reason) {
+      return call("admin", "product_moderate", { id: id, decision: decision, patch: patch || null, reason: reason || "" }, { token: null, adminKey: key });
+    }
   };
 
   /* ---------------------------------------------------------------- FOODS --- */
@@ -185,9 +189,77 @@
     }
   };
 
+  /* ------------------------------------------------------------ COMMUNITY --- */
+  /* Gemeinschafts-Produktdatenbank: geraetelokal erfasste Produkte koennen (nur
+     mit ausdruecklichem Opt-in) VORGESCHLAGEN werden. Uebertragen werden nur
+     Name/Marke/Naehrwerte/Barcode — NIE Fotos, nie sonstige Record-Interna.
+     Freigegebene Produkte werden geladen und geraetelokal gecacht (Suche/Scan
+     funktionieren dann auch offline). */
+  var COMMUNITY_CACHE_KEY = "pk_community_cache_v1";
+  // Whitelist: die EINZIGEN Felder, die je an den Server gehen. Auch wenn der
+  // Aufrufer ein ganzes PKStore-Produkt (inkl. Foto-Blobs) uebergibt, verlaesst
+  // nichts anderes das Geraet.
+  function submitPayload(p) {
+    p = p || {};
+    var n = function (v) { var x = Number(v); return Number.isFinite(x) ? x : 0; };
+    return {
+      name: String(p.name || ""), brand: String(p.brand || ""),
+      barcode: String(p.barcode || ""), unit: p.unit === "ml" ? "ml" : "g",
+      base_g: n(p.base_g) || 100,
+      kcal: n(p.kcal), sat_fat_g: n(p.sat_fat_g), sugar_g: n(p.sugar_g),
+      protein_g: n(p.protein_g), fiber_g: n(p.fiber_g)
+    };
+  }
+  var community = {
+    /* Ein Produkt der Gemeinschaft vorschlagen (verlangt aktiven Zugang). */
+    submit(product) { return call("data", "product_submit", submitPayload(product)); },
+    /* Freigegebene Produkte laden und geraetelokal cachen (fuer Offline-Suche). */
+    async list() {
+      var d = await call("data", "product_list", {});
+      try {
+        localStorage.setItem(COMMUNITY_CACHE_KEY, JSON.stringify({ at: Date.now(), products: d.products || [] }));
+      } catch (e) { /* Speicher voll/gesperrt -> egal */ }
+      return d;
+    },
+    /* Zuletzt gecachte, freigegebene Produkte (instant, offline). */
+    cached() {
+      try {
+        var raw = localStorage.getItem(COMMUNITY_CACHE_KEY);
+        if (!raw) return [];
+        var j = JSON.parse(raw);
+        return (j && j.products) || [];
+      } catch (e) { return []; }
+    },
+    /* Als "shared" markierte, noch nicht synchronisierte Produkte nachreichen
+       (z. B. Erfassung war offline oder der Zugang war gerade abgelaufen). Aendert
+       NIE Werte, schickt nur die Whitelist. Fehler werden geschluckt -> der
+       Datensatz bleibt "pending" und wird beim naechsten Online-Start erneut
+       versucht. Kein Token / kein PKStore -> nichts zu tun. */
+    async syncPending() {
+      if (!root.PKStore || !getToken()) return { synced: 0 };
+      var all;
+      try { all = await root.PKStore.all(); } catch (e) { return { synced: 0 }; }
+      var pending = (all || []).filter(function (r) { return r && r.shared && r.sync_status !== "synced"; });
+      var synced = 0;
+      for (var i = 0; i < pending.length; i++) {
+        var r = pending[i];
+        try {
+          await community.submit(r);
+          r.sync_status = "synced"; r.synced_at = Date.now();
+          try { await root.PKStore.put(r); } catch (e) { /* egal */ }
+          synced++;
+        } catch (e) {
+          // Offline oder (noch) kein aktiver Zugang -> spaeter erneut versuchen.
+          if (e && (e.code === "no_access" || e.code === "unauthorized" || e.status === 401 || e.status === 402)) break;
+        }
+      }
+      return { synced: synced };
+    }
+  };
+
   var API = {
     cfg: CFG, getToken: getToken, setToken: setToken, clearToken: clearToken,
-    call: call, auth: auth, data: data, admin: admin, foods: foods
+    call: call, auth: auth, data: data, admin: admin, foods: foods, community: community
   };
   root.PKApi = API;
 })(typeof window !== "undefined" ? window : globalThis);

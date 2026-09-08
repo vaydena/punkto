@@ -15,6 +15,7 @@ const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const num = (v: any, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
 
 async function sha256hex(s: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -51,7 +52,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "stats") {
-      const [tot, active, trial, expired, rev, recent] = await Promise.all([
+      const [tot, active, trial, expired, rev, recent, pend] = await Promise.all([
         sql`select count(*)::int as n from punkto.users`,
         sql`select count(*)::int as n from punkto.subscriptions where current_period_end > now()`,
         sql`select count(*)::int as n from punkto.subscriptions where (current_period_end is null or current_period_end <= now()) and trial_ends_at > now()`,
@@ -60,11 +61,13 @@ Deno.serve(async (req: Request) => {
         sql`select date_trunc('day', created_at)::date::text as day, count(*)::int as n
               from punkto.users where created_at > now() - interval '30 days'
               group by 1 order by 1`,
+        sql`select count(*)::int as n from punkto.community_products where status = 'pending'`,
       ]);
       return json({
         ok: true,
         users_total: tot[0].n, subs_active: active[0].n, subs_trial: trial[0].n, subs_expired: expired[0].n,
         revenue_cents: rev[0].c, payments_count: rev[0].n, signups_30d: recent,
+        community_pending: pend[0].n,
       });
     }
 
@@ -158,12 +161,52 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "export") {
-      const [users, subs, payments] = await Promise.all([
+      const [users, subs, payments, community] = await Promise.all([
         sql`select id, email, display_name, created_at, last_login_at, onboarded from punkto.users order by created_at`,
         sql`select user_id, status, plan, trial_ends_at, current_period_end, updated_at from punkto.subscriptions`,
         sql`select id, user_id, amount_cents, method, months, ref, note, created_by, created_at from punkto.payments order by created_at`,
+        sql`select id, barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, status, created_at, moderated_at from punkto.community_products order by created_at`,
       ]);
-      return json({ ok: true, exported_at: new Date().toISOString(), users, subscriptions: subs, payments });
+      return json({ ok: true, exported_at: new Date().toISOString(), users, subscriptions: subs, payments, community_products: community });
+    }
+
+    if (action === "products_pending") {
+      // Offene Community-Vorschlaege fuer die Moderation (aelteste zuerst).
+      const limit = clamp(Number(body.limit) || 200, 1, 500);
+      const rows = await sql`
+        select id, barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, created_at
+          from punkto.community_products where status = 'pending'
+          order by created_at asc limit ${limit}`;
+      return json({ ok: true, products: rows });
+    }
+
+    if (action === "product_moderate") {
+      // Vorschlag freigeben (approved) oder ablehnen (rejected). Der Betreiber darf
+      // die Naehrwerte vor der Freigabe optional korrigieren (patch), damit ein
+      // sonst guter Eintrag nicht wegen eines Tippfehlers verworfen werden muss.
+      const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
+      const decision = ["approved", "rejected"].includes(String(body.decision)) ? String(body.decision) : null;
+      if (!decision) return json({ error: "bad_decision" }, 400);
+      const reason = body.reason ? String(body.reason).slice(0, 200) : "";
+      const p = body.patch && typeof body.patch === "object" ? body.patch : null;
+      if (p) {
+        await sql`update punkto.community_products set
+            name      = coalesce(${p.name != null ? String(p.name).trim().slice(0, 120) : null}, name),
+            brand     = coalesce(${p.brand != null ? String(p.brand).trim().slice(0, 80) : null}, brand),
+            unit      = coalesce(${p.unit === "ml" ? "ml" : (p.unit === "g" ? "g" : null)}, unit),
+            base_g    = coalesce(${p.base_g != null ? clamp(num(p.base_g, 100), 1, 100000) : null}, base_g),
+            kcal      = coalesce(${p.kcal != null ? clamp(num(p.kcal), 0, 99999) : null}, kcal),
+            sat_fat_g = coalesce(${p.sat_fat_g != null ? clamp(num(p.sat_fat_g), 0, 1000) : null}, sat_fat_g),
+            sugar_g   = coalesce(${p.sugar_g != null ? clamp(num(p.sugar_g), 0, 1000) : null}, sugar_g),
+            protein_g = coalesce(${p.protein_g != null ? clamp(num(p.protein_g), 0, 1000) : null}, protein_g),
+            fiber_g   = coalesce(${p.fiber_g != null ? clamp(num(p.fiber_g), 0, 1000) : null}, fiber_g)
+          where id = ${id} and status = 'pending'`;
+      }
+      const r = await sql`update punkto.community_products
+          set status = ${decision}, reject_reason = ${reason}, moderated_at = now(), moderated_by = 'operator'
+          where id = ${id} returning id, status`;
+      if (!r.length) return json({ error: "not_found" }, 404);
+      return json({ ok: true, product: r[0] });
     }
 
     if (action === "set_key") {

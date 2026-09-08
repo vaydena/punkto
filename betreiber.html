@@ -56,6 +56,21 @@
   @media(max-width:760px){.adm-two{grid-template-columns:1fr}}
   .card h3{margin:0 0 4px}
 
+  /* Gemeinschaftsprodukte-Moderation */
+  .pend-badge{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 7px;border-radius:999px;
+    background:var(--amber-600,#c77d16);color:#fff;font-size:.8rem;font-weight:800;font-variant-numeric:tabular-nums}
+  #commList{display:flex;flex-direction:column;gap:12px;padding:4px 4px 6px}
+  .comm-item{border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;background:var(--card-2)}
+  .comm-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+  .comm-bc{font-size:.82rem;color:var(--muted)}
+  .comm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 10px}
+  @media(max-width:560px){.comm-grid{grid-template-columns:repeat(2,1fr)}}
+  .comm-f{display:flex;flex-direction:column;gap:3px;font-size:.75rem;color:var(--muted);font-weight:600}
+  .comm-f input{padding:.42em .55em;font-size:.9rem;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+  .comm-actions{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .comm-reason{flex:1;min-width:150px;padding:.5em .7em;font-size:.86rem;border:1px solid var(--line);border-radius:9px}
+  .btn.small{padding:.5em 1em;font-size:.86rem}
+
   /* Nutzer-Detail (nutzt .sheet-back/.sheet aus punkto.css) */
   .icon-btn{background:none;border:0;font-size:1.2rem;line-height:1;color:var(--muted);cursor:pointer;padding:.2em .4em;border-radius:8px}
   .icon-btn:hover{background:var(--line-2);color:var(--ink)}
@@ -174,6 +189,24 @@
         <span style="flex:1"></span>
         <button class="btn outline small hide" id="userMore">Mehr laden</button>
       </div>
+    </div>
+
+    <!-- GEMEINSCHAFTSPRODUKTE -->
+    <div class="sec-head">
+      <h2>Gemeinschaftsprodukte <span class="pend-badge hide" id="commBadge">0</span></h2>
+    </div>
+    <div class="table-card">
+      <div class="th">
+        <h3>Vorschläge zur Prüfung</h3>
+        <span class="sp" style="flex:1"></span>
+        <button class="btn outline small" id="commReload">Aktualisieren</button>
+      </div>
+      <p class="muted" style="font-size:.85rem;padding:0 4px 6px">
+        Von Nutzern freigegebene Produkte (nur Name, Marke, Nährwerte, Barcode – keine Fotos).
+        Werte vor dem Freigeben bei Bedarf korrigieren. Freigegebene erscheinen für alle in der Suche.
+      </p>
+      <div id="commList"></div>
+      <div class="empty hide" id="commEmpty">Keine offenen Vorschläge. 👍</div>
     </div>
 
     <!-- WERKZEUGE -->
@@ -301,6 +334,7 @@
     showView("dash");
     renderStats(stats);
     loadUsers(true);
+    loadCommunity();
   }
 
   /* --------------------------------------------------------------- stats */
@@ -529,6 +563,98 @@
   async function refreshStats() {
     try { renderStats(await API.admin.stats(KEY)); } catch (e) { /* leise */ }
   }
+
+  /* --------------------------------------------------------- community mod */
+  var commItems = [];
+  function nf(v) { return String(v == null || v === "" ? "" : v); }
+  function commRow(p) {
+    // Editierbare Nährwerte -> Betreiber kann vor der Freigabe korrigieren.
+    return '<div class="comm-item" data-id="' + esc(p.id) + '">' +
+      '<div class="comm-head">' +
+        '<div><b>' + esc(p.name) + '</b>' + (p.brand ? ' <span class="muted">· ' + esc(p.brand) + '</span>' : '') + '</div>' +
+        '<span class="comm-bc mono">' + (p.barcode ? esc(p.barcode) : '—') + '</span>' +
+      '</div>' +
+      '<div class="comm-grid">' +
+        commField(p.id, "name", "Name", p.name, "text") +
+        commField(p.id, "brand", "Marke", p.brand, "text") +
+        commField(p.id, "unit", "Einheit", p.unit || "g", "text") +
+        commField(p.id, "base_g", "Bezug", p.base_g, "num") +
+        commField(p.id, "kcal", "kcal", p.kcal, "num") +
+        commField(p.id, "sat_fat_g", "ges. Fett", p.sat_fat_g, "num") +
+        commField(p.id, "sugar_g", "Zucker", p.sugar_g, "num") +
+        commField(p.id, "protein_g", "Eiweiß", p.protein_g, "num") +
+        commField(p.id, "fiber_g", "Ballastst.", p.fiber_g, "num") +
+      '</div>' +
+      '<div class="comm-actions">' +
+        '<input type="text" class="comm-reason" data-r="' + esc(p.id) + '" placeholder="Grund (bei Ablehnung, optional)">' +
+        '<button class="btn outline small comm-reject" data-x="' + esc(p.id) + '">Ablehnen</button>' +
+        '<button class="btn dark small comm-approve" data-a="' + esc(p.id) + '">Freigeben</button>' +
+      '</div>' +
+    '</div>';
+  }
+  function commField(id, key, label, val, type) {
+    return '<label class="comm-f"><span>' + esc(label) + '</span>' +
+      '<input type="' + (type === "num" ? "number" : "text") + '"' + (type === "num" ? ' step="0.1"' : '') +
+      ' data-f="' + esc(key) + '" data-id="' + esc(id) + '" value="' + esc(nf(val)) + '"></label>';
+  }
+  function patchFor(id, root) {
+    var patch = {};
+    (root || document).querySelectorAll('.comm-item[data-id="' + cssEsc(id) + '"] input[data-f]').forEach(function (inp) {
+      var k = inp.getAttribute("data-f"), v = inp.value;
+      if (k === "unit") patch[k] = (v === "ml" ? "ml" : "g");
+      else if (k === "name" || k === "brand") patch[k] = v;
+      else patch[k] = Number(v) || 0;
+    });
+    return patch;
+  }
+  function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
+
+  async function loadCommunity() {
+    try {
+      var d = await API.admin.productsPending(KEY, 200);
+      commItems = d.products || [];
+      var host = $("commList");
+      host.innerHTML = commItems.map(commRow).join("");
+      $("commEmpty").classList.toggle("hide", commItems.length > 0);
+      var badge = $("commBadge");
+      badge.textContent = commItems.length;
+      badge.classList.toggle("hide", commItems.length === 0);
+      wireCommButtons(host);
+    } catch (e) { handleErr(e, "Vorschläge konnten nicht geladen werden"); }
+  }
+  function wireCommButtons(host) {
+    // Server erwartet die Vergangenheitsform: "approved" / "rejected".
+    host.querySelectorAll(".comm-approve").forEach(function (b) {
+      b.addEventListener("click", function () { moderate(b.getAttribute("data-a"), "approved", b); });
+    });
+    host.querySelectorAll(".comm-reject").forEach(function (b) {
+      b.addEventListener("click", function () { moderate(b.getAttribute("data-x"), "rejected", b); });
+    });
+  }
+  async function moderate(id, decision, btn) {
+    var card = btn.closest(".comm-item");
+    var reasonInp = card ? card.querySelector(".comm-reason") : null;
+    var reason = reasonInp ? reasonInp.value.trim() : "";
+    if (decision === "rejected" && !reason && !confirm("Ohne Grund ablehnen?")) return;
+    var patch = decision === "approved" ? patchFor(id, document) : null;
+    // Buttons der Karte sperren
+    if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
+    try {
+      await API.admin.productModerate(KEY, id, decision, patch, reason);
+      if (card) { card.style.opacity = ".35"; card.style.pointerEvents = "none"; }
+      toast(decision === "approved" ? "Freigegeben." : "Abgelehnt.");
+      commItems = commItems.filter(function (p) { return String(p.id) !== String(id); });
+      var badge = $("commBadge");
+      badge.textContent = commItems.length;
+      badge.classList.toggle("hide", commItems.length === 0);
+      $("commEmpty").classList.toggle("hide", commItems.length > 0);
+      refreshStats();
+    } catch (e) {
+      if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = false; });
+      handleErr(e, "Aktion fehlgeschlagen");
+    }
+  }
+  $("commReload").addEventListener("click", function () { loadCommunity(); });
 
   /* --------------------------------------------------------------- export */
   $("exportBtn").addEventListener("click", async function () {

@@ -120,6 +120,7 @@ function weekRange(dayStr: string) {
 const WRITE = new Set([
   "diary_add", "diary_del", "weight_set", "weight_del", "activity_add", "activity_del",
   "food_add", "food_del", "recipe_add", "recipe_del",
+  "product_submit",
 ]);
 
 Deno.serve(async (req: Request) => {
@@ -269,6 +270,48 @@ Deno.serve(async (req: Request) => {
       const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
       await sql`delete from punkto.recipes where id = ${id} and user_id = ${u.id}`;
       return json({ ok: true });
+    }
+
+    if (action === "product_submit") {
+      // Eigenes (geraetelokal erfasstes) Produkt der Community VORSCHLAGEN.
+      // Uebertragen werden NUR Name/Marke/Naehrwerte/Barcode -> KEINE Fotos, keine
+      // sonstigen personenbezogenen Daten. Landet als status='pending' und wird
+      // erst nach Betreiber-Freigabe fuer andere sichtbar. submitted_by dient nur
+      // der internen Zuordnung/Rate-Limitierung und wird nie oeffentlich ausgegeben.
+      const name = String(body.name || "").trim().slice(0, 120);
+      if (!name) return json({ error: "bad_name" }, 400);
+      const barcode = String(body.barcode || "").replace(/\D/g, "").slice(0, 40);
+      const brand = String(body.brand || "").trim().slice(0, 80);
+      const unit = String(body.unit) === "ml" ? "ml" : "g";
+      const base_g = clamp(num(body.base_g, 100), 1, 100000);
+      const kcal = clamp(num(body.kcal), 0, 99999);
+      const sat = clamp(num(body.sat_fat_g), 0, 1000);
+      const sugar = clamp(num(body.sugar_g), 0, 1000);
+      const protein = clamp(num(body.protein_g), 0, 1000);
+      const fiber = clamp(num(body.fiber_g), 0, 1000);
+      const hash = await sha256hex(
+        [barcode, name.toLowerCase(), brand.toLowerCase(), unit, base_g, kcal, sat, sugar, protein, fiber].join("|"),
+      );
+      // Dedup: derselbe Vorschlag (gleicher Hash) erzeugt keine Dublette. Das
+      // no-op-Update sorgt dafuer, dass RETURNING auch bei Konflikt den aktuellen
+      // Status liefert (pending/approved/rejected -> Client kann Feedback zeigen).
+      const r = await sql`
+        insert into punkto.community_products
+          (barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, submitted_by, submit_hash)
+        values (${barcode}, ${name}, ${brand}, ${unit}, ${base_g}, ${kcal}, ${sat}, ${sugar}, ${protein}, ${fiber}, ${u.id}, ${hash})
+        on conflict (submit_hash) do update set submit_hash = excluded.submit_hash
+        returning status`;
+      return json({ ok: true, status: r[0]?.status || "pending" });
+    }
+
+    if (action === "product_list") {
+      // Freigegebene Community-Produkte fuer die Lebensmittel-Suche (Merge im
+      // Client). Bewusst schlank und OHNE submitted_by (keine PII nach aussen).
+      const rows = await sql`
+        select id, barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g
+          from punkto.community_products where status = 'approved'
+          order by name limit 3000`;
+      return json({ ok: true, products: rows, count: rows.length });
     }
 
     return json({ error: "unknown_action" }, 400);
