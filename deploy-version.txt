@@ -1,4 +1,4 @@
-pk-v7-1d5f
+pk-v8-4e2c
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -23,5 +23,14 @@ v7-1d5f: Fix „ewiger Ladeschirm" (echte Ursache) — der Spinner „Laedt …"
          prueft !l.hidden und griff darum ebenfalls nicht. Fix: Regel
          `.app-loading[hidden]{display:none}` in app.html UND konto.html. SW-CACHE
          pk-app-v7 (purged alten Cache; Selbstheilung v4/v6 laedt installierte PWAs neu).
+v8-4e2c: Lebensmittel-Datenbank erweitert (assets/data/punkto-foods.json ->
+         Version pk-foods-2026-09-08-1): neu Tomatensoße (Fertiggerichte), Brezel,
+         Laugenbrötchen und Laugenstange (Brot & Getreide). Bestehendes
+         „Weizenbrötchen" in „Brötchen" umbenannt (id broetchen unveraendert), da ein
+         Weizenbroetchen das kanonische Broetchen ist und die Suche „Brötchen" es ohnehin
+         schon fand — so kein Dublett. Punkte werden clientseitig aus den Naehrwerten
+         gerechnet (pk-engine.js), nicht gespeichert. SW-CACHE auf pk-app-v8 angehoben,
+         damit installierte PWAs die neue JSON laden (SW ist cache-first, JSON nicht im
+         Shell-Precache -> erst ein Cache-Purge zieht sie nach).
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

@@ -1,5 +1,5 @@
 {
-  "version": "pk-foods-2026-09-07-1",
+  "version": "pk-foods-2026-09-08-1",
   "note": "Kuratierte Basis-Datenbank haeufiger Lebensmittel (DE). Naehrwerte je base_g (meist 100 g) bzw. je Stueck. free=true -> 0-Punkte-Lebensmittel. Werte gerundet, dienen der Orientierung, keine amtlichen Angaben.",
   "foods": [
     { "id": "apfel", "name": "Apfel", "cat": "Obst", "unit": "Stück", "base_g": 130, "kcal": 68, "sat_fat_g": 0, "sugar_g": 13, "protein_g": 0.4, "fiber_g": 2.6, "free": true },
@@ -33,8 +33,11 @@
 
     { "id": "brot-vollkorn", "name": "Vollkornbrot", "cat": "Brot & Getreide", "unit": "Scheibe", "base_g": 45, "kcal": 100, "sat_fat_g": 0.2, "sugar_g": 1.4, "protein_g": 3.5, "fiber_g": 3.5, "free": false },
     { "id": "brot-misch", "name": "Mischbrot", "cat": "Brot & Getreide", "unit": "Scheibe", "base_g": 45, "kcal": 110, "sat_fat_g": 0.2, "sugar_g": 1, "protein_g": 3.2, "fiber_g": 2.3, "free": false },
-    { "id": "broetchen", "name": "Weizenbrötchen", "cat": "Brot & Getreide", "unit": "Stück", "base_g": 60, "kcal": 165, "sat_fat_g": 0.3, "sugar_g": 1.8, "protein_g": 5.4, "fiber_g": 2, "free": false },
+    { "id": "broetchen", "name": "Brötchen", "cat": "Brot & Getreide", "unit": "Stück", "base_g": 60, "kcal": 165, "sat_fat_g": 0.3, "sugar_g": 1.8, "protein_g": 5.4, "fiber_g": 2, "free": false },
     { "id": "toast", "name": "Toastbrot", "cat": "Brot & Getreide", "unit": "Scheibe", "base_g": 25, "kcal": 66, "sat_fat_g": 0.3, "sugar_g": 1, "protein_g": 2.2, "fiber_g": 0.9, "free": false },
+    { "id": "brezel", "name": "Brezel (Laugenbrezel)", "cat": "Brot & Getreide", "unit": "Stück", "base_g": 75, "kcal": 248, "sat_fat_g": 0.4, "sugar_g": 1.9, "protein_g": 7.5, "fiber_g": 2.3, "free": false },
+    { "id": "laugenbroetchen", "name": "Laugenbrötchen", "cat": "Brot & Getreide", "unit": "Stück", "base_g": 75, "kcal": 248, "sat_fat_g": 0.4, "sugar_g": 1.8, "protein_g": 7.5, "fiber_g": 2.3, "free": false },
+    { "id": "laugenstange", "name": "Laugenstange", "cat": "Brot & Getreide", "unit": "Stück", "base_g": 80, "kcal": 264, "sat_fat_g": 0.4, "sugar_g": 1.9, "protein_g": 8, "fiber_g": 2.4, "free": false },
     { "id": "haferflocken", "name": "Haferflocken", "cat": "Brot & Getreide", "unit": "g", "base_g": 50, "kcal": 186, "sat_fat_g": 1.4, "sugar_g": 0.6, "protein_g": 6.5, "fiber_g": 5, "free": false },
     { "id": "muesli", "name": "Früchtemüsli", "cat": "Brot & Getreide", "unit": "g", "base_g": 50, "kcal": 180, "sat_fat_g": 1, "sugar_g": 12, "protein_g": 4, "fiber_g": 3.5, "free": false },
     { "id": "cornflakes", "name": "Cornflakes", "cat": "Brot & Getreide", "unit": "g", "base_g": 40, "kcal": 152, "sat_fat_g": 0.2, "sugar_g": 3, "protein_g": 3, "fiber_g": 1.2, "free": false },
@@ -113,6 +116,7 @@
     { "id": "lasagne", "name": "Lasagne", "cat": "Fertiggerichte", "unit": "Portion", "base_g": 300, "kcal": 420, "sat_fat_g": 8, "sugar_g": 9, "protein_g": 22, "fiber_g": 4, "free": false },
     { "id": "spaghetti-bolo", "name": "Spaghetti Bolognese", "cat": "Fertiggerichte", "unit": "Portion", "base_g": 350, "kcal": 480, "sat_fat_g": 5, "sugar_g": 8, "protein_g": 22, "fiber_g": 5, "free": false },
     { "id": "salat-gemischt", "name": "Gemischter Salat (o. Dressing)", "cat": "Fertiggerichte", "unit": "Portion", "base_g": 200, "kcal": 40, "sat_fat_g": 0, "sugar_g": 4, "protein_g": 2.5, "fiber_g": 3, "free": true },
-    { "id": "suppe-gemuese", "name": "Gemüsesuppe", "cat": "Fertiggerichte", "unit": "Teller", "base_g": 300, "kcal": 90, "sat_fat_g": 0.6, "sugar_g": 6, "protein_g": 3, "fiber_g": 3, "free": false }
+    { "id": "suppe-gemuese", "name": "Gemüsesuppe", "cat": "Fertiggerichte", "unit": "Teller", "base_g": 300, "kcal": 90, "sat_fat_g": 0.6, "sugar_g": 6, "protein_g": 3, "fiber_g": 3, "free": false },
+    { "id": "tomatensosse", "name": "Tomatensoße", "cat": "Fertiggerichte", "unit": "g", "base_g": 100, "kcal": 50, "sat_fat_g": 0.3, "sugar_g": 6.5, "protein_g": 1.5, "fiber_g": 1.5, "free": false }
   ]
 }
