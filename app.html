@@ -129,6 +129,37 @@
   #pkInstall .btn{flex:0 0 auto}
   @media(max-width:420px){#pkInstall .tx span{display:none}}
 
+  /* 3-Foto-Erfassung (eigenes Produkt, offline) */
+  .cap-tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:4px 0 6px}
+  .cap-tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    aspect-ratio:3/4;border:1.6px dashed var(--line);border-radius:var(--r);background:var(--card);cursor:pointer;
+    color:var(--ink-2);font-size:.74rem;font-weight:700;text-align:center;padding:6px;overflow:hidden}
+  .cap-tile.has{border-style:solid;border-color:var(--green-tint-2);color:#fff}
+  .cap-tile input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .cap-tile .ci{width:30px;height:30px;border-radius:9px;background:var(--green-tint);color:var(--green-700);
+    display:grid;place-items:center;flex:0 0 auto}
+  .cap-tile .ci svg{width:18px;height:18px}
+  .cap-tile .num{position:absolute;top:5px;left:5px;width:19px;height:19px;border-radius:50%;background:var(--green);
+    color:#fff;display:grid;place-items:center;font-size:.72rem;z-index:2}
+  .cap-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+  .cap-tile .cap-lbl{position:relative;z-index:2}
+  .cap-tile.has .cap-lbl{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);padding:3px 4px;
+    color:#fff;z-index:2}
+  .cap-tile .ck{position:absolute;top:5px;right:5px;width:19px;height:19px;border-radius:50%;background:var(--green);
+    color:#fff;display:none;place-items:center;z-index:3}
+  .cap-tile.has .ck{display:grid}
+  .ocr-status{font-size:.82rem;color:var(--muted);margin:6px 0 2px;display:flex;align-items:center;gap:8px;min-height:1.2em}
+  .ocr-status .spin{width:16px;height:16px;border:2px solid var(--green-tint-2);border-top-color:var(--green);
+    border-radius:50%;animation:spin .8s linear infinite;flex:0 0 auto}
+  .filled-flag{color:var(--green-700);font-weight:700}
+  .badge-off{display:inline-block;font-size:.66rem;font-weight:800;letter-spacing:.02em;background:var(--green-tint);
+    color:var(--green-800);border-radius:999px;padding:1px 7px;vertical-align:middle;margin-left:4px}
+
+  /* Offline-Hinweis oben in der App */
+  .offline-banner{background:#eef3ef;color:var(--ink-2);border-radius:var(--r);padding:.6em 1em;margin-bottom:14px;
+    font-size:.86rem;font-weight:600;display:flex;align-items:center;gap:.5em}
+  .offline-banner .dot{width:8px;height:8px;border-radius:50%;background:var(--amber-600);flex:0 0 auto}
+
   .toast{position:fixed;left:50%;bottom:calc(90px + var(--sab));transform:translateX(-50%) translateY(20px);
     background:var(--ink);color:#fff;padding:.7em 1.2em;border-radius:var(--r-pill);font-size:.9rem;font-weight:600;
     z-index:60;opacity:0;transition:all .25s ease;pointer-events:none;box-shadow:var(--shadow-lg);max-width:90vw}
@@ -354,7 +385,9 @@
 
       <!-- Eigene Lebensmittel -->
       <div id="foodSubOwn" hidden>
-        <button class="btn primary block" id="btnNewFood" style="margin-bottom:14px">+ Eigenes Lebensmittel</button>
+        <button class="btn primary block" id="btnCaptureProduct" style="margin-bottom:10px">📷 Produkt mit 3 Fotos anlegen</button>
+        <button class="btn ghost block" id="btnNewFood" style="margin-bottom:14px">+ Werte manuell eingeben</button>
+        <div id="ownProductList"></div>
         <div id="ownFoodList"></div>
       </div>
 
@@ -424,6 +457,8 @@
 
 <script src="assets/pk-engine.js"></script>
 <script src="assets/pk-app.js"></script>
+<script src="assets/pk-store.js"></script>
+<script src="assets/pk-ocr.js"></script>
 <script>
 /* ============================================================================
    Punkto App — Steuerlogik. Kein Framework. Nutzt window.PKApi + window.PK.
@@ -441,6 +476,8 @@
     today: null,               // Server-„heute"
     data: null,                // letzte state()-Antwort
     localFoods: [],
+    localProducts: [],         // eigene Produkte aus PKStore (IndexedDB, offline)
+    offline: false,            // true = aus Cache geladen (kein Netz beim Start)
     camStream: null
   };
 
@@ -501,6 +538,8 @@
     catch (e) {
       if (isNoAccess(e)) { if (e.data && e.data.subscription) S.sub = e.data.subscription; renderAccessBanner(); openPaywall(); return null; }
       if (e.status === 401) { location.replace("anmelden.html?reset=1"); return null; }
+      // Offline: Schreiben (Tagebuch/Profil) braucht das Netz — freundlich abfangen statt roter Fehler.
+      if (e.code === "network") { S.offline = true; toast("Dafür brauchst du eine Internetverbindung."); return null; }
       toast(humanErr(e)); throw e;
     }
   }
@@ -529,19 +568,50 @@
     S.user = d.user;
     S.sub = d.subscription;
     S.day = d.day;
-    if (!day) S.today = d.day;   // erste Antwort definiert „heute"
+    if (!day) { S.today = d.day; S.offline = false; cacheState(d); }  // erste Antwort definiert „heute"
     return d;
   }
 
-  async function boot() {
+  /* Letzten „heute"-Stand geraetelokal sichern, damit die App offline booten
+     kann (Scanner + Punkte funktionieren dann ohne Netz; Schreiben bleibt online). */
+  var CACHE_KEY = "pk_state_cache_v1";
+  function cacheState(d) {
     try {
-      // Lokale Lebensmittel schon mal vorladen (für Suche).
-      API.foods.loadLocal().then(function (l) { S.localFoods = l || []; });
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        at: Date.now(), day: d.day, user: d.user, subscription: d.subscription, data: d
+      }));
+    } catch (e) { /* Speicher voll/gesperrt -> egal */ }
+  }
+  function readCache() {
+    try { var s = localStorage.getItem(CACHE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+  }
+  function hydrateFromCache(c) {
+    S.data = c.data; S.user = c.user; S.sub = c.subscription;
+    S.day = c.day; S.today = c.day; S.offline = true;
+  }
+
+  async function boot() {
+    // Lokale Datenbanken (Such-DB + eigene Offline-Produkte) parallel vorladen.
+    API.foods.loadLocal().then(function (l) { S.localFoods = l || []; });
+    refreshLocalProducts();
+
+    try {
       await loadState();
     } catch (e) {
       if (e.status === 401) { API.clearToken(); location.replace("anmelden.html"); return; }
+      // Kein Netz? -> aus dem letzten gesicherten Stand offline weiterarbeiten.
+      var c = (e.code === "network") ? readCache() : null;
+      if (c && c.user && c.user.onboarded) {
+        hydrateFromCache(c);
+        $("#loading").hidden = true;
+        showApp();
+        toast("Offline — dein letzter Stand. Eintragen geht wieder online.");
+        return;
+      }
       $("#loading").innerHTML = '<div style="text-align:center;max-width:320px">' +
         '<p style="color:var(--danger)">' + esc(humanErr(e)) + '</p>' +
+        (e.code === "network"
+          ? '<p style="color:var(--muted);font-size:.86rem">Beim ersten Start braucht Punkto einmal Internet.</p>' : '') +
         '<button class="btn primary" onclick="location.reload()">Neu laden</button></div>';
       return;
     }
@@ -549,6 +619,32 @@
     $("#loading").hidden = true;
     if (!S.user.onboarded) { startOnboarding(); }
     else { showApp(); }
+  }
+
+  /* Eigene Offline-Produkte aus IndexedDB in den Zustand laden (für Suche/Liste). */
+  async function refreshLocalProducts() {
+    try { S.localProducts = (window.PKStore ? await PKStore.all() : []) || []; }
+    catch (e) { S.localProducts = []; }
+    return S.localProducts;
+  }
+
+  /* Ein PKStore-Produkt in das einheitliche Food-Schema bringen (für Detail/Suche). */
+  function productToFood(p) {
+    return {
+      id: "local-" + p.barcode, barcode: p.barcode, name: p.name, brand: p.brand || "",
+      cat: "Eigenes Produkt", unit: p.unit || "g", base_g: p.base_g || 100,
+      kcal: +p.kcal || 0, sat_fat_g: +p.sat_fat_g || 0, sugar_g: +p.sugar_g || 0,
+      protein_g: +p.protein_g || 0, fiber_g: +p.fiber_g || 0,
+      free: !!p.free, points: p.points, source: "local", per: (p.base_g || 100) + " " + (p.unit || "g")
+    };
+  }
+  /* Lokale Produkte passend zur Anfrage (für die Mischung in Suchergebnisse). */
+  function localProductMatches(q) {
+    q = (q || "").trim().toLowerCase();
+    return (S.localProducts || []).filter(function (p) {
+      return !q || (p.name || "").toLowerCase().indexOf(q) >= 0 ||
+        (p.brand || "").toLowerCase().indexOf(q) >= 0 || (p.barcode || "").indexOf(q) >= 0;
+    }).map(productToFood);
   }
 
   function showApp() {
@@ -917,6 +1013,7 @@
       '<button class="quick-act a" data-q="barcode"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg></span>Barcode scannen</button>' +
       '<button class="quick-act b" data-q="weight"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l3-4"/></svg></span>Gewicht</button>' +
       '<button class="quick-act s" data-q="activity"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></span>Aktivität</button>' +
+      '<button class="quick-act c" data-q="capture"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>Produkt anlegen</button>' +
       '</div>',
       function (root) {
         $$(".quick-act", root).forEach(function (b) {
@@ -926,6 +1023,7 @@
             else if (q === "barcode") openScanSheet();
             else if (q === "weight") openWeightSheet();
             else if (q === "activity") openActivitySheet();
+            else if (q === "capture") openCaptureSheet();
           });
         });
       });
@@ -943,11 +1041,11 @@
         var run = debounce(async function () {
           var q = input.value.trim();
           var res = await API.foods.search(q);
-          // eigene Lebensmittel dazumischen
+          // eigene Produkte (offline, 3-Foto) + eigene Lebensmittel zuerst
           var own = (S.data.custom_foods || []).filter(function (f) {
             return !q || f.name.toLowerCase().indexOf(q.toLowerCase()) >= 0;
           });
-          renderFoodResults(out, own.concat(res), preMeal);
+          renderFoodResults(out, localProductMatches(q).concat(own, res), preMeal);
         }, 180);
         input.addEventListener("input", run); run();
       });
@@ -1103,20 +1201,34 @@
 
   async function lookupBarcode(code, root) {
     stopCamera();
+    var norm = String(code || "").replace(/\s+/g, "").replace(/\D/g, "") || String(code || "").trim();
     var box = $(".scan-box", root); if (box) box.style.opacity = ".4";
     var status = $("#scanStatus", root);
-    status.innerHTML = '<div class="list-empty"><div class="spin" style="width:26px;height:26px;border:3px solid var(--green-tint-2);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div>Suche Produkt …</div>';
-    var food;
-    try { food = await API.foods.byBarcode(code); } catch (e) { food = null; }
-    if (!food) {
-      status.innerHTML = '<div class="alert warn">Kein Produkt zu <b>' + esc(code) + '</b> gefunden.</div>' +
-        '<button class="btn ghost block" id="scanCustom">Als eigenes Lebensmittel anlegen</button>';
-      $("#scanCustom", status.parentNode || document).addEventListener("click", function () {
-        openCustomFoodSheet({ barcode: code });
-      });
-      return;
+
+    // 1) Zuerst lokal (funktioniert offline): eigenes Produkt per Barcode?
+    var local = null;
+    try { local = window.PKStore ? await PKStore.get(norm) : null; } catch (e) { local = null; }
+    if (local) { openFoodDetail(productToFood(local)); return; }
+
+    // 2) Online: Open Food Facts.
+    var food = null;
+    if (navigator.onLine) {
+      status.innerHTML = '<div class="list-empty"><div class="spin" style="width:26px;height:26px;border:3px solid var(--green-tint-2);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div>Suche Produkt …</div>';
+      try { food = await API.foods.byBarcode(norm); } catch (e) { food = null; }
+      if (food) { openFoodDetail(food); return; }
     }
-    openFoodDetail(food);
+
+    // 3) Nicht gefunden -> selbst anlegen (3 Fotos bevorzugt, manuell als Alternative).
+    status.innerHTML =
+      '<div class="alert warn">' +
+      (navigator.onLine
+        ? 'Kein Produkt zu <b>' + esc(norm) + '</b> gefunden. Leg es einfach selbst an:'
+        : 'Offline – zu <b>' + esc(norm) + '</b> ist lokal nichts gespeichert. Du kannst es jetzt mit 3 Fotos anlegen:') +
+      '</div>' +
+      '<button class="btn primary block" id="scanCapture">📷 Produkt mit 3 Fotos anlegen</button>' +
+      '<button class="btn ghost block" id="scanCustom" style="margin-top:10px">Werte manuell eingeben</button>';
+    $("#scanCapture", status).addEventListener("click", function () { openCaptureSheet({ barcode: norm }); });
+    $("#scanCustom", status).addEventListener("click", function () { openCustomFoodSheet({ barcode: norm }); });
   }
 
   /* ---------------------- GEWICHT ---------------------- */
@@ -1239,6 +1351,192 @@
           var r = await guardWrite(function () { return API.data.foodAdd(food); });
           if (r) { closeSheet(); await refreshDay(); switchFoodSub("own"); toast("Lebensmittel gespeichert."); }
           else this.disabled = false;
+        });
+      });
+  }
+
+  /* ---------------------- 3-FOTO-ERFASSUNG (eigenes Produkt, offline) ----------
+     Der Nutzer macht 3 Fotos: 1) Produkt, 2) Zutaten/Nährwerte, 3) Barcode.
+     Foto 2 wird per OCR ausgelesen (Autofill, editierbar), Foto 3 liefert den
+     Barcode. Gespeichert wird alles gerätelokal (IndexedDB, PKStore) inkl. der
+     Fotos als Blob — offline nutzbar, Re-Scan des Barcodes findet das Produkt. */
+
+  /* Foto verkleinern (JPEG) — spart Platz in der lokalen DB. Fällt bei Fehlern
+     auf die Originaldatei zurück. */
+  async function downscaleImage(file, maxDim, quality) {
+    maxDim = maxDim || 1280; quality = quality || 0.82;
+    try {
+      var bmp = await createImageBitmap(file);
+      var w = bmp.width, h = bmp.height;
+      var scale = Math.min(1, maxDim / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+      var cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
+      cv.getContext("2d").drawImage(bmp, 0, 0, cw, ch);
+      try { bmp.close && bmp.close(); } catch (e) {}
+      return await new Promise(function (resolve) {
+        cv.toBlob(function (b) { resolve(b || file); }, "image/jpeg", quality);
+      });
+    } catch (e) { return file; }
+  }
+
+  /* Barcode aus einem Standbild lesen (BarcodeDetector auf ImageBitmap). */
+  async function decodeBarcodeFromBlob(blob) {
+    if (!("BarcodeDetector" in window)) return "";
+    try {
+      var bmp = await createImageBitmap(blob);
+      var det;
+      try { det = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] }); }
+      catch (e) { det = new window.BarcodeDetector(); }
+      var codes = await det.detect(bmp);
+      try { bmp.close && bmp.close(); } catch (e) {}
+      return (codes && codes.length) ? String(codes[0].rawValue).replace(/\s+/g, "").replace(/\D/g, "") : "";
+    } catch (e) { return ""; }
+  }
+
+  function openCaptureSheet(pre) {
+    pre = pre || {};
+    var CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+    var CK = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+    var photos = { product: null, nutrition: null, barcode: null };
+    var urls = [];
+    function tile(key, num, label) {
+      return '<label class="cap-tile" data-tile="' + key + '">' +
+        '<span class="num">' + num + '</span>' +
+        '<span class="ci">' + CAM + '</span>' +
+        '<span class="cap-lbl">' + label + '</span>' +
+        '<span class="ck">' + CK + '</span>' +
+        '<input type="file" accept="image/*" capture="environment" data-cap="' + key + '"></label>';
+    }
+
+    openSheet("Produkt mit 3 Fotos",
+      '<p style="color:var(--muted);margin-top:-6px;font-size:.9rem">Fotografiere nacheinander Produkt, Nährwerte und Barcode. Die Nährwerte werden – wenn möglich – automatisch ausgelesen. <span class="badge-off">offline</span></p>' +
+      '<div class="cap-tiles">' + tile("product", 1, "Produkt") + tile("nutrition", 2, "Zutaten &amp; Nährwerte") + tile("barcode", 3, "Barcode") + '</div>' +
+      '<div class="ocr-status" id="cpOcr" hidden></div>' +
+      '<div class="field"><label for="cpName">Name</label><input type="text" id="cpName" maxlength="80" placeholder="z. B. Bio-Haferflocken" value="' + esc(pre.name || "") + '"></div>' +
+      '<div class="row"><div class="field"><label for="cpBrand">Marke (optional)</label><input type="text" id="cpBrand" maxlength="60"></div>' +
+      '<div class="field"><label for="cpUnit">Einheit</label><select id="cpUnit"><option value="g">g (fest)</option><option value="ml">ml (flüssig)</option></select></div></div>' +
+      '<div class="row"><div class="field"><label for="cpBase">Bezug</label><input type="number" id="cpBase" inputmode="numeric" value="100" min="1" max="2000"></div>' +
+      '<div class="field"><label for="cpKcal">Kalorien</label><input type="number" id="cpKcal" inputmode="numeric" placeholder="kcal" min="0"></div></div>' +
+      '<p style="color:var(--muted);font-size:.85rem;margin:2px 0 10px">Nährwerte je Bezugsmenge (editierbar – so stimmt die Punktzahl exakt):</p>' +
+      '<div class="row"><div class="field"><label for="cpSat">ges. Fett (g)</label><input type="number" id="cpSat" inputmode="decimal" step="0.1" placeholder="0" min="0"></div>' +
+      '<div class="field"><label for="cpSugar">Zucker (g)</label><input type="number" id="cpSugar" inputmode="decimal" step="0.1" placeholder="0" min="0"></div></div>' +
+      '<div class="row"><div class="field"><label for="cpProt">Eiweiß (g)</label><input type="number" id="cpProt" inputmode="decimal" step="0.1" placeholder="0" min="0"></div>' +
+      '<div class="field"><label for="cpFiber">Ballaststoffe (g)</label><input type="number" id="cpFiber" inputmode="decimal" step="0.1" placeholder="0" min="0"></div></div>' +
+      '<div class="field"><label for="cpBarcode">Barcode</label><input type="text" id="cpBarcode" inputmode="numeric" placeholder="wird aus Foto 3 gelesen" value="' + esc(pre.barcode || "") + '"></div>' +
+      '<div class="detail-points"><span class="coin" id="cpPts">0</span><span>Punkte je Bezugsmenge</span></div>' +
+      '<button class="btn primary block big" id="cpSave">Produkt speichern</button>',
+      function (root) {
+        function vals() {
+          return {
+            kcal: +$("#cpKcal", root).value || 0, sat_fat_g: +$("#cpSat", root).value || 0,
+            sugar_g: +$("#cpSugar", root).value || 0, protein_g: +$("#cpProt", root).value || 0,
+            fiber_g: +$("#cpFiber", root).value || 0
+          };
+        }
+        function recalc() { var p = PK.pointsFor(vals()); $("#cpPts", root).textContent = p; return p; }
+        ["#cpKcal", "#cpSat", "#cpSugar", "#cpProt", "#cpFiber"].forEach(function (s) { $(s, root).addEventListener("input", recalc); });
+
+        function markTile(key, blob) {
+          var t = $('.cap-tile[data-tile="' + key + '"]', root);
+          if (!t) return;
+          var old = $("img", t); if (old) old.remove();
+          var img = document.createElement("img");
+          var u = URL.createObjectURL(blob); urls.push(u);
+          img.onload = function () { try { URL.revokeObjectURL(u); } catch (e) {} };
+          img.src = u;
+          t.appendChild(img); t.classList.add("has");
+        }
+
+        function setNum(id, v) { if (v != null) $(id, root).value = v; }
+
+        async function runOcr(blob) {
+          var box = $("#cpOcr", root); box.hidden = false;
+          if (!window.PKOcr) { box.innerHTML = 'Automatisches Auslesen nicht verfügbar – bitte Werte von Hand eintragen.'; return; }
+          box.innerHTML = '<span class="spin"></span> Nährwerte werden gelesen … (beim ersten Mal lädt das Modell)';
+          try {
+            var parsed = await PKOcr.scanNutrition(blob, function (m) {
+              if (m && m.status && box) {
+                var pct = m.progress != null ? " " + Math.round(m.progress * 100) + "%" : "";
+                var label = /recogniz/i.test(m.status) ? "Text wird erkannt" : (/load|init|download/i.test(m.status) ? "Modell wird geladen" : m.status);
+                box.innerHTML = '<span class="spin"></span> ' + esc(label) + pct;
+              }
+            });
+            if (parsed.unit === "ml") $("#cpUnit", root).value = "ml";
+            if (parsed.base_g) setNum("#cpBase", parsed.base_g);
+            setNum("#cpKcal", parsed.kcal);
+            setNum("#cpSat", parsed.sat_fat_g);
+            setNum("#cpSugar", parsed.sugar_g);
+            setNum("#cpProt", parsed.protein_g);
+            setNum("#cpFiber", parsed.fiber_g);
+            recalc();
+            var found = Object.keys(parsed._found || {}).length;
+            box.innerHTML = found
+              ? '<span class="filled-flag">✓ ' + found + ' Wert' + (found === 1 ? "" : "e") + ' automatisch übernommen.</span> Bitte kurz prüfen.'
+              : 'Konnte nichts sicher lesen – bitte Werte von Hand eintragen.';
+          } catch (e) {
+            box.innerHTML = navigator.onLine
+              ? 'Automatisches Auslesen fehlgeschlagen – bitte Werte von Hand eintragen.'
+              : 'Fürs erste automatische Auslesen einmal online sein. Du kannst die Werte auch von Hand eintragen.';
+          }
+        }
+
+        async function onPick(key, file) {
+          if (!file) return;
+          var maxDim = key === "barcode" ? 1600 : 1280;   // Barcode braucht mehr Details
+          var blob = await downscaleImage(file, maxDim, 0.82);
+          photos[key] = blob;
+          markTile(key, blob);
+          if (key === "nutrition") { runOcr(blob); }
+          if (key === "barcode") {
+            var box = $("#cpOcr", root);
+            var code = await decodeBarcodeFromBlob(file);   // Original fürs Dekodieren (schärfer)
+            if (code) { $("#cpBarcode", root).value = code; }
+            else if (!$("#cpBarcode", root).value) {
+              if (box) { box.hidden = false; box.innerHTML = 'Barcode nicht erkannt – bitte die Nummer unten eintragen.'; }
+            }
+          }
+        }
+
+        $$('input[type=file][data-cap]', root).forEach(function (inp) {
+          inp.addEventListener("change", function () {
+            var f = inp.files && inp.files[0];
+            onPick(inp.dataset.cap, f);
+            inp.value = "";   // erlaubt erneutes Wählen desselben Bildes
+          });
+        });
+
+        $("#cpName", root).focus();
+        recalc();
+
+        $("#cpSave", root).addEventListener("click", async function () {
+          var name = $("#cpName", root).value.trim();
+          if (!name) return toast("Bitte einen Namen eingeben.");
+          var barcode = String($("#cpBarcode", root).value || "").replace(/\s+/g, "").replace(/\D/g, "");
+          if (!barcode) return toast("Bitte den Barcode fotografieren oder die Nummer eintragen.");
+          if (!window.PKStore || !PKStore.supported) return toast("Lokaler Speicher nicht verfügbar.");
+          var v = vals();
+          var unit = $("#cpUnit", root).value === "ml" ? "ml" : "g";
+          var base = +$("#cpBase", root).value || 100;
+          var rec = {
+            barcode: barcode, name: name, brand: $("#cpBrand", root).value.trim(),
+            unit: unit, base_g: base,
+            kcal: v.kcal, sat_fat_g: v.sat_fat_g, sugar_g: v.sugar_g, protein_g: v.protein_g, fiber_g: v.fiber_g,
+            free: false, source: "local", points: recalc(),
+            photos: { product: photos.product, nutrition: photos.nutrition, barcode: photos.barcode }
+          };
+          this.disabled = true;
+          try {
+            var existing = await PKStore.get(barcode);
+            if (existing) rec.created_at = existing.created_at;
+            await PKStore.put(rec);
+            await refreshLocalProducts();
+            closeSheet();
+            toast("Produkt gespeichert · " + rec.points + " P je " + base + " " + unit);
+            switchTab("viewFood"); switchFoodSub("own");
+          } catch (e) {
+            this.disabled = false;
+            toast("Speichern fehlgeschlagen. Bitte erneut versuchen.");
+          }
         });
       });
   }
@@ -1457,13 +1755,51 @@
     var q = $("#foodSearchInput").value.trim();
     var res = await API.foods.search(q);
     var own = (S.data.custom_foods || []).filter(function (f) { return !q || f.name.toLowerCase().indexOf(q.toLowerCase()) >= 0; });
-    renderFoodResults($("#foodResults"), own.concat(res));
+    renderFoodResults($("#foodResults"), localProductMatches(q).concat(own, res));
   }, 180);
 
+  var DEL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>';
+
+  /* Eigene, gerätelokale Produkte (3-Foto-Erfassung) — oben in „Eigene". */
+  function renderLocalProductList() {
+    var host = $("#ownProductList");
+    if (!host) return;
+    var list = S.localProducts || [];
+    if (!list.length) { host.innerHTML = ""; return; }
+    host.innerHTML = '<div style="font-weight:800;color:var(--ink-2);margin:2px 0 8px;font-size:.82rem">Eigene Produkte <span class="badge-off">offline</span></div>' +
+      list.map(function (p, i) {
+        host._map = host._map || {}; host._map[i] = p;
+        var pts = p.free ? 0 : (p.points != null ? p.points : PK.pointsFor(p));
+        return '<div class="mini-list-item">' +
+          '<div class="info"><div class="nm">📷 ' + esc(p.name) + (p.brand ? ' <span style="color:var(--muted);font-weight:400">· ' + esc(p.brand) + '</span>' : '') + '</div>' +
+          '<div class="meta">' + esc((p.base_g || 100) + " " + (p.unit || "g")) + ' · ' + pts + ' P · Code ' + esc(p.barcode) + '</div></div>' +
+          '<button class="btn ghost small" data-add-prod="' + i + '">+ Tag</button>' +
+          '<button class="del" data-del-prod="' + esc(p.barcode) + '" aria-label="Löschen">' + DEL_SVG + '</button>' +
+          '</div>';
+      }).join("");
+    $$("[data-add-prod]", host).forEach(function (b) {
+      b.addEventListener("click", function () { openFoodDetail(productToFood(host._map[+b.dataset.addProd])); });
+    });
+    $$("[data-del-prod]", host).forEach(function (b) {
+      b.addEventListener("click", async function () {
+        if (!confirm("Dieses Produkt inkl. Fotos vom Gerät löschen?")) return;
+        try { if (window.PKStore) await PKStore.del(b.dataset.delProd); } catch (e) {}
+        await refreshLocalProducts();
+        renderOwnFoods();
+        toast("Produkt gelöscht.");
+      });
+    });
+  }
+
   function renderOwnFoods() {
+    renderLocalProductList();
     var list = S.data.custom_foods || [];
     var host = $("#ownFoodList");
-    if (!list.length) { host.innerHTML = '<div class="list-empty">Noch keine eigenen Lebensmittel.<br>Lege oben eins an — praktisch für Selbstgekochtes.</div>'; return; }
+    if (!list.length) {
+      host.innerHTML = (S.localProducts || []).length ? ''
+        : '<div class="list-empty">Noch keine eigenen Produkte oder Lebensmittel.<br>Leg oben eins mit 3 Fotos an — funktioniert offline.</div>';
+      return;
+    }
     host.innerHTML = list.map(function (f, i) {
       host._map = host._map || {}; host._map[i] = f;
       return '<div class="mini-list-item">' +
@@ -1570,6 +1906,7 @@
     $$("#foodSeg button").forEach(function (b) { b.addEventListener("click", function () { switchFoodSub(b.dataset.sub); }); });
     $("#foodSearchInput").addEventListener("input", runFoodSearch);
     $("#btnScanFromFood").addEventListener("click", openScanSheet);
+    $("#btnCaptureProduct").addEventListener("click", function () { openCaptureSheet(); });
     $("#btnNewFood").addEventListener("click", function () { openCustomFoodSheet(); });
     $("#btnNewRecipe").addEventListener("click", openRecipeSheet);
 
@@ -1626,10 +1963,10 @@
       hint.textContent = "Als App installieren — startet direkt.";
     } else if (isIOS) {
       btn.hidden = true;
-      hint.textContent = "In Safari: Teilen ↑ → „Zum Home-Bildschirm".";
+      hint.textContent = "In Safari: Teilen ↑ → „Zum Home-Bildschirm“.";
     } else {
       btn.hidden = true;
-      hint.textContent = "Browser-Menü ⋮ → „App installieren / Zum Startbildschirm".";
+      hint.textContent = "Browser-Menü ⋮ → „App installieren / Zum Startbildschirm“.";
     }
     showBanner();
   }

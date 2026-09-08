@@ -176,7 +176,8 @@ jobs:
           have=$(curl -s "$SITE/index.html?cb=$RANDOM" | grep -o '<title>[^<]*</title>' | head -1)
           echo "index.html Titel: lokal=$want live=$have"; [ "$want" = "$have" ] || bad=1
           for f in anmelden.html app.html konto.html betreiber.html impressum.html datenschutz.html agb.html \
-                   assets/punkto.css assets/pk-app.js assets/pk-engine.js assets/data/punkto-foods.json \
+                   assets/punkto.css assets/pk-app.js assets/pk-engine.js assets/pk-store.js assets/pk-ocr.js \
+                   assets/data/punkto-foods.json \
                    sw.js manifest.webmanifest deploy-version.txt; do
             loc=$(stat -c %s "$f"); res=$(curl -s -o /dev/null -w '%{http_code} %{size_download}' "$SITE/$f?cb=$RANDOM")
             echo "$f: lokal=$loc live=$res"; [ "$res" = "200 $loc" ] || bad=1

@@ -10,7 +10,7 @@
    - Dokumente (HTML): Netz zuerst -> live bleibt frisch; offline Rückfall auf den Cache.
    - Statische Assets (CSS/JS/Icons/Manifest): Cache zuerst -> schnell; sonst Netz + nachlegen. */
 
-const CACHE = "pk-app-v2";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
+const CACHE = "pk-app-v3";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
 const SHELL = [
   "./anmelden.html",
   "./app.html",
@@ -19,12 +19,18 @@ const SHELL = [
   "./assets/punkto.css",
   "./assets/pk-app.js",
   "./assets/pk-engine.js",
+  "./assets/pk-store.js",
+  "./assets/pk-ocr.js",
   "./icon-192.png",
   "./icon-512.png",
   "./icon-maskable-512.png",
   "./apple-touch-icon.png",
   "./favicon.svg"
 ];
+/* Hinweis: Die schweren OCR-Ressourcen unter ./assets/ocr/ (Tesseract-WASM +
+   traineddata, ~10 MB) werden BEWUSST nicht vorgecacht. Sie landen beim ersten
+   (Online-)Gebrauch über den Cache-first-Zweig unten automatisch im Cache und
+   sind danach offline verfügbar. */
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
