@@ -321,7 +321,6 @@
 <script>
 (function(){
   "use strict";
-  var SNOOZE_KEY = 'hf_install_snooze', SNOOZE_DAYS = 14;
   var banner = document.getElementById('pkInstall');
   var btn = document.getElementById('pkInstallBtn');
   var xBtn = document.getElementById('pkInstallX');
@@ -330,21 +329,20 @@
   function isStandalone(){
     return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
   }
-  function snoozed(){
-    try { var t = +localStorage.getItem(SNOOZE_KEY) || 0; return Date.now() - t < SNOOZE_DAYS*864e5; } catch(e){ return false; }
-  }
-  function snooze(){ try { localStorage.setItem(SNOOZE_KEY, String(Date.now())); } catch(e){} }
   function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream; }
 
-  // „installiert" = Live-Zustand, KEIN Dauer-Flag (Kern-Lehre 2). Kein Alt-Flag persistieren.
-  if (isStandalone() || snoozed()) return;
+  // Wunsch: Der Install-Hinweis bleibt sichtbar, BIS die App wirklich installiert ist.
+  // Einziger dauerhafter Ausblender ist der Live-Zustand „installiert" (isStandalone /
+  // appinstalled) — es wird NICHTS in localStorage persistiert (kein Snooze mehr).
+  // „×" blendet nur die aktuelle Ansicht aus; beim nächsten Laden erscheint er wieder.
+  if (isStandalone()) return;
 
   function showBanner(){ banner.classList.add('show'); }
 
   // Kern-Lehre 1: nie allein auf beforeinstallprompt verlassen — timed Fallback.
   var offered = false;
   function offerManual(){
-    if (offered || isStandalone() || snoozed()) return;
+    if (offered || isStandalone()) return;
     offered = true;
     if (window.__pkDeferredPrompt) {
       btn.style.display = '';
@@ -375,7 +373,8 @@
       banner.classList.remove('show');
     }
   });
-  xBtn.addEventListener('click', function(){ snooze(); banner.classList.remove('show'); });
+  // Nur diese Ansicht ausblenden (kein Snooze) — kommt beim naechsten Laden wieder, bis installiert.
+  xBtn.addEventListener('click', function(){ banner.classList.remove('show'); });
 
   window.addEventListener('appinstalled', function(){ banner.classList.remove('show'); });
 

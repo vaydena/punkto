@@ -393,18 +393,15 @@
 </script>
 
 <script>
-/* Kern-Lehre 2/3: Install-Hinweis auf der Verweil-Seite, „installiert" = Live-Zustand,
-   „×" nur zeitboxen (14 Tage). SW-Registrierung. */
+/* Install-Hinweis auf der Verweil-Seite. Wunsch: bleibt sichtbar, BIS die App wirklich
+   installiert ist — einziger dauerhafter Ausblender ist der Live-Zustand „installiert"
+   (isStandalone / appinstalled); es wird NICHTS in localStorage persistiert (kein Snooze).
+   „×" blendet nur die aktuelle Ansicht aus und kommt beim naechsten Laden zurueck. SW-Registrierung. */
 (function () {
   "use strict";
-  var SNOOZE_KEY = "hf_install_snooze", SNOOZE_DAYS = 14;
   function isStandalone() {
     return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
   }
-  function snoozed() {
-    try { var v = +localStorage.getItem(SNOOZE_KEY) || 0; return v && (Date.now() - v) < SNOOZE_DAYS * 864e5; } catch (e) { return false; }
-  }
-  function snooze() { try { localStorage.setItem(SNOOZE_KEY, String(Date.now())); } catch (e) {} }
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 
   var banner = document.getElementById("pkInstall");
@@ -414,13 +411,13 @@
   var shown = false;
 
   function showBanner() {
-    if (shown || isStandalone() || snoozed()) return;
+    if (shown || isStandalone()) return;
     shown = true; banner.classList.add("on");
   }
   function hideBanner() { banner.classList.remove("on"); }
 
   function offerManual() {
-    if (isStandalone() || snoozed()) return;
+    if (isStandalone()) return;
     var dp = window.__pkDeferredPrompt;
     if (dp) {
       btn.hidden = false;
@@ -443,9 +440,10 @@
     window.__pkDeferredPrompt = null;
     hideBanner();
   });
-  xBtn.addEventListener("click", function () { snooze(); hideBanner(); });
+  // Nur diese Ansicht ausblenden (kein Snooze) — kommt beim naechsten Laden wieder, bis installiert.
+  xBtn.addEventListener("click", function () { hideBanner(); });
 
-  window.addEventListener("pk-can-install", function () { if (!isStandalone() && !snoozed()) offerManual(); });
+  window.addEventListener("pk-can-install", function () { if (!isStandalone()) offerManual(); });
   window.addEventListener("appinstalled", function () { hideBanner(); });
 
   // Zeitgesteuerter Fallback (Kern-Lehre 1): auch ohne beforeinstallprompt zeigen.
