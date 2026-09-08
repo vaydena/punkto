@@ -74,6 +74,19 @@
   .detail-points{display:flex;align-items:center;justify-content:center;gap:.5em;background:var(--green-tint);
     border-radius:var(--r);padding:14px;margin:14px 0;font-weight:700;color:var(--green-800)}
   .detail-points .coin{font-size:1.3rem;min-width:2.2em;height:2.2em}
+  /* Eigene Punkte: der berechnete Wert ist nur ein Vorschlag -> überschreibbar */
+  .detail-points.is-custom .coin{box-shadow:0 0 0 2px var(--warn)}
+  .pts-adjust{margin:-4px 0 14px;text-align:center}
+  .pts-toggle{background:none;border:0;font:inherit;font-weight:700;font-size:.9rem;color:var(--green-700);
+    cursor:pointer;padding:6px 12px;border-radius:8px}
+  .pts-toggle:hover{background:var(--green-tint);color:var(--green-800)}
+  .pts-custom{margin-top:4px}
+  .pts-custom .stepper{max-width:220px;margin:0 auto}
+  .pts-reset{display:inline-block;margin-top:10px;background:none;border:0;font:inherit;font-size:.85rem;
+    color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .pts-reset:hover{color:var(--green-700)}
+  /* [hidden] hart durchsetzen (Autor-CSS darf UA-[hidden] nicht überstimmen) */
+  .pts-toggle[hidden],.pts-custom[hidden]{display:none}
 
   /* Scanner */
   .scan-box{position:relative;background:#000;border-radius:var(--r);overflow:hidden;aspect-ratio:4/3;margin-bottom:14px}
@@ -1099,18 +1112,59 @@
         '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
         [50, 100, 150, 200].map(function (g) { return '<button class="chip" data-preset="' + g + '">' + g + ' g</button>'; }).join("") +
         '</div>') +
-      '<div class="detail-points"><span class="coin" id="dPts">0</span><span>Punkte für diese Menge</span></div>' +
+      '<div class="detail-points" id="dPtsBox"><span class="coin" id="dPts">0</span><span id="dPtsLbl">Punkte für diese Menge</span></div>' +
+      '<div class="pts-adjust">' +
+        '<button type="button" class="pts-toggle" id="dPtsEdit">✎ Punkte selbst anpassen</button>' +
+        '<div class="pts-custom" id="dPtsCustom" hidden>' +
+          '<div class="stepper">' +
+          '<button type="button" id="dcMinus">−</button>' +
+          '<input type="number" id="dPtsInput" inputmode="numeric" min="0" max="200" step="1" value="0" aria-label="Eigene Punkte">' +
+          '<button type="button" id="dcPlus">+</button>' +
+          '</div>' +
+          '<button type="button" class="pts-reset" id="dcReset">↺ Vorschlag übernehmen (<span id="dcSuggest">0</span>&nbsp;P)</button>' +
+        '</div>' +
+      '</div>' +
       '<button class="btn primary block big" id="dAdd">Zum Tagebuch</button>',
       function (root) {
         var amtEl = $("#dAmount", root), ptsEl = $("#dPts", root);
+        var boxEl = $("#dPtsBox", root), lblEl = $("#dPtsLbl", root);
+        var custWrap = $("#dPtsCustom", root), custIn = $("#dPtsInput", root);
+        var editBtn = $("#dPtsEdit", root), suggEl = $("#dcSuggest", root);
+        // Der berechnete Punktwert ist nur ein VORSCHLAG. Sobald der Nutzer ihn
+        // selbst setzt (manual=true), bleibt sein Wert stehen — auch wenn er die
+        // Menge noch ändert; „Vorschlag übernehmen" kehrt zur Automatik zurück.
+        var manual = false, manualPts = 0;
+
+        function clampPts(x) { x = Math.round(parseFloat(x) || 0); return x < 0 ? 0 : (x > 200 ? 200 : x); }
+        function suggestFor(v) {
+          if (portionMode) return Math.max(0, Math.round((nf.points || 0) * v));
+          return PK.pointsForAmount(nf, v);
+        }
         function recalc() {
           var v = parseFloat(amtEl.value) || 0;
-          var pts;
-          if (portionMode) { pts = Math.max(0, Math.round((nf.points || 0) * v)); }
-          else { pts = PK.pointsForAmount(nf, v); }
+          var suggest = suggestFor(v);
+          if (suggEl) suggEl.textContent = suggest;
+          var pts = manual ? clampPts(manualPts) : suggest;
           ptsEl.textContent = pts;
           ptsEl.className = pts === 0 ? "coin zero" : "coin";
+          if (lblEl) lblEl.textContent = manual ? "Eigene Punkte" : "Punkte für diese Menge";
+          if (boxEl) boxEl.classList.toggle("is-custom", manual);
           return pts;
+        }
+        function enterManual() {
+          manual = true;
+          manualPts = clampPts(suggestFor(parseFloat(amtEl.value) || 0)); // Start beim aktuellen Vorschlag
+          custIn.value = manualPts;
+          custWrap.hidden = false;
+          editBtn.hidden = true;
+          recalc();
+          try { custIn.focus(); custIn.select(); } catch (e) {}
+        }
+        function leaveManual() {
+          manual = false;
+          custWrap.hidden = true;
+          editBtn.hidden = false;
+          recalc();
         }
         amtEl.addEventListener("input", recalc);
         $("#dMinus", root).addEventListener("click", function () {
@@ -1122,6 +1176,12 @@
         $$("[data-preset]", root).forEach(function (c) {
           c.addEventListener("click", function () { amtEl.value = c.dataset.preset; recalc(); });
         });
+        editBtn.addEventListener("click", enterManual);
+        $("#dcReset", root).addEventListener("click", leaveManual);
+        custIn.addEventListener("input", function () { manualPts = clampPts(custIn.value); recalc(); });
+        custIn.addEventListener("blur", function () { custIn.value = clampPts(custIn.value); });
+        $("#dcMinus", root).addEventListener("click", function () { manualPts = clampPts(manualPts - 1); custIn.value = manualPts; recalc(); });
+        $("#dcPlus", root).addEventListener("click", function () { manualPts = clampPts(manualPts + 1); custIn.value = manualPts; recalc(); });
         $$("#dMeal button", root).forEach(function (b) {
           b.addEventListener("click", function () {
             $$("#dMeal button", root).forEach(function (x) { x.classList.remove("on"); });

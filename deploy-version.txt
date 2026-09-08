@@ -1,4 +1,4 @@
-pk-v8-4e2c
+pk-v9-2a7d
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -32,5 +32,15 @@ v8-4e2c: Lebensmittel-Datenbank erweitert (assets/data/punkto-foods.json ->
          gerechnet (pk-engine.js), nicht gespeichert. SW-CACHE auf pk-app-v8 angehoben,
          damit installierte PWAs die neue JSON laden (SW ist cache-first, JSON nicht im
          Shell-Precache -> erst ein Cache-Purge zieht sie nach).
+v9-2a7d: Eigener Punktwert beim Eintragen — im „Zum Tagebuch"-Dialog (openFoodDetail)
+         kann der Nutzer den vom System vorgeschlagenen Punktwert jetzt selbst
+         ueberschreiben. Neuer Button „✎ Punkte selbst anpassen" oeffnet ein Stepper-
+         Eingabefeld (0–200, per +/− oder Tastatur); die Muenze bekommt einen goldenen
+         Ring und die Beschriftung wechselt auf „Eigene Punkte". „↺ Vorschlag uebernehmen
+         (N P)" zeigt live den automatischen Wert und kehrt zur Automatik zurueck. Der
+         gewaehlte Wert bleibt beim Aendern der Menge bestehen und fliesst als
+         entry.points in den Tagebucheintrag (Server clamped ohnehin auf 0–200, kein
+         Backend-Change noetig). Reine Client-Aenderung in app.html; SW-CACHE auf
+         pk-app-v9 angehoben, damit installierte PWAs den neuen Inline-Code laden.
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
