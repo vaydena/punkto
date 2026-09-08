@@ -38,12 +38,32 @@
 
     var payload = Object.assign({ action: action }, body || {});
     var res, data;
+
+    // Timeout via AbortController: ein Server, der die Verbindung annimmt aber
+    // nie antwortet, darf NIE zu einem ewigen await werden (sonst haengt der
+    // Ladeschirm auf „Laedt …" ohne Ende). Nach timeoutMs brechen wir ab und
+    // werfen denselben network-Fehler wie ein echter Verbindungsabbruch -> die
+    // Aufrufer zeigen den Offline-Cache bzw. einen „Neu laden"-Knopf.
+    var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, opts.timeoutMs || 15000) : null;
     try {
-      res = await fetch(CFG.FN + fn, { method: "POST", headers: headers, body: JSON.stringify(payload) });
-    } catch (e) {
-      var ne = new Error("network"); ne.code = "network"; ne.status = 0; throw ne;
+      try {
+        res = await fetch(CFG.FN + fn, {
+          method: "POST", headers: headers, body: JSON.stringify(payload),
+          signal: ctrl ? ctrl.signal : undefined
+        });
+      } catch (e) {
+        var ne = new Error("network"); ne.code = "network"; ne.status = 0; throw ne;
+      }
+      try { data = await res.json(); }
+      catch (e) {
+        // Abbruch waehrend des Body-Lesens zaehlt ebenfalls als network.
+        if (ctrl && ctrl.signal.aborted) { var na = new Error("network"); na.code = "network"; na.status = 0; throw na; }
+        data = {};
+      }
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    try { data = await res.json(); } catch (e) { data = {}; }
     if (!res.ok || data.error) {
       var err = new Error(data.error || ("http_" + res.status));
       err.code = data.error || ("http_" + res.status);

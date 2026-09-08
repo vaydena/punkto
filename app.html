@@ -1924,6 +1924,21 @@
   /* ---- Start ---- */
   document.addEventListener("DOMContentLoaded", boot);
   if (document.readyState !== "loading") boot();
+
+  /* Boot-Watchdog (letzte Sicherung): steht der Ladeschirm nach 20 s immer noch
+     mit dem Spinner (unerwarteter Hänger irgendwo ausserhalb von loadState),
+     dem Nutzer einen Ausweg statt endlosem „Lädt …" geben. Greift NICHT, wenn
+     boot() den Schirm schon ausgeblendet oder durch eine Fehlermeldung ersetzt
+     hat (dann fehlt .spin). */
+  setTimeout(function () {
+    var l = document.getElementById("loading");
+    if (l && !l.hidden && l.querySelector(".spin")) {
+      l.innerHTML = '<div style="text-align:center;max-width:320px">' +
+        '<p>Das dauert länger als gewöhnlich.</p>' +
+        '<p style="color:var(--muted);font-size:.86rem">Bitte lade die App neu.</p>' +
+        '<button class="btn primary" onclick="location.reload()">Neu laden</button></div>';
+    }
+  }, 20000);
 })();
 </script>
 
@@ -1989,8 +2004,24 @@
 
   // Service Worker
   if ("serviceWorker" in navigator) {
+    // Hatte die Seite beim Laden schon einen Controller? Nur dann ist ein
+    // spaeterer controllerchange ein ECHTES Update (neue Version wurde aktiv)
+    // -> genau einmal neu laden, damit ein haengengebliebener Tab die frische
+    // Version bekommt. Bei der Erstinstallation (kein alter Controller) NICHT
+    // neu laden, sonst Reload-Schleife.
+    var hadController = !!navigator.serviceWorker.controller;
+    var swReloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController || swReloaded) return;
+      swReloaded = true;
+      location.reload();
+    });
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("sw.js").catch(function () { /* offline ohne SW ok */ });
+      navigator.serviceWorker.register("sw.js").then(function (reg) {
+        try { reg.update(); } catch (e) { /* egal */ }
+        // Lange offene Tabs regelmaessig auf eine neue Version pruefen.
+        setInterval(function () { try { reg.update(); } catch (e) { /* egal */ } }, 3600000);
+      }).catch(function () { /* offline ohne SW ok */ });
     });
   }
 })();

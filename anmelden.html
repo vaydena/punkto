@@ -381,9 +381,23 @@
 
   setTimeout(offerManual, 1600);
 
-  /* Service Worker registrieren */
+  /* Service Worker registrieren + Auto-Update: ein neu deployter Worker laedt
+     einen haengengebliebenen (alten) Tab genau einmal neu. Erstinstallation
+     (kein alter Controller) loest KEIN Reload aus -> keine Schleife. */
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+    var hadController = !!navigator.serviceWorker.controller;
+    var swReloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (!hadController || swReloaded) return;
+      swReloaded = true;
+      location.reload();
+    });
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').then(function (reg) {
+        try { reg.update(); } catch (e) {}
+        setInterval(function () { try { reg.update(); } catch (e) {} }, 3600000);
+      }).catch(function(){});
+    });
   }
 })();
 </script>

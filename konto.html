@@ -451,10 +451,22 @@
   // Zeitgesteuerter Fallback (Kern-Lehre 1): auch ohne beforeinstallprompt zeigen.
   setTimeout(offerManual, 1600);
 
-  // Service Worker
+  // Service Worker + Auto-Update: ein neu deployter Worker laedt einen alten,
+  // haengengebliebenen Tab genau einmal neu. Erstinstallation loest kein Reload
+  // aus (kein alter Controller) -> keine Schleife.
   if ("serviceWorker" in navigator) {
+    var hadController = !!navigator.serviceWorker.controller;
+    var swReloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController || swReloaded) return;
+      swReloaded = true;
+      location.reload();
+    });
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("sw.js").catch(function () { /* offline ohne SW ok */ });
+      navigator.serviceWorker.register("sw.js").then(function (reg) {
+        try { reg.update(); } catch (e) { /* egal */ }
+        setInterval(function () { try { reg.update(); } catch (e) { /* egal */ } }, 3600000);
+      }).catch(function () { /* offline ohne SW ok */ });
     });
   }
 })();

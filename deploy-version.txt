@@ -1,6 +1,8 @@
-pk-v3-4c1a
+pk-v4-9c3d
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
+v4-9c3d: Fix „ewiger Ladeschirm" — fetch-Timeout (AbortController) in pk-app.js, SW Auto-Update-Reload
+         (controllerchange) in app/anmelden/konto, Boot-Watchdog mit „Neu laden" nach 20 s. SW-CACHE pk-app-v4.
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
