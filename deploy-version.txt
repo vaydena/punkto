@@ -1,4 +1,4 @@
-pk-v13-e5a1
+pk-v14-7c4a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -109,5 +109,30 @@ v13-e5a1: Punkte-Rechner (Taschenrechner) — in der App UND oeffentlich auf der
          (Slice auf 20 Zeichen), „calc" faellt darunter. Reine Client-Aenderung
          (app.html + index.html). SW-CACHE auf pk-app-v13 angehoben, damit
          installierte PWAs den neuen Inline-Code laden.
+v14-7c4a: OCR-Nährwertauslesen an ECHTEN Handyfotos repariert (der v12-Fix hielt an
+         realen Fotos NICHT — er war nur an einem synthetischen Etikett getestet).
+         Realfall: dunkle, gewoelbte Aldi-Kaffeedose („Barissimo Latte Espresso"),
+         kleine Tabelle im Bild neben hellem Zutatentext -> die alte OCR las nur den
+         Zutaten-Absatz, die Naehrwerttabelle gar nicht (-> „Konnte nichts sicher
+         lesen"). Neu in pk-ocr.js, am ORIGINALFOTO validiert (Werte exakt: 56 kcal /
+         0,8 g ges. Fett / 8,2 g Zucker je 100 ml):
+         (1) TABELLE ZUERST LOKALISIEREN: auf dunkler Dose ist die Tabelle der helle
+             Block -> grobe Helligkeitskarte (groesster zentraler heller Blob),
+             freischneiden und auf ~1500 px hochrechnen. So liest Tesseract die
+             Tabelle isoliert statt am groesseren Zutatentext „haengenzubleiben".
+         (2) MEHRERE AUFBEREITUNGEN + FELD-MERGE: PSM 11 (Sparse-Text) liest die
+             gestauchte Brennwert-Zeile (kcal) am besten, PSM 6/3 den Rest; jedes Feld
+             wird aus der ERSTEN Variante uebernommen, die einen plausiblen (Wertebe-
+             reichs-gefilterten) Wert liefert; frueher Abbruch, sobald kcal+ges.Fett+
+             Zucker stehen (haelt den Normalfall schnell).
+         (3) EINHEIT-„g"-als-„9"-Korrektur (aus „0,8 g" macht die OCR „0,89" -> 0,8)
+             und unscharfe Stichwoerter (Zucker auch „ucker/lucker", gesaettigte auch
+             „…attigt…"). Validierungs-Harness (Headless-Chrome/CDP) laeuft die ECHTE
+             scanNutrition-Pipeline gegen das reale Foto — nicht mehr nur synthetisch.
+         app.html: OCR-Kommentar aktualisiert (kein prepForOcr mehr), Ergebnis-Meldung
+         benennt fehlende Punkte-Felder (z. B. Eiweiss), Rohtext bei Misserfolg
+         einklappbar (nativer <details> -> Diagnose des naechsten Fehlerfalls).
+         Reine Client-Aenderung (app.html + assets/pk-ocr.js), kein Backend-/Datenmodell-
+         Change. SW-CACHE auf pk-app-v14 angehoben (pk-ocr.js im Shell-Precache -> Purge).
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

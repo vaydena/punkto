@@ -1754,9 +1754,26 @@
             setNum("#cpFiber", parsed.fiber_g);
             recalc();
             var found = Object.keys(parsed._found || {}).length;
-            box.innerHTML = found
-              ? '<span class="filled-flag">✓ ' + found + ' Wert' + (found === 1 ? "" : "e") + ' automatisch übernommen.</span> Bitte kurz prüfen.'
-              : 'Konnte nichts sicher lesen – bitte Werte von Hand eintragen.';
+            if (found) {
+              // Punkte-relevante, aber nicht gelesene Felder gezielt benennen —
+              // ehrlicher als ein pauschales „bitte prüfen" (Eiweiß z. B. senkt die
+              // Punkte, fehlt es, wären die Punkte zu hoch).
+              var miss = [];
+              if (parsed.kcal == null) miss.push("Kalorien");
+              if (parsed.sat_fat_g == null) miss.push("ges. Fett");
+              if (parsed.sugar_g == null) miss.push("Zucker");
+              if (parsed.protein_g == null) miss.push("Eiweiß");
+              var tail = miss.length ? ' Noch ergänzen: <b>' + miss.join(", ") + '</b>.' : ' Bitte kurz prüfen.';
+              box.innerHTML = '<span class="filled-flag">✓ ' + found + ' Wert' + (found === 1 ? "" : "e") + ' automatisch übernommen.</span>' + tail;
+            } else {
+              // Gar nichts erkannt: Rohtext einklappbar zeigen (nativer <details> —
+              // umgeht die [hidden]/display-Falle) — hilft, den nächsten Fehlerfall
+              // zu diagnostizieren, ohne die Fotos zu brauchen.
+              box.innerHTML = 'Konnte nichts sicher lesen – bitte Werte von Hand eintragen.'
+                + (parsed._text ? '<details class="ocr-raw" style="margin-top:6px"><summary style="cursor:pointer;font-size:.8rem;color:var(--muted)">Erkannten Text anzeigen</summary>'
+                    + '<pre style="white-space:pre-wrap;word-break:break-word;max-height:130px;overflow:auto;font-size:.72rem;opacity:.7;margin:6px 0 0">'
+                    + esc(String(parsed._text).slice(0, 800)) + '</pre></details>' : '');
+            }
           } catch (e) {
             box.innerHTML = navigator.onLine
               ? 'Automatisches Auslesen fehlgeschlagen – bitte Werte von Hand eintragen.'
@@ -1771,9 +1788,9 @@
           photos[key] = blob;
           markTile(key, blob);
           // OCR bekommt bewusst das ORIGINAL (nicht das klein gespeicherte JPEG):
-          // PKOcr rechnet selbst auf ~2200 px hoch + Graustufen/Kontrast herunter.
-          // Auf 1280 verkleinert schrumpft die Etikettschrift sonst unter Tesseracts
-          // lesbare Groesse (Einheit „g" wird „9"), s. prepForOcr in pk-ocr.js.
+          // PKOcr sucht darin die Naehrwerttabelle, schneidet sie frei und rechnet
+          // sie hoch (s. scanNutrition/brightBox in pk-ocr.js). Auf 1280 verkleinert
+          // schrumpft die kleine Tabellenschrift sonst unter Tesseracts lesbare Groesse.
           if (key === "nutrition") { runOcr(file); }
           if (key === "barcode") {
             var box = $("#cpOcr", root);
