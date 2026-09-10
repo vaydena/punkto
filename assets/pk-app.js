@@ -134,6 +134,10 @@
     productsPending(key, limit) { return call("admin", "products_pending", { limit: limit || 200 }, { token: null, adminKey: key }); },
     productModerate(key, id, decision, patch, reason) {
       return call("admin", "product_moderate", { id: id, decision: decision, patch: patch || null, reason: reason || "" }, { token: null, adminKey: key });
+    },
+    photosPending(key, limit) { return call("admin", "photos_pending", { limit: limit || 100 }, { token: null, adminKey: key }); },
+    photoModerate(key, id, decision, reason) {
+      return call("admin", "photo_moderate", { id: id, decision: decision, reason: reason || "" }, { token: null, adminKey: key });
     }
   };
 
@@ -210,12 +214,44 @@
       barcode: String(p.barcode || ""), unit: p.unit === "ml" ? "ml" : "g",
       base_g: n(p.base_g) || 100,
       kcal: n(p.kcal), sat_fat_g: n(p.sat_fat_g), sugar_g: n(p.sugar_g),
-      protein_g: n(p.protein_g), fiber_g: n(p.fiber_g)
+      protein_g: n(p.protein_g), fiber_g: n(p.fiber_g),
+      // Diaet-Flags mitteilen (vegan impliziert vegetarisch). "gekauft bei" bleibt
+      // bewusst geraetelokal -> wird NICHT an die Gemeinschaft uebergeben.
+      vegan: !!p.vegan, vegetarian: !!p.vegetarian || !!p.vegan
     };
   }
+  /* Einen (bereits geraetelokal als JPEG gespeicherten) Foto-Blob fuer den
+     Community-Vorschlag aufbereiten: ueber ein Canvas klein rechnen (streift zugleich
+     EXIF/GPS) und als JPEG-DataURL liefern. Bleibt klar unter der 800-KB-Grenze der
+     Edge-Function. Nur fuer syncPending() (die App selbst nutzt ihren eigenen Weg). */
+  function blobToJpegDataUrl(blob, maxDim, quality) {
+    maxDim = maxDim || 1000; quality = quality || 0.8;
+    return new Promise(function (resolve) {
+      if (!blob || typeof document === "undefined" || typeof createImageBitmap === "undefined") return resolve("");
+      createImageBitmap(blob).then(function (bmp) {
+        try {
+          var w = bmp.width, h = bmp.height;
+          var scale = Math.min(1, maxDim / Math.max(w, h));
+          var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+          var cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
+          cv.getContext("2d").drawImage(bmp, 0, 0, cw, ch);
+          try { bmp.close && bmp.close(); } catch (e) { /* egal */ }
+          var url = cv.toDataURL("image/jpeg", quality);
+          resolve(url && url.indexOf("data:image/jpeg") === 0 ? url : "");
+        } catch (e) { resolve(""); }
+      }).catch(function () { resolve(""); });
+    });
+  }
+
   var community = {
     /* Ein Produkt der Gemeinschaft vorschlagen (verlangt aktiven Zugang). */
     submit(product) { return call("data", "product_submit", submitPayload(product)); },
+    /* Optionales Produktfoto zu einem Gemeinschaftsprodukt vorschlagen (zweites
+       Opt-in). photo = JPEG-DataURL oder Base64. Landet als "pending" im privaten
+       Bucket und wird erst nach Betreiber-Freigabe am Artikel gezeigt. */
+    submitPhoto(community_product_id, photo) {
+      return call("data", "product_photo_submit", { community_product_id: community_product_id, photo: photo });
+    },
     /* Freigegebene Produkte laden und geraetelokal cachen (fuer Offline-Suche). */
     async list() {
       var d = await call("data", "product_list", {});
@@ -239,24 +275,58 @@
        Datensatz bleibt "pending" und wird beim naechsten Online-Start erneut
        versucht. Kein Token / kein PKStore -> nichts zu tun. */
     async syncPending() {
-      if (!root.PKStore || !getToken()) return { synced: 0 };
+      if (!root.PKStore || !getToken()) return { synced: 0, photos: 0 };
       var all;
-      try { all = await root.PKStore.all(); } catch (e) { return { synced: 0 }; }
+      try { all = await root.PKStore.all(); } catch (e) { return { synced: 0, photos: 0 }; }
+      var stop = false, synced = 0, photos = 0;
+
+      // 1) Produkt-Vorschlaege (nur Skalare) nachreichen. Die zurueckgegebene id wird
+      //    am Datensatz gemerkt -> ein optionales Foto kann danach zugeordnet werden.
       var pending = (all || []).filter(function (r) { return r && r.shared && r.sync_status !== "synced"; });
-      var synced = 0;
       for (var i = 0; i < pending.length; i++) {
         var r = pending[i];
         try {
-          await community.submit(r);
+          var d = await community.submit(r);
           r.sync_status = "synced"; r.synced_at = Date.now();
+          if (d && d.id) r.community_id = d.id;
           try { await root.PKStore.put(r); } catch (e) { /* egal */ }
           synced++;
         } catch (e) {
           // Offline oder (noch) kein aktiver Zugang -> spaeter erneut versuchen.
-          if (e && (e.code === "no_access" || e.code === "unauthorized" || e.status === 401 || e.status === 402)) break;
+          if (e && (e.code === "no_access" || e.code === "unauthorized" || e.status === 401 || e.status === 402)) { stop = true; break; }
         }
       }
-      return { synced: synced };
+
+      // 2) Optionale Produktfotos nachreichen — nur mit zweitem Opt-in (share_photo),
+      //    vorhandener community_id und noch nicht uebertragenem Foto. Das Bild selbst
+      //    verlaesst das Geraet nur hier. "failed" = dauerhaft untauglich (kein Retry).
+      if (!stop) {
+        var photoPending = (all || []).filter(function (r) {
+          return r && r.share_photo && r.community_id &&
+                 r.photo_sync_status !== "synced" && r.photo_sync_status !== "failed" &&
+                 r.photos && r.photos.product && (r.photos.product instanceof Blob);
+        });
+        for (var k = 0; k < photoPending.length; k++) {
+          var pr = photoPending[k];
+          try {
+            var url = await blobToJpegDataUrl(pr.photos.product, 1000, 0.8);
+            if (!url) { pr.photo_sync_status = "error"; try { await root.PKStore.put(pr); } catch (e2) { /* egal */ } continue; }
+            await community.submitPhoto(pr.community_id, url);
+            pr.photo_sync_status = "synced"; pr.photo_synced_at = Date.now();
+            try { await root.PKStore.put(pr); } catch (e3) { /* egal */ }
+            photos++;
+          } catch (e) {
+            var code = (e && e.status) || 0;
+            // Zugang abgelaufen / offline -> abbrechen, beim naechsten Start erneut.
+            if (e && (e.code === "no_access" || e.code === "unauthorized" || code === 401 || code === 402)) break;
+            // Bild dauerhaft untauglich (ungueltig / zu gross / kein JPEG) -> aufgeben.
+            pr.photo_sync_status = (code === 400 || code === 413 || code === 415) ? "failed" : "error";
+            try { await root.PKStore.put(pr); } catch (e4) { /* egal */ }
+          }
+        }
+      }
+
+      return { synced: synced, photos: photos };
     }
   };
 

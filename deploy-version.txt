@@ -1,4 +1,4 @@
-pk-v16-a7e4
+pk-v17-b8f2
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -179,5 +179,64 @@ v16-a7e4: Eigene Lebensmittel UND Rezepte nachtraeglich bearbeiten (schliesst di
          Bearbeiten-Modus + Stift-Buttons in renderOwnFoods/renderRecipes (die .edit-CSS
          existiert seit v15, kein CSS-Change). SW-CACHE auf pk-app-v16 angehoben
          (pk-app.js im Shell-Precache -> Purge noetig).
+v17-b8f2: Produktfotos mit der Gemeinschaft teilen (moderiert). Bewusste, mit dem
+         Betreiber abgestimmte Ausnahme von der bisherigen Regel „Community = nur
+         Skalare, nie Fotos": Beim Freigeben eines eigenen 3-Foto-Produkts gibt es
+         jetzt ein ZWEITES, getrenntes Opt-in „Produktfoto mitteilen" (erscheint nur,
+         wenn Freigabe an UND ein Produktfoto (Foto 1) vorliegt; standardmaessig AUS).
+         Nur dann wird das Produktfoto (Vorderseite) als SEPARATER Vorschlag
+         uebertragen — klein gerechnet per Canvas (strippt EXIF/GPS), als JPEG.
+         DATENFLUSS/PRIVACY: privater Storage-Bucket „punkto-community". Ausstehende
+         Fotos sind NIE oeffentlich; der Betreiber prueft sie ueber KURZLEBIG (1 h)
+         signierte Review-URLs. Erst mit der Freigabe wird eine lang gueltige signierte
+         URL erzeugt und am Gemeinschaftsartikel gespeichert (community_products.photo_url
+         + photo_id); ab dann zeigt die App das Foto in der Produktansicht (grosses Bild)
+         und als Thumbnail in den Suchtreffern. Ablehnen loescht das Storage-Objekt
+         dauerhaft. Ein neu freigegebenes Foto ersetzt ein evtl. vorheriges (altes Objekt
+         wird geloescht). Server-Grenzen: <= 800 KB, JPEG-Magic-Bytes geprueft, max.
+         50 offene Fotos je Nutzer. Offline/kein Zugang -> Foto bleibt „pending" und wird
+         beim naechsten Online-Start nachgereicht (syncPending Schritt 2; dauerhaft
+         untaugliche Bilder -> „failed", kein Endlos-Retry).
+         Neu: DB-Tabelle punkto.community_photos (+ community_products.photo_url/photo_id),
+         privater Bucket punkto-community. Edge-Actions punkto-data product_photo_submit
+         (WRITE-gated) + product_list liefert photo_url; punkto-admin photos_pending
+         (signierte Review-URLs) / photo_moderate (+ stats.photos_pending, export um
+         community_photos ergaenzt). Beide Functions neu deployt (verify_jwt=false!).
+         Client: app.html (2. Opt-in + Sichtbarkeitslogik, Inline-Upload nach Freigabe
+         des Produkts, Foto in Detail + Thumbnail in Suche, blobToShareJpeg), pk-app.js
+         (community.submitPhoto + blobToJpegDataUrl, syncPending Foto-Nachreichung,
+         admin.photosPending/photoModerate), betreiber.html (Sektion „Produktfotos" mit
+         Bildvorschau + Freigeben/Ablehnen). SW-CACHE auf pk-app-v17 angehoben
+         (app.html-Inline + pk-app.js im Shell-Precache -> Purge noetig).
+v17-b8f2 (Teil 2, gebuendelt): Drei neue Erfassungsfelder — Vegan, Vegetarisch,
+         „gekauft bei". Bei der 3-Foto-Produkterfassung (und im Bearbeiten-Modus)
+         gibt es jetzt zwei Haekchen 🌱 Vegan / 🥕 Vegetarisch sowie ein optionales
+         Textfeld „Gekauft bei" mit durchsuchbarer Diskounter-Vorschlagsliste
+         (natives <input list> + <datalist>: Aldi/Lidl/Rewe/Edeka/DM/Rossmann/Müller
+         … ~29 Vorschlaege, Freitext bleibt erlaubt).
+         SICHTBARKEIT/PRIVACY-ENTSCHEIDUNG:
+         (1) Vegan/Vegetarisch sind Produkteigenschaften -> geraetelokal UND (bei
+             aktiver Gemeinschafts-Freigabe) an die Community uebergeben. Positiv-only
+             Badges (nur „🌱 Vegan" ODER „🥕 Vegetarisch", nie eine „nicht vegan"-
+             Behauptung). Invariante ueberall erzwungen: vegan impliziert vegetarisch
+             (Client Capture-Sheet: vegan an -> vegetarisch an+gesperrt; punkto-data
+             submit; punkto-admin moderate; betreiber.html).
+         (2) „gekauft bei" ist eine persoenliche Einkaufsnotiz -> BLEIBT geraetelokal,
+             wird NICHT an die Community uebergeben (submitPayload laesst das Feld
+             bewusst weg; communityToFood liefert bought_at leer zurueck). Hinweis im
+             UI: „Nur fuer dich – bleibt auf deinem Geraet."
+         DEDUP unveraendert: Diaet-Flags gehen NICHT in den submit_hash ein -> derselbe
+         Artikel bleibt dedupliziert, egal welche Flags der Erst-Einreicher setzt
+         (first-wins; der Betreiber korrigiert bei der Freigabe).
+         Neu: Spalten punkto.community_products.vegan/vegetarian (boolean not null
+         default false, Migration angewandt). punkto-data: product_submit schreibt
+         vegan/vegetarian, product_list liefert sie mit. punkto-admin: export +
+         products_pending liefern die Flags, product_moderate patcht sie (Server
+         erzwingt vegan->vegetarian). Client: app.html (Capture-Sheet-Felder +
+         syncDiet + normFood/productToFood/communityToFood + Badges in Suche & Detail
+         + Bearbeiten-Vorbelegung), assets/pk-app.js (submitPayload reicht die Flags
+         weiter, laesst bought_at weg), betreiber.html (zwei Kontrollkaestchen je
+         Vorschlag, per patchFor mituebergeben). Kein neuer SW-Bump noetig (bereits
+         pk-app-v17 fuer die gebuendelte Auslieferung).
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

@@ -216,6 +216,29 @@
     border-radius:var(--r);padding:11px 13px;margin:2px 0 14px;cursor:pointer;font-size:.9rem;line-height:1.4}
   .cap-share input[type=checkbox]{margin-top:3px;width:18px;height:18px;flex:0 0 auto;accent-color:var(--green)}
   .cap-share-note{color:var(--muted);font-size:.82rem}
+  /* Foto-Freigabe ist eine Unter-Option der Freigabe: leicht eingerückt, erscheint
+     erst wenn ein Produktfoto vorliegt. WICHTIG: eigene [hidden]-Regel, sonst
+     überstimmt display:flex das UA-[hidden]{display:none} (bekannte Falle). */
+  .cap-share.cap-share-photo{margin:-8px 0 14px;margin-left:22px}
+  .cap-share[hidden]{display:none!important}
+  .food-photo{display:block;width:100%;max-height:230px;object-fit:cover;border-radius:var(--r);margin:0 0 12px;background:var(--green-tint)}
+  .food-thumb{width:38px;height:38px;border-radius:9px;object-fit:cover;flex:0 0 auto;margin-right:2px;background:var(--green-tint)}
+  /* Diaet-Merkmale: nur POSITIVE Badges (nie "nicht vegan" behaupten). Vegan hat den
+     kraeftigeren Ton, Vegetarisch den helleren; beide teilen die Grün-Tokens. */
+  .diet-badges{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 12px}
+  .diet-badge{display:inline-flex;align-items:center;gap:.35em;font-size:.78rem;font-weight:700;
+    padding:.2em .7em;border-radius:var(--r-pill);line-height:1.4}
+  .diet-badge.vegan{background:var(--green-700);color:#fff}
+  .diet-badge.vegetarian{background:var(--green-tint-2);color:var(--green-800)}
+  /* Kompakter Marker in der Ergebnisliste (nur vegan, damit die Zeile ruhig bleibt). */
+  .diet-tag{color:var(--green-700);font-weight:700}
+  /* "gekauft bei" – rein persoenliche Einkaufsinfo, dezent unter den Nährwerten. */
+  .buy-line{display:flex;align-items:center;gap:.45em;color:var(--muted);font-size:.86rem;margin:0 0 12px}
+  .buy-line b{color:var(--ink-2);font-weight:600}
+  /* Erfassungs-Bogen: Zeile für die Diaet-Häkchen + das "gekauft bei"-Feld. */
+  .cap-diet{display:flex;flex-wrap:wrap;gap:6px 18px;margin:2px 0 14px}
+  .cap-diet label{display:inline-flex;align-items:center;gap:.5em;font-size:.92rem;font-weight:600;cursor:pointer}
+  .cap-diet input{width:18px;height:18px;accent-color:var(--green)}
 
   /* Offline-Hinweis oben in der App */
   .offline-banner{background:#eef3ef;color:var(--ink-2);border-radius:var(--r);padding:.6em 1em;margin-bottom:14px;
@@ -583,7 +606,8 @@
       kcal: +f.kcal || 0, sat_fat_g: +f.sat_fat_g || 0, sugar_g: +f.sugar_g || 0,
       protein_g: +f.protein_g || 0, fiber_g: +f.fiber_g || 0,
       free: !!f.free, per: f.per || (base + " g"), points: f.points,
-      barcode: f.barcode || "", source: f.source || ""
+      barcode: f.barcode || "", source: f.source || "", photo_url: f.photo_url || "",
+      vegan: !!f.vegan, vegetarian: !!f.vegetarian || !!f.vegan, bought_at: f.bought_at || ""
     };
   }
 
@@ -699,7 +723,8 @@
       cat: "Eigenes Produkt", unit: p.unit || "g", base_g: p.base_g || 100,
       kcal: +p.kcal || 0, sat_fat_g: +p.sat_fat_g || 0, sugar_g: +p.sugar_g || 0,
       protein_g: +p.protein_g || 0, fiber_g: +p.fiber_g || 0,
-      free: !!p.free, points: p.points, source: "local", per: (p.base_g || 100) + " " + (p.unit || "g")
+      free: !!p.free, points: p.points, source: "local", per: (p.base_g || 100) + " " + (p.unit || "g"),
+      vegan: !!p.vegan, vegetarian: !!p.vegetarian || !!p.vegan, bought_at: p.bought_at || ""
     };
   }
   /* Lokale Produkte passend zur Anfrage (für die Mischung in Suchergebnisse). */
@@ -720,7 +745,10 @@
       kcal: +p.kcal || 0, sat_fat_g: +p.sat_fat_g || 0, sugar_g: +p.sugar_g || 0,
       protein_g: +p.protein_g || 0, fiber_g: +p.fiber_g || 0,
       free: false, points: undefined, source: "community",
-      per: (+p.base_g || 100) + " " + (p.unit || "g")
+      per: (+p.base_g || 100) + " " + (p.unit || "g"),
+      photo_url: p.photo_url || "",
+      // "gekauft bei" ist geraetelokal -> kommt bewusst NICHT aus der Gemeinschaft.
+      vegan: !!p.vegan, vegetarian: !!p.vegetarian || !!p.vegan, bought_at: ""
     };
   }
   /* Gemeinschaftsprodukte passend zur Anfrage. Produkte, deren Barcode bereits als
@@ -1294,10 +1322,14 @@
       var nf = normFood(f);
       var pts = nf.free ? 0 : (nf.points != null && !nf.kcal ? nf.points : PK.pointsFor(nf));
       var meta = (nf.cat ? nf.cat + " · " : "") + "je " + nf.base_g + " " + (nf.unit || "g");
+      // Kompakter, POSITIVER Marker: 🌱 vegan, sonst 🥕 vegetarisch (nie „nicht vegan").
+      var dietMark = nf.vegan ? ' <span class="diet-tag" title="Vegan">🌱</span>'
+        : (nf.vegetarian ? ' <span class="diet-tag" title="Vegetarisch">🥕</span>' : '');
       var coinCls = pts === 0 ? "coin zero" : "coin";
       host._foods = host._foods || {}; host._foods[i] = f;
       return '<button class="food-item" data-fi="' + i + '">' +
-        '<div class="info"><div class="nm">' + esc(nf.name) + '</div><div class="meta">' + esc(meta) + '</div></div>' +
+        (nf.photo_url ? '<img class="food-thumb" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
+        '<div class="info"><div class="nm">' + esc(nf.name) + '</div><div class="meta">' + esc(meta) + dietMark + '</div></div>' +
         '<span class="' + coinCls + '">' + pts + '</span></button>';
     }).join("");
     $$(".food-item", host).forEach(function (b) {
@@ -1316,7 +1348,15 @@
     var unitLabel = portionMode ? "Portion(en)" : (nf.unit || "g");
 
     openSheet(nf.name,
+      (nf.photo_url ? '<img class="food-photo" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
       (nf.brand ? '<p style="color:var(--muted);margin-top:-6px">' + esc(nf.brand) + '</p>' : '') +
+      // Nur positive Diaet-Badges (vegan schließt vegetarisch ein -> dann nur „Vegan").
+      ((nf.vegan || nf.vegetarian) ? '<div class="diet-badges">' +
+        (nf.vegan ? '<span class="diet-badge vegan">🌱 Vegan</span>' : '') +
+        (nf.vegan ? '' : (nf.vegetarian ? '<span class="diet-badge vegetarian">🥕 Vegetarisch</span>' : '')) +
+        '</div>' : '') +
+      // „gekauft bei" – rein persoenlich, nur wenn hinterlegt (nie aus der Gemeinschaft).
+      (nf.bought_at ? '<div class="buy-line">🛒 gekauft bei <b>' + esc(nf.bought_at) + '</b></div>' : '') +
       '<label>Mahlzeit</label>' +
       '<div class="seg" id="dMeal" style="margin-bottom:14px">' +
       MEALS.map(function (m) { return '<button data-m="' + m.key + '"' + (m.key === meal ? ' class="on"' : '') + '>' + m.label + '</button>'; }).join("") +
@@ -1788,6 +1828,21 @@
     } catch (e) { return file; }
   }
 
+  /* Produktfoto für den Gemeinschafts-Vorschlag aufbereiten: klein rechnen (das
+     Canvas-Reencoding strippt zugleich EXIF/GPS) und als JPEG-DataURL liefern.
+     Ergebnis bleibt deutlich unter der 800-KB-Grenze der Edge-Function. */
+  async function blobToShareJpeg(blob) {
+    try {
+      var small = await downscaleImage(blob, 1000, 0.8);   // Blob (image/jpeg)
+      return await new Promise(function (resolve) {
+        var fr = new FileReader();
+        fr.onload = function () { resolve(String(fr.result || "")); };
+        fr.onerror = function () { resolve(""); };
+        fr.readAsDataURL(small);
+      });
+    } catch (e) { return ""; }
+  }
+
   /* Barcode aus einem Standbild lesen (BarcodeDetector auf ImageBitmap). */
   async function decodeBarcodeFromBlob(blob) {
     if (!("BarcodeDetector" in window)) return "";
@@ -1812,6 +1867,14 @@
     var urls = [];
     // Vorbelegung nur für Werte > 0 (wie im Lebensmittel-Sheet) — leere Felder bleiben leer.
     function nv(x) { x = +x; return Number.isFinite(x) && x > 0 ? ' value="' + x + '"' : ''; }
+    // "gekauft bei": kuratierte deutsche Diskounter/Drogerien/Supermärkte als Vorschläge.
+    // <datalist> ist durchsuchbar UND lässt freien Text zu (usw.) — keine Zwangsauswahl.
+    var STORES = ["Aldi", "Aldi Süd", "Aldi Nord", "Lidl", "Rewe", "Edeka", "Kaufland",
+      "Netto", "Penny", "Norma", "Globus", "Marktkauf", "tegut", "Famila", "Real",
+      "DM", "Rossmann", "Müller", "Budni",
+      "Denns Biomarkt", "Alnatura", "Bioladen", "Metro", "Amazon",
+      "Wochenmarkt", "Bäckerei", "Tankstelle", "Getränkemarkt", "Hofladen"];
+    var STORE_OPTS = STORES.map(function (s) { return '<option value="' + esc(s) + '">'; }).join("");
     // Pro Foto ZWEI Wege (MediScan-Muster): Kamera (capture) und Galerie (ohne capture).
     // Beide Inputs sind versteckt und werden per .click() aus der Button-Geste geöffnet.
     function tile(key, num, label) {
@@ -1847,11 +1910,25 @@
       '<div class="row"><div class="field"><label for="cpProt">Eiweiß (g)</label><input type="number" id="cpProt" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(pre.protein_g) + '></div>' +
       '<div class="field"><label for="cpFiber">Ballaststoffe (g)</label><input type="number" id="cpFiber" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(pre.fiber_g) + '></div></div>' +
       '<div class="field"><label for="cpBarcode">Barcode</label><input type="text" id="cpBarcode" inputmode="numeric" placeholder="wird aus Foto 3 gelesen" value="' + esc(pre.barcode || "") + '"></div>' +
+      // Diaet-Merkmale: vegan impliziert vegetarisch (wird unten automatisch gesetzt).
+      '<div class="cap-diet">' +
+        '<label><input type="checkbox" id="cpVegan"' + (pre.vegan ? " checked" : "") + '> 🌱 Vegan</label>' +
+        '<label><input type="checkbox" id="cpVegetarian"' + (pre.vegetarian ? " checked" : "") + '> 🥕 Vegetarisch</label>' +
+      '</div>' +
+      // "gekauft bei" – rein persoenliche Einkaufsinfo, durchsuchbares Diskounter-Feld, freier Text erlaubt.
+      '<div class="field"><label for="cpBoughtAt">Gekauft bei (optional)</label>' +
+        '<input type="text" id="cpBoughtAt" list="cpStores" maxlength="40" autocomplete="off" placeholder="Diskounter suchen oder eintippen …" value="' + esc(pre.bought_at || "") + '">' +
+        '<datalist id="cpStores">' + STORE_OPTS + '</datalist>' +
+        '<span class="cap-share-note" style="display:block;margin-top:4px">Nur für dich – bleibt auf deinem Gerät.</span></div>' +
       '<div class="detail-points"><span class="coin" id="cpPts">0</span><span>Punkte je Bezugsmenge</span></div>' +
       '<label class="cap-share"><input type="checkbox" id="cpShare"' + (pre.shared ? " checked" : "") + '>' +
       '<span><b>Für die Gemeinschaft freigeben</b><br>' +
-      '<span class="cap-share-note">Teile nur <b>Name, Marke, Nährwerte & Barcode</b> – <b>keine Fotos</b>. ' +
+      '<span class="cap-share-note">Teile <b>Name, Marke, Nährwerte, Barcode & Vegan/Vegetarisch</b> (nicht „gekauft bei"). ' +
       'Nach Prüfung durch uns hilfst du damit anderen. Standard: bleibt nur auf deinem Gerät.</span></span></label>' +
+      '<label class="cap-share cap-share-photo" id="cpSharePhotoWrap" hidden><input type="checkbox" id="cpSharePhoto"' + (pre.share_photo ? " checked" : "") + '>' +
+      '<span><b>Produktfoto mitteilen</b><br>' +
+      '<span class="cap-share-note">Zusätzlich dein <b>Produktfoto</b> (Vorderseite, Foto 1) vorschlagen. ' +
+      'Wird separat geprüft und erst nach Freigabe am Gemeinschaftsartikel gezeigt.</span></span></label>' +
       '<button class="btn primary block big" id="cpSave">' + (editMode ? "Änderungen speichern" : "Produkt speichern") + '</button>',
       function (root) {
         function vals() {
@@ -1863,6 +1940,29 @@
         }
         function recalc() { var p = PK.pointsFor(vals()); $("#cpPts", root).textContent = p; return p; }
         ["#cpKcal", "#cpSat", "#cpSugar", "#cpProt", "#cpFiber"].forEach(function (s) { $(s, root).addEventListener("input", recalc); });
+
+        // Foto-Freigabe (zweites Opt-in) nur einblenden, wenn die Freigabe angehakt
+        // ist UND ein Produktfoto vorliegt — ohne Foto gibt es nichts zu teilen.
+        function updatePhotoShareVis() {
+          var wrap = $("#cpSharePhotoWrap", root);
+          if (!wrap) return;
+          var shareOn = !!($("#cpShare", root) && $("#cpShare", root).checked);
+          var hasPhoto = !!photos.product;
+          wrap.hidden = !(shareOn && hasPhoto);
+          if (wrap.hidden) { var cb = $("#cpSharePhoto", root); if (cb) cb.checked = false; }
+        }
+        if ($("#cpShare", root)) $("#cpShare", root).addEventListener("change", updatePhotoShareVis);
+
+        // Vegan impliziert vegetarisch: ist "Vegan" an, wird "Vegetarisch" automatisch
+        // gesetzt und gesperrt (nicht abwählbar, solange vegan). Sonst wieder frei.
+        var cpVegan = $("#cpVegan", root), cpVeggie = $("#cpVegetarian", root);
+        function syncDiet() {
+          if (!cpVegan || !cpVeggie) return;
+          if (cpVegan.checked) { cpVeggie.checked = true; cpVeggie.disabled = true; }
+          else { cpVeggie.disabled = false; }
+        }
+        if (cpVegan) cpVegan.addEventListener("change", syncDiet);
+        syncDiet(); // Prefill (Bearbeiten-Modus) sofort konsistent machen
 
         function markTile(key, blob) {
           var t = $('.cap-tile[data-tile="' + key + '"]', root);
@@ -1931,6 +2031,7 @@
           var blob = await downscaleImage(file, maxDim, 0.82);
           photos[key] = blob;
           markTile(key, blob);
+          if (key === "product") updatePhotoShareVis();   // Foto-Freigabe kann jetzt sichtbar werden
           // OCR bekommt bewusst das ORIGINAL (nicht das klein gespeicherte JPEG):
           // PKOcr sucht darin die Naehrwerttabelle, schneidet sie frei und rechnet
           // sie hoch (s. scanNutrition/brightBox in pk-ocr.js). Auf 1280 verkleinert
@@ -1978,6 +2079,7 @@
             if (b && (b instanceof Blob)) { photos[k] = b; markTile(k, b); }
           });
         }
+        updatePhotoShareVis();   // Bearbeiten-Modus: Foto-Freigabe ggf. sofort zeigen
 
         $("#cpName", root).focus();
         recalc();
@@ -1992,14 +2094,27 @@
           var unit = $("#cpUnit", root).value === "ml" ? "ml" : "g";
           var base = +$("#cpBase", root).value || 100;
           var share = !!($("#cpShare", root) && $("#cpShare", root).checked);
+          // Zweites, getrenntes Opt-in: nur wenn Freigabe an, Häkchen gesetzt UND ein
+          // Produktfoto vorliegt. Ohne all das wird kein Foto vorgeschlagen.
+          var sharePhoto = share && !!($("#cpSharePhoto", root) && $("#cpSharePhoto", root).checked) && !!photos.product;
+          // Diaet-Flags (vegan impliziert vegetarisch) + persoenliche Einkaufsinfo.
+          var vegan = !!($("#cpVegan", root) && $("#cpVegan", root).checked);
+          var vegetarian = vegan || !!($("#cpVegetarian", root) && $("#cpVegetarian", root).checked);
+          var boughtAt = String($("#cpBoughtAt", root).value || "").trim().slice(0, 40);
           var rec = {
             barcode: barcode, name: name, brand: $("#cpBrand", root).value.trim(),
             unit: unit, base_g: base,
             kcal: v.kcal, sat_fat_g: v.sat_fat_g, sugar_g: v.sugar_g, protein_g: v.protein_g, fiber_g: v.fiber_g,
             free: false, source: "local", points: recalc(),
+            // vegan/vegetarian gehen mit in die Gemeinschaft; bought_at bleibt geraetelokal.
+            vegan: vegan, vegetarian: vegetarian, bought_at: boughtAt,
             // Gemeinschaft: Opt-in merken. "pending" -> beim nächsten Online-Start
             // reicht syncPending() den Vorschlag nach (falls hier offline/kein Zugang).
             shared: share, sync_status: share ? "pending" : undefined,
+            // Optionales Produktfoto (eigenes Opt-in). "pending" -> der Inline-Upload
+            // unten bzw. syncPending() reicht es nach, sobald das Produkt eine
+            // community_id hat. Freigabe des Fotos erfolgt separat durch den Betreiber.
+            share_photo: sharePhoto, photo_sync_status: sharePhoto ? "pending" : undefined,
             photos: { product: photos.product, nutrition: photos.nutrition, barcode: photos.barcode }
           };
           this.disabled = true;
@@ -2009,6 +2124,13 @@
               rec.created_at = existing.created_at;
               // Einmal freigegeben bleibt freigegeben (Häkchen nicht heimlich zurücknehmen).
               if (existing.shared && !share) { rec.shared = true; rec.sync_status = existing.sync_status || "pending"; }
+              // Community-Zuordnung bewahren; ein bereits geteiltes Foto bleibt geteilt
+              // und wird nicht erneut hochgeladen (photo_sync_status "synced" behalten).
+              if (existing.community_id) rec.community_id = existing.community_id;
+              if (existing.share_photo && !sharePhoto) rec.share_photo = true;
+              if (rec.share_photo) {
+                rec.photo_sync_status = existing.photo_sync_status === "synced" ? "synced" : (rec.photo_sync_status || "pending");
+              }
             } else if (editMode && pre.created_at) {
               rec.created_at = pre.created_at;   // Anlegedatum beim Bearbeiten bewahren
             }
@@ -2022,12 +2144,30 @@
             closeSheet();
             toast((editMode ? "Produkt aktualisiert · " : "Produkt gespeichert · ") + rec.points + " P je " + base + " " + unit);
             switchTab("viewFood"); switchFoodSub("own");
-            // Freigabe: nur Whitelist (Name/Marke/Nährwerte/Barcode) — NIE Fotos.
+            // Freigabe: Werte-Whitelist (Name/Marke/Nährwerte/Barcode). Das Produktfoto
+            // geht NUR mit dem zweiten Opt-in und als separater Vorschlag mit.
             if (rec.shared && API.community) {
-              API.community.submit(rec).then(async function () {
+              API.community.submit(rec).then(async function (d) {
                 rec.sync_status = "synced"; rec.synced_at = Date.now();
+                if (d && d.id) rec.community_id = d.id;   // für die Foto-Zuordnung merken
                 try { await PKStore.put(rec); } catch (e) {}
-                toast("Danke! Dein Vorschlag wird von uns geprüft.");
+                // Optionales Produktfoto separat vorschlagen. Klein gerechnet als
+                // JPEG-DataURL (strippt EXIF/GPS); scheitert der Upload -> bleibt
+                // "pending" und syncPending() versucht es beim nächsten Start erneut.
+                if (rec.share_photo && rec.community_id && rec.photo_sync_status !== "synced"
+                    && photos.product && API.community.submitPhoto) {
+                  try {
+                    var dataUrl = await blobToShareJpeg(photos.product);
+                    if (dataUrl) {
+                      await API.community.submitPhoto(rec.community_id, dataUrl);
+                      rec.photo_sync_status = "synced"; rec.photo_synced_at = Date.now();
+                      try { await PKStore.put(rec); } catch (e) {}
+                    }
+                  } catch (e) { /* bleibt pending -> später erneut */ }
+                }
+                toast(rec.share_photo
+                  ? "Danke! Dein Vorschlag & das Foto werden von uns geprüft."
+                  : "Danke! Dein Vorschlag wird von uns geprüft.");
               }).catch(function () { /* bleibt pending -> später erneut */ });
             }
           } catch (e) {
@@ -2294,7 +2434,8 @@
           _edit: true, _origBarcode: p.barcode, created_at: p.created_at,
           name: p.name, brand: p.brand || "", unit: p.unit || "g", base_g: p.base_g || 100,
           kcal: p.kcal, sat_fat_g: p.sat_fat_g, sugar_g: p.sugar_g, protein_g: p.protein_g, fiber_g: p.fiber_g,
-          barcode: p.barcode, shared: !!p.shared, photos: p.photos || null
+          barcode: p.barcode, shared: !!p.shared, photos: p.photos || null,
+          vegan: !!p.vegan, vegetarian: !!p.vegetarian, bought_at: p.bought_at || ""
         });
       });
     });

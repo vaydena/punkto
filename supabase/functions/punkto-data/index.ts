@@ -79,6 +79,37 @@ async function sha256hex(s: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+// --- Community-Fotos: privater Storage-Bucket --------------------------------
+// Produktfotos liegen in einem NICHT-oeffentlichen Bucket; Uploads laufen mit dem
+// Service-Role-Key ueber die Storage-REST-API. Anonymer Zugriff ist unmoeglich —
+// ausstehende Fotos sieht niemand ausser dem Betreiber (per Signed-URL im Admin).
+const SUPA_URL = Deno.env.get("SUPABASE_URL") || "";
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const PHOTO_BUCKET = "punkto-community";
+// data:-URL oder rohes base64 -> Bytes. null bei Unsinn.
+function decodeImage(s: string): Uint8Array | null {
+  const b64 = s.startsWith("data:") ? (s.split(",")[1] || "") : s;
+  if (!b64) return null;
+  try {
+    const bin = atob(b64.replace(/\s+/g, ""));
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr.length ? arr : null;
+  } catch { return null; }
+}
+async function storageUpload(path: string, bytes: Uint8Array): Promise<boolean> {
+  if (!SERVICE_KEY || !SUPA_URL) return false;
+  try {
+    const res = await fetch(`${SUPA_URL}/storage/v1/object/${PHOTO_BUCKET}/${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "image/jpeg", "x-upsert": "true" },
+      body: bytes,
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 async function auth(req: Request) {
   const token = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
   if (!token) return null;
@@ -120,7 +151,7 @@ function weekRange(dayStr: string) {
 const WRITE = new Set([
   "diary_add", "diary_update", "diary_del", "weight_set", "weight_del", "activity_add", "activity_del",
   "food_add", "food_update", "food_del", "recipe_add", "recipe_update", "recipe_del",
-  "product_submit",
+  "product_submit", "product_photo_submit",
 ]);
 
 Deno.serve(async (req: Request) => {
@@ -353,6 +384,11 @@ Deno.serve(async (req: Request) => {
       const sugar = clamp(num(body.sugar_g), 0, 1000);
       const protein = clamp(num(body.protein_g), 0, 1000);
       const fiber = clamp(num(body.fiber_g), 0, 1000);
+      // Diaet-Flags (optional). vegan impliziert vegetarisch. Bewusst NICHT Teil des
+      // submit_hash -> derselbe Artikel bleibt dedupliziert, egal wie die Flags stehen
+      // (erster Vorschlag gewinnt; der Betreiber kann sie bei der Freigabe korrigieren).
+      const vegan = body.vegan === true || body.vegan === "true" || body.vegan === 1;
+      const vegetarian = vegan || body.vegetarian === true || body.vegetarian === "true" || body.vegetarian === 1;
       const hash = await sha256hex(
         [barcode, name.toLowerCase(), brand.toLowerCase(), unit, base_g, kcal, sat, sugar, protein, fiber].join("|"),
       );
@@ -361,18 +397,47 @@ Deno.serve(async (req: Request) => {
       // Status liefert (pending/approved/rejected -> Client kann Feedback zeigen).
       const r = await sql`
         insert into punkto.community_products
-          (barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, submitted_by, submit_hash)
-        values (${barcode}, ${name}, ${brand}, ${unit}, ${base_g}, ${kcal}, ${sat}, ${sugar}, ${protein}, ${fiber}, ${u.id}, ${hash})
+          (barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, vegan, vegetarian, submitted_by, submit_hash)
+        values (${barcode}, ${name}, ${brand}, ${unit}, ${base_g}, ${kcal}, ${sat}, ${sugar}, ${protein}, ${fiber}, ${vegan}, ${vegetarian}, ${u.id}, ${hash})
         on conflict (submit_hash) do update set submit_hash = excluded.submit_hash
-        returning status`;
-      return json({ ok: true, status: r[0]?.status || "pending" });
+        returning id, status`;
+      // id wird zurueckgegeben, damit der Client ein optionales Produktfoto
+      // eindeutig diesem Vorschlag zuordnen kann (product_photo_submit).
+      return json({ ok: true, id: r[0]?.id || null, status: r[0]?.status || "pending" });
+    }
+
+    if (action === "product_photo_submit") {
+      // Optionales Produktfoto zu einem vorgeschlagenen/freigegebenen Community-
+      // Produkt beisteuern (separates Opt-in, NICHT automatisch mit den Werten).
+      // Das Foto landet als status='pending' im privaten Bucket und wird erst nach
+      // Betreiber-Freigabe an den Artikel angehaengt. submitted_by bleibt intern.
+      const cpid = String(body.community_product_id || "");
+      if (!UUID_RE.test(cpid)) return json({ error: "bad_product" }, 400);
+      const prod = await sql`select id, barcode from punkto.community_products where id = ${cpid} limit 1`;
+      if (!prod[0]) return json({ error: "product_not_found" }, 404);
+      const bytes = decodeImage(String(body.photo || ""));
+      if (!bytes) return json({ error: "bad_image" }, 400);
+      if (bytes.length > 800 * 1024) return json({ error: "image_too_large" }, 413);
+      // Muss ein JPEG sein (Client re-encodiert per Canvas -> streift auch EXIF/GPS).
+      if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) return json({ error: "not_jpeg" }, 415);
+      // Missbrauch bremsen: hoechstens 50 offene Fotos je Nutzer.
+      const openN = await sql`select count(*)::int as n from punkto.community_photos
+                                where submitted_by = ${u.id} and status = 'pending'`;
+      if ((openN[0]?.n || 0) >= 50) return json({ error: "too_many_pending" }, 429);
+      const path = `photos/${crypto.randomUUID()}.jpg`;
+      if (!(await storageUpload(path, bytes))) return json({ error: "upload_failed" }, 502);
+      const r = await sql`
+        insert into punkto.community_photos (community_product_id, barcode, storage_path, submitted_by)
+        values (${cpid}, ${prod[0].barcode || ""}, ${path}, ${u.id})
+        returning id, status`;
+      return json({ ok: true, id: r[0]?.id || null, status: r[0]?.status || "pending" });
     }
 
     if (action === "product_list") {
       // Freigegebene Community-Produkte fuer die Lebensmittel-Suche (Merge im
       // Client). Bewusst schlank und OHNE submitted_by (keine PII nach aussen).
       const rows = await sql`
-        select id, barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g
+        select id, barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, vegan, vegetarian, photo_url
           from punkto.community_products where status = 'approved'
           order by name limit 3000`;
       return json({ ok: true, products: rows, count: rows.length });

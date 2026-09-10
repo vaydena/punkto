@@ -67,9 +67,24 @@
   @media(max-width:560px){.comm-grid{grid-template-columns:repeat(2,1fr)}}
   .comm-f{display:flex;flex-direction:column;gap:3px;font-size:.75rem;color:var(--muted);font-weight:600}
   .comm-f input{padding:.42em .55em;font-size:.9rem;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+  .comm-check{flex-direction:row;align-items:center;gap:7px}
+  .comm-check input{flex:none;width:18px;height:18px;accent-color:var(--green);cursor:pointer}
+  .comm-check input:disabled{cursor:not-allowed;opacity:.65}
   .comm-actions{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
   .comm-reason{flex:1;min-width:150px;padding:.5em .7em;font-size:.86rem;border:1px solid var(--line);border-radius:9px}
   .btn.small{padding:.5em 1em;font-size:.86rem}
+
+  /* Produktfoto-Moderation */
+  #photoList{display:flex;flex-direction:column;gap:12px;padding:4px 4px 6px}
+  .photo-item{display:flex;gap:14px;border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;background:var(--card-2)}
+  @media(max-width:560px){.photo-item{flex-direction:column}}
+  .photo-preview{flex:0 0 auto;width:120px;height:120px;border-radius:10px;overflow:hidden;background:var(--line-2);display:grid;place-items:center}
+  @media(max-width:560px){.photo-preview{width:100%;height:200px}}
+  .photo-preview img{width:100%;height:100%;object-fit:cover;display:block}
+  .photo-preview.noimg img{display:none}
+  .photo-noimg{font-size:.78rem;color:var(--muted);text-align:center;padding:0 8px}
+  .photo-body{flex:1;min-width:0}
+  .photo-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 
   /* Nutzer-Detail (nutzt .sheet-back/.sheet aus punkto.css) */
   .icon-btn{background:none;border:0;font-size:1.2rem;line-height:1;color:var(--muted);cursor:pointer;padding:.2em .4em;border-radius:8px}
@@ -202,11 +217,31 @@
         <button class="btn outline small" id="commReload">Aktualisieren</button>
       </div>
       <p class="muted" style="font-size:.85rem;padding:0 4px 6px">
-        Von Nutzern freigegebene Produkte (nur Name, Marke, Nährwerte, Barcode – keine Fotos).
+        Von Nutzern freigegebene Produkte (Name, Marke, Nährwerte, Barcode).
         Werte vor dem Freigeben bei Bedarf korrigieren. Freigegebene erscheinen für alle in der Suche.
+        Optional geteilte <b>Produktfotos</b> werden separat unten geprüft.
       </p>
       <div id="commList"></div>
       <div class="empty hide" id="commEmpty">Keine offenen Vorschläge. 👍</div>
+    </div>
+
+    <!-- PRODUKTFOTOS -->
+    <div class="sec-head">
+      <h2>Produktfotos <span class="pend-badge hide" id="photoBadge">0</span></h2>
+    </div>
+    <div class="table-card">
+      <div class="th">
+        <h3>Foto-Vorschläge zur Prüfung</h3>
+        <span class="sp" style="flex:1"></span>
+        <button class="btn outline small" id="photoReload">Aktualisieren</button>
+      </div>
+      <p class="muted" style="font-size:.85rem;padding:0 4px 6px">
+        Optional von Nutzern geteilte Produktfotos. Nach <b>Freigabe</b> wird das Foto am
+        zugehörigen Gemeinschaftsartikel gezeigt (Vorschau &amp; Suche). Bei <b>Ablehnung</b>
+        wird das Bild dauerhaft gelöscht. Die Vorschau-Links sind kurzlebig signiert.
+      </p>
+      <div id="photoList"></div>
+      <div class="empty hide" id="photoEmpty">Keine offenen Foto-Vorschläge. 👍</div>
     </div>
 
     <!-- WERKZEUGE -->
@@ -335,6 +370,7 @@
     renderStats(stats);
     loadUsers(true);
     loadCommunity();
+    loadPhotos();
   }
 
   /* --------------------------------------------------------------- stats */
@@ -584,6 +620,8 @@
         commField(p.id, "sugar_g", "Zucker", p.sugar_g, "num") +
         commField(p.id, "protein_g", "Eiweiß", p.protein_g, "num") +
         commField(p.id, "fiber_g", "Ballastst.", p.fiber_g, "num") +
+        commCheck(p.id, "vegan", "🌱 Vegan", p.vegan) +
+        commCheck(p.id, "vegetarian", "🥕 Vegetarisch", p.vegetarian) +
       '</div>' +
       '<div class="comm-actions">' +
         '<input type="text" class="comm-reason" data-r="' + esc(p.id) + '" placeholder="Grund (bei Ablehnung, optional)">' +
@@ -597,11 +635,17 @@
       '<input type="' + (type === "num" ? "number" : "text") + '"' + (type === "num" ? ' step="0.1"' : '') +
       ' data-f="' + esc(key) + '" data-id="' + esc(id) + '" value="' + esc(nf(val)) + '"></label>';
   }
+  function commCheck(id, key, label, val) {
+    var on = val === true || val === "true" || val === 1;
+    return '<label class="comm-f comm-check"><span>' + esc(label) + '</span>' +
+      '<input type="checkbox" data-f="' + esc(key) + '" data-id="' + esc(id) + '"' + (on ? ' checked' : '') + '></label>';
+  }
   function patchFor(id, root) {
     var patch = {};
     (root || document).querySelectorAll('.comm-item[data-id="' + cssEsc(id) + '"] input[data-f]').forEach(function (inp) {
       var k = inp.getAttribute("data-f"), v = inp.value;
-      if (k === "unit") patch[k] = (v === "ml" ? "ml" : "g");
+      if (inp.type === "checkbox") patch[k] = inp.checked;
+      else if (k === "unit") patch[k] = (v === "ml" ? "ml" : "g");
       else if (k === "name" || k === "brand") patch[k] = v;
       else patch[k] = Number(v) || 0;
     });
@@ -630,6 +674,16 @@
     host.querySelectorAll(".comm-reject").forEach(function (b) {
       b.addEventListener("click", function () { moderate(b.getAttribute("data-x"), "rejected", b); });
     });
+    // Vegan impliziert vegetarisch: vegan an -> vegetarisch an + gesperrt (Wert bleibt
+    // trotz disabled per .checked lesbar). Der Server erzwingt dieselbe Invariante.
+    host.querySelectorAll(".comm-item").forEach(function (card) {
+      var vg = card.querySelector('input[data-f="vegan"]');
+      var ve = card.querySelector('input[data-f="vegetarian"]');
+      if (!vg || !ve) return;
+      var sync = function () { if (vg.checked) { ve.checked = true; ve.disabled = true; } else { ve.disabled = false; } };
+      vg.addEventListener("change", sync);
+      sync();
+    });
   }
   async function moderate(id, decision, btn) {
     var card = btn.closest(".comm-item");
@@ -655,6 +709,73 @@
     }
   }
   $("commReload").addEventListener("click", function () { loadCommunity(); });
+
+  /* ------------------------------------------------------------- photo mod */
+  var photoItems = [];
+  function photoRow(p) {
+    var title = p.product_name ? esc(p.product_name) : '(Produkt nicht gefunden)';
+    var brand = p.product_brand ? ' <span class="muted">· ' + esc(p.product_brand) + '</span>' : '';
+    var hint = (p.product_status && p.product_status !== "approved")
+      ? '<p class="muted" style="font-size:.8rem;margin:0 0 8px">Hinweis: zugehöriges Produkt ist noch „' + esc(p.product_status) + '" (nicht freigegeben).</p>'
+      : '';
+    return '<div class="photo-item" data-id="' + esc(p.id) + '">' +
+      '<div class="photo-preview">' +
+        (p.review_url
+          ? '<img src="' + esc(p.review_url) + '" alt="" loading="lazy" onerror="this.closest(\'.photo-preview\').classList.add(\'noimg\');this.insertAdjacentHTML(\'afterend\',\'<span class=&quot;photo-noimg&quot;>Bild nicht ladbar</span>\')">'
+          : '<span class="photo-noimg">Kein Vorschau-Link</span>') +
+      '</div>' +
+      '<div class="photo-body">' +
+        '<div class="photo-head"><div><b>' + title + '</b>' + brand + '</div>' +
+          '<span class="comm-bc mono">' + (p.barcode ? esc(p.barcode) : '—') + '</span></div>' +
+        hint +
+        '<div class="comm-actions">' +
+          '<input type="text" class="comm-reason" data-r="' + esc(p.id) + '" placeholder="Grund (bei Ablehnung, optional)">' +
+          '<button class="btn outline small photo-reject" data-x="' + esc(p.id) + '">Ablehnen</button>' +
+          '<button class="btn dark small photo-approve" data-a="' + esc(p.id) + '">Freigeben</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+  function setPhotoBadge() {
+    var badge = $("photoBadge");
+    badge.textContent = photoItems.length;
+    badge.classList.toggle("hide", photoItems.length === 0);
+    $("photoEmpty").classList.toggle("hide", photoItems.length > 0);
+  }
+  async function loadPhotos() {
+    try {
+      var d = await API.admin.photosPending(KEY, 100);
+      photoItems = d.photos || [];
+      var host = $("photoList");
+      host.innerHTML = photoItems.map(photoRow).join("");
+      setPhotoBadge();
+      host.querySelectorAll(".photo-approve").forEach(function (b) {
+        b.addEventListener("click", function () { moderatePhoto(b.getAttribute("data-a"), "approved", b); });
+      });
+      host.querySelectorAll(".photo-reject").forEach(function (b) {
+        b.addEventListener("click", function () { moderatePhoto(b.getAttribute("data-x"), "rejected", b); });
+      });
+    } catch (e) { handleErr(e, "Foto-Vorschläge konnten nicht geladen werden"); }
+  }
+  async function moderatePhoto(id, decision, btn) {
+    var card = btn.closest(".photo-item");
+    var reasonInp = card ? card.querySelector(".comm-reason") : null;
+    var reason = reasonInp ? reasonInp.value.trim() : "";
+    if (decision === "rejected" && !confirm("Foto ablehnen und dauerhaft löschen?")) return;
+    if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
+    try {
+      await API.admin.photoModerate(KEY, id, decision, reason);
+      if (card) { card.style.opacity = ".35"; card.style.pointerEvents = "none"; }
+      toast(decision === "approved" ? "Foto freigegeben." : "Foto abgelehnt & gelöscht.");
+      photoItems = photoItems.filter(function (p) { return String(p.id) !== String(id); });
+      setPhotoBadge();
+      refreshStats();
+    } catch (e) {
+      if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = false; });
+      handleErr(e, "Aktion fehlgeschlagen");
+    }
+  }
+  $("photoReload").addEventListener("click", function () { loadPhotos(); });
 
   /* --------------------------------------------------------------- export */
   $("exportBtn").addEventListener("click", async function () {
