@@ -119,7 +119,7 @@ function weekRange(dayStr: string) {
 
 const WRITE = new Set([
   "diary_add", "diary_update", "diary_del", "weight_set", "weight_del", "activity_add", "activity_del",
-  "food_add", "food_del", "recipe_add", "recipe_del",
+  "food_add", "food_update", "food_del", "recipe_add", "recipe_update", "recipe_del",
   "product_submit",
 ]);
 
@@ -262,6 +262,29 @@ Deno.serve(async (req: Request) => {
         returning id, name, brand, per, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, points, barcode`;
       return json({ ok: true, food: r[0] });
     }
+    if (action === "food_update") {
+      // Bestehendes eigenes Lebensmittel bearbeiten. Gleiche Felder/Validierung
+      // wie food_add; Punkte kommen fertig berechnet vom Client (PK.pointsFor).
+      // Scope per user_id -> fremde Eintraege sind unerreichbar (404 bei Miss).
+      const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
+      const name = String(body.name || "").trim().slice(0, 120);
+      if (!name) return json({ error: "bad_name" }, 400);
+      const r = await sql`update punkto.custom_foods set
+              name = ${name},
+              brand = ${body.brand ? String(body.brand).slice(0, 80) : null},
+              per = ${body.per ? String(body.per).slice(0, 30) : "100 g"},
+              kcal = ${body.kcal != null ? clamp(num(body.kcal), 0, 99999) : null},
+              sat_fat_g = ${body.sat_fat_g != null ? clamp(num(body.sat_fat_g), 0, 1000) : null},
+              sugar_g = ${body.sugar_g != null ? clamp(num(body.sugar_g), 0, 1000) : null},
+              protein_g = ${body.protein_g != null ? clamp(num(body.protein_g), 0, 1000) : null},
+              fiber_g = ${body.fiber_g != null ? clamp(num(body.fiber_g), 0, 1000) : null},
+              points = ${clamp(num(body.points), 0, 200)},
+              barcode = ${body.barcode ? String(body.barcode).slice(0, 40) : null}
+            where id = ${id} and user_id = ${u.id}
+          returning id, name, brand, per, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, points, barcode`;
+      if (!r[0]) return json({ error: "not_found" }, 404);
+      return json({ ok: true, food: r[0] });
+    }
     if (action === "food_del") {
       const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
       await sql`delete from punkto.custom_foods where id = ${id} and user_id = ${u.id}`;
@@ -281,6 +304,30 @@ Deno.serve(async (req: Request) => {
       const r = await sql`insert into punkto.recipes (user_id, name, servings, items, points_total, points_per_serving)
         values (${u.id}, ${name}, ${servings}, ${JSON.stringify(items)}::jsonb, ${Math.round(total * 10) / 10}, ${per})
         returning id, name, servings, items, points_total, points_per_serving`;
+      return json({ ok: true, recipe: r[0] });
+    }
+    if (action === "recipe_update") {
+      // Bestehendes Rezept bearbeiten. Zutaten/Portionen wie recipe_add
+      // normalisieren und Gesamt-/Pro-Portion-Punkte serverseitig neu berechnen.
+      const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
+      const name = String(body.name || "").trim().slice(0, 120);
+      if (!name) return json({ error: "bad_name" }, 400);
+      const servings = clamp(num(body.servings, 1), 1, 99);
+      const items = Array.isArray(body.items) ? body.items.slice(0, 60).map((it: any) => ({
+        name: String(it?.name || "").slice(0, 120), points: clamp(num(it?.points), 0, 200),
+        kcal: it?.kcal != null ? clamp(num(it.kcal), 0, 99999) : null, qty: clamp(num(it?.qty, 1), 0, 9999),
+      })) : [];
+      const total = items.reduce((a: number, it: any) => a + num(it.points), 0);
+      const per = Math.round((total / servings) * 10) / 10;
+      const r = await sql`update punkto.recipes set
+              name = ${name},
+              servings = ${servings},
+              items = ${JSON.stringify(items)}::jsonb,
+              points_total = ${Math.round(total * 10) / 10},
+              points_per_serving = ${per}
+            where id = ${id} and user_id = ${u.id}
+          returning id, name, servings, items, points_total, points_per_serving`;
+      if (!r[0]) return json({ error: "not_found" }, 404);
       return json({ ok: true, recipe: r[0] });
     }
     if (action === "recipe_del") {

@@ -111,8 +111,10 @@
     activityAdd(a) { return call("data", "activity_add", a); },
     activityDel(id) { return call("data", "activity_del", { id: id }); },
     foodAdd(food) { return call("data", "food_add", food); },
+    foodUpdate(food) { return call("data", "food_update", food); },
     foodDel(id) { return call("data", "food_del", { id: id }); },
     recipeAdd(recipe) { return call("data", "recipe_add", recipe); },
+    recipeUpdate(recipe) { return call("data", "recipe_update", recipe); },
     recipeDel(id) { return call("data", "recipe_del", { id: id }); }
   };
 
