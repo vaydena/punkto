@@ -1,4 +1,4 @@
-pk-v17-b8f2
+pk-v18-5f1c
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -238,5 +238,20 @@ v17-b8f2 (Teil 2, gebuendelt): Drei neue Erfassungsfelder — Vegan, Vegetarisch
          weiter, laesst bought_at weg), betreiber.html (zwei Kontrollkaestchen je
          Vorschlag, per patchFor mituebergeben). Kein neuer SW-Bump noetig (bereits
          pk-app-v17 fuer die gebuendelte Auslieferung).
+v18-5f1c: Barcode-Feld (Foto 3) der 3-Foto-Erfassung scannt jetzt LIVE statt zu
+         fotografieren. Statt des Fotoapparat-Symbols steht dort ein Scanner-Symbol;
+         Klick oeffnet einen Inline-Live-Scanner DIREKT im Erfassungs-Blatt (kein
+         zweites Sheet -> Fotos 1/2 und alle Formularwerte bleiben erhalten; die
+         Ein-Sheet-Architektur laesst kein zweites Blatt zu). Bei Erkennung
+         (BarcodeDetector: EAN-13/8, UPC-A/E, Code-128) wird die Nummer eingetragen,
+         der erkannte Kameraframe als Foto 3 gespeichert (Haekchen), kurz vibriert
+         und getoastet. Rueckfaelle: Browser ohne BarcodeDetector (z. B. iOS Safari)
+         -> Hinweis auf Galerie/manuelle Eingabe; Kamera nicht verfuegbar -> Warnung;
+         das Galerie-Symbol bleibt als Still-Bild-Decode-Rueckfall (decodeBarcodeFromBlob).
+         „Abbrechen" und das Schliessen des Blatts bauen die Kamera sauber ab
+         (stopCamera; Detect-Loop endet auf stopped || !S.camStream). Alte Barcode-
+         Testfotos brauchen keine Migration (Bestand bleibt anzeigbar, ist aber nicht
+         mehr Pflicht). Reine Client-Aenderung (app.html). SW-CACHE auf pk-app-v18
+         angehoben (app.html-Inline im Shell-Precache -> Purge noetig).
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

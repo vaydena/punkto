@@ -180,6 +180,8 @@
 
   /* 3-Foto-Erfassung (eigenes Produkt, offline) */
   .cap-tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:4px 0 6px}
+  /* Inline-Live-Scan fürs Barcode-Feld (kein display gesetzt -> UA-[hidden] greift). */
+  .cap-scan{margin:4px 0 12px}
   .cap-tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
     aspect-ratio:3/4;border:1.6px dashed var(--line);border-radius:var(--r);background:var(--card);
     color:var(--ink-2);font-size:.74rem;font-weight:700;text-align:center;padding:6px;overflow:hidden}
@@ -1863,6 +1865,9 @@
     var CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
     var GAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
     var CK = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+    // Barcode-Feld nutzt STATT der Kamera einen Scanner-Button (Live-Scan) — gleiche
+    // Rahmen-/Scanlinien-Grafik wie „Barcode scannen" im Add-Sheet.
+    var SCAN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>';
     var photos = { product: null, nutrition: null, barcode: null };
     var urls = [];
     // Vorbelegung nur für Werte > 0 (wie im Lebensmittel-Sheet) — leere Felder bleiben leer.
@@ -1878,15 +1883,22 @@
     // Pro Foto ZWEI Wege (MediScan-Muster): Kamera (capture) und Galerie (ohne capture).
     // Beide Inputs sind versteckt und werden per .click() aus der Button-Geste geöffnet.
     function tile(key, num, label) {
+      // Feld 3 (Barcode): Scanner-Button (Live-Scan) statt Kamera; kein Kamera-Input.
+      // Der Galerie-Button bleibt überall — beim Barcode als Rückfall (Standbild dekodieren).
+      var isBc = (key === "barcode");
+      var firstBtn = isBc
+        ? '<button type="button" class="cap-btn" data-scan="' + key + '" aria-label="Barcode scannen" title="Barcode scannen">' + SCAN + '</button>'
+        : '<button type="button" class="cap-btn" data-cam="' + key + '" aria-label="' + label + ' fotografieren" title="Foto aufnehmen">' + CAM + '</button>';
+      var camInput = isBc ? '' : '<input type="file" accept="image/*" capture="environment" data-cap-cam="' + key + '" hidden>';
       return '<div class="cap-tile" data-tile="' + key + '">' +
         '<span class="num">' + num + '</span>' +
         '<span class="ck">' + CK + '</span>' +
         '<span class="cap-lbl">' + label + '</span>' +
         '<span class="cap-acts">' +
-          '<button type="button" class="cap-btn" data-cam="' + key + '" aria-label="' + label + ' fotografieren" title="Foto aufnehmen">' + CAM + '</button>' +
+          firstBtn +
           '<button type="button" class="cap-btn" data-gal="' + key + '" aria-label="' + label + ' aus Galerie wählen" title="Aus Galerie wählen">' + GAL + '</button>' +
         '</span>' +
-        '<input type="file" accept="image/*" capture="environment" data-cap-cam="' + key + '" hidden>' +
+        camInput +
         '<input type="file" accept="image/*" data-cap-gal="' + key + '" hidden>' +
       '</div>';
     }
@@ -1895,9 +1907,10 @@
       '<p style="color:var(--muted);margin-top:-6px;font-size:.9rem">' +
         (editMode
           ? 'Ändere Name, Nährwerte oder Fotos. Die Punktzahl wird neu berechnet.'
-          : 'Nimm je ein Foto auf (📷) <b>oder</b> wähle ein vorhandenes aus der Galerie (🖼️): Produkt, Nährwerte, Barcode. Die Nährwerte werden – wenn möglich – automatisch ausgelesen.') +
+          : 'Produkt und Nährwerte fotografieren (📷) <b>oder</b> aus der Galerie wählen (🖼️). Den <b>Barcode</b> einfach live scannen. Die Nährwerte werden – wenn möglich – automatisch ausgelesen.') +
         ' <span class="badge-off">offline</span></p>' +
       '<div class="cap-tiles">' + tile("product", 1, "Produkt") + tile("nutrition", 2, "Zutaten &amp; Nährwerte") + tile("barcode", 3, "Barcode") + '</div>' +
+      '<div class="cap-scan" id="cpScanBox" hidden></div>' +
       '<div class="ocr-status" id="cpOcr" hidden></div>' +
       '<div class="field"><label for="cpName">Name</label><input type="text" id="cpName" maxlength="80" placeholder="z. B. Bio-Haferflocken" value="' + esc(pre.name || "") + '"></div>' +
       '<div class="row"><div class="field"><label for="cpBrand">Marke (optional)</label><input type="text" id="cpBrand" maxlength="60" value="' + esc(pre.brand || "") + '"></div>' +
@@ -1909,7 +1922,7 @@
       '<div class="field"><label for="cpSugar">Zucker (g)</label><input type="number" id="cpSugar" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(pre.sugar_g) + '></div></div>' +
       '<div class="row"><div class="field"><label for="cpProt">Eiweiß (g)</label><input type="number" id="cpProt" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(pre.protein_g) + '></div>' +
       '<div class="field"><label for="cpFiber">Ballaststoffe (g)</label><input type="number" id="cpFiber" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(pre.fiber_g) + '></div></div>' +
-      '<div class="field"><label for="cpBarcode">Barcode</label><input type="text" id="cpBarcode" inputmode="numeric" placeholder="wird aus Foto 3 gelesen" value="' + esc(pre.barcode || "") + '"></div>' +
+      '<div class="field"><label for="cpBarcode">Barcode</label><input type="text" id="cpBarcode" inputmode="numeric" placeholder="wird beim Scannen gelesen" value="' + esc(pre.barcode || "") + '"></div>' +
       // Diaet-Merkmale: vegan impliziert vegetarisch (wird unten automatisch gesetzt).
       '<div class="cap-diet">' +
         '<label><input type="checkbox" id="cpVegan"' + (pre.vegan ? " checked" : "") + '> 🌱 Vegan</label>' +
@@ -1973,6 +1986,69 @@
           img.onload = function () { try { URL.revokeObjectURL(u); } catch (e) {} };
           img.src = u;
           t.appendChild(img); t.classList.add("has");
+        }
+
+        // Live-Barcode-Scan INLINE im Erfassungs-Sheet (es gibt nur EIN Sheet — ein
+        // zweites zu öffnen würde Formular + Fotos 1/2 zerstören). Bei Treffer wird die
+        // Nummer ins Feld gesetzt UND der Detektions-Frame als Foto 3 gespeichert (der
+        // Kachel-Haken/Thumbnail signalisiert „erledigt"). Galerie bleibt als Rückfall.
+        async function startInlineScan() {
+          var box = $("#cpScanBox", root);
+          if (!box || !box.hidden) return;         // schon aktiv -> Doppel-Loop vermeiden
+          box.hidden = false;
+          if (!("BarcodeDetector" in window)) {
+            box.innerHTML = '<div class="alert info">Live-Scan wird von diesem Browser nicht unterstützt. Wähle den Barcode aus der Galerie (🖼️) oder tippe die Nummer unten ein.</div>';
+            return;
+          }
+          box.innerHTML =
+            '<div class="scan-box"><video id="cpScanVideo" playsinline muted></video><div class="reticle"></div></div>' +
+            '<div class="scan-hint">Halte den Barcode ins Bild.' +
+              ' <button type="button" class="btn ghost" id="cpScanCancel" style="padding:3px 12px;margin-left:6px">Abbrechen</button></div>';
+          var video = $("#cpScanVideo", root);
+          var stopped = false;
+          $("#cpScanCancel", root).addEventListener("click", function () {
+            stopped = true; stopCamera(); box.hidden = true; box.innerHTML = "";
+          });
+          try {
+            S.camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            video.srcObject = S.camStream; await video.play();
+          } catch (e) {
+            stopped = true; stopCamera();
+            box.innerHTML = '<div class="alert warn">Kamera nicht verfügbar. Wähle den Barcode aus der Galerie (🖼️) oder tippe die Nummer unten ein.</div>';
+            return;
+          }
+          var detector;
+          try { detector = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] }); }
+          catch (e) { detector = new window.BarcodeDetector(); }
+          var tick = async function () {
+            if (stopped || !S.camStream) return;   // Abbrechen/closeSheet räumt S.camStream ab
+            try {
+              var codes = await detector.detect(video);
+              if (codes && codes.length) {
+                var code = String(codes[0].rawValue).replace(/\s+/g, "").replace(/\D/g, "");
+                if (code) {
+                  // Standbild aus dem Detektions-Frame ziehen — VOR stopCamera(), sonst
+                  // ist das <video> schon schwarz.
+                  var cv = document.createElement("canvas");
+                  var vw = video.videoWidth || 1280, vh = video.videoHeight || 960;
+                  cv.width = vw; cv.height = vh;
+                  try { cv.getContext("2d").drawImage(video, 0, 0, vw, vh); } catch (e2) {}
+                  stopped = true;
+                  try { navigator.vibrate && navigator.vibrate(60); } catch (e3) {}
+                  stopCamera();
+                  box.hidden = true; box.innerHTML = "";
+                  $("#cpBarcode", root).value = code;
+                  cv.toBlob(function (blob) {
+                    if (blob) { photos.barcode = blob; markTile("barcode", blob); }
+                  }, "image/jpeg", 0.82);
+                  toast("Barcode erkannt · " + code);
+                  return;
+                }
+              }
+            } catch (e4) { /* Frame überspringen */ }
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
         }
 
         function setNum(id, v) { if (v != null) $(id, root).value = v; }
@@ -2056,6 +2132,10 @@
             if (inp) { try { inp.click(); } catch (e) {} }
           });
         });
+        // Barcode-Feld: Scanner-Button öffnet den Inline-Live-Scan (kein neues Sheet).
+        $$(".cap-btn[data-scan]", root).forEach(function (b) {
+          b.addEventListener("click", function () { startInlineScan(); });
+        });
         $$(".cap-btn[data-gal]", root).forEach(function (b) {
           b.addEventListener("click", function () {
             var inp = $('input[data-cap-gal="' + b.dataset.gal + '"]', root);
@@ -2088,7 +2168,7 @@
           var name = $("#cpName", root).value.trim();
           if (!name) return toast("Bitte einen Namen eingeben.");
           var barcode = String($("#cpBarcode", root).value || "").replace(/\s+/g, "").replace(/\D/g, "");
-          if (!barcode) return toast("Bitte den Barcode fotografieren oder die Nummer eintragen.");
+          if (!barcode) return toast("Bitte den Barcode scannen oder die Nummer eintragen.");
           if (!window.PKStore || !PKStore.supported) return toast("Lokaler Speicher nicht verfügbar.");
           var v = vals();
           var unit = $("#cpUnit", root).value === "ml" ? "ml" : "g";
