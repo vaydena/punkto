@@ -118,7 +118,7 @@ function weekRange(dayStr: string) {
 }
 
 const WRITE = new Set([
-  "diary_add", "diary_del", "weight_set", "weight_del", "activity_add", "activity_del",
+  "diary_add", "diary_update", "diary_del", "weight_set", "weight_del", "activity_add", "activity_del",
   "food_add", "food_del", "recipe_add", "recipe_del",
   "product_submit",
 ]);
@@ -198,6 +198,23 @@ Deno.serve(async (req: Request) => {
                 ${body.unit ? String(body.unit).slice(0, 20) : null}, ${body.kcal != null ? clamp(num(body.kcal), 0, 99999) : null},
                 ${body.source ? String(body.source).slice(0, 20) : "manual"}, ${body.ref_code ? String(body.ref_code).slice(0, 40) : null})
         returning id, meal, name, points, qty, unit, kcal, source, ref_code, created_at`;
+      return json({ ok: true, entry: r[0] });
+    }
+    if (action === "diary_update") {
+      // Bestehenden Tagebuch-Eintrag bearbeiten (nur die editierbaren Felder:
+      // Mahlzeit, Punkte, Menge, Einheit, kcal). Name/Tag/Quelle bleiben fix —
+      // es ist dasselbe Lebensmittel, nur anders verbucht. Scope per user_id.
+      const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
+      const meal = ["breakfast", "lunch", "dinner", "snack", "other"].includes(String(body.meal)) ? String(body.meal) : "other";
+      const r = await sql`update punkto.diary_entries set
+              meal = ${meal},
+              points = ${clamp(num(body.points), 0, 200)},
+              qty = ${clamp(num(body.qty, 1), 0, 9999)},
+              unit = ${body.unit ? String(body.unit).slice(0, 20) : null},
+              kcal = ${body.kcal != null ? clamp(num(body.kcal), 0, 99999) : null}
+            where id = ${id} and user_id = ${u.id}
+          returning id, meal, name, points, qty, unit, kcal, source, ref_code, created_at`;
+      if (!r[0]) return json({ error: "not_found" }, 404);
       return json({ ok: true, entry: r[0] });
     }
     if (action === "diary_del") {

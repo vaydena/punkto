@@ -104,6 +104,7 @@
     state(day) { return call("data", "state", day ? { day: day } : {}); },
     billing() { return call("data", "billing", {}); },
     diaryAdd(entry) { return call("data", "diary_add", entry); },
+    diaryUpdate(entry) { return call("data", "diary_update", entry); },
     diaryDel(id) { return call("data", "diary_del", { id: id }); },
     weightSet(kg, day) { return call("data", "weight_set", { weight_kg: kg, day: day }); },
     weightDel(day) { return call("data", "weight_del", { day: day }); },

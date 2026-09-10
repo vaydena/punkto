@@ -374,6 +374,8 @@ body.app{background:var(--bg);padding-bottom:calc(76px + var(--sab))}
 .entry .info{flex:1;min-width:0}
 .entry .info .nm{font-weight:700;font-size:.96rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .entry .info .qt{font-size:.82rem;color:var(--muted)}
+.entry .edit{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px;flex:0 0 auto}
+.entry .edit:hover{background:var(--green-tint);color:var(--green-700)}
 .entry .del{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px;flex:0 0 auto}
 .entry .del:hover{background:var(--danger-tint);color:var(--danger)}
 .empty{text-align:center;padding:36px 20px;color:var(--muted)}

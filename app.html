@@ -143,6 +143,8 @@
   .mini-list-item .info{flex:1;min-width:0}
   .mini-list-item .info .nm{font-weight:700;font-size:.95rem}
   .mini-list-item .info .meta{font-size:.8rem;color:var(--muted)}
+  .mini-list-item .edit{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}
+  .mini-list-item .edit:hover{background:var(--green-tint);color:var(--green-700)}
   .mini-list-item .del{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}
   .mini-list-item .del:hover{background:var(--danger-tint);color:var(--danger)}
 
@@ -178,20 +180,28 @@
 
   /* 3-Foto-Erfassung (eigenes Produkt, offline) */
   .cap-tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:4px 0 6px}
-  .cap-tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
-    aspect-ratio:3/4;border:1.6px dashed var(--line);border-radius:var(--r);background:var(--card);cursor:pointer;
+  .cap-tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+    aspect-ratio:3/4;border:1.6px dashed var(--line);border-radius:var(--r);background:var(--card);
     color:var(--ink-2);font-size:.74rem;font-weight:700;text-align:center;padding:6px;overflow:hidden}
   .cap-tile.has{border-style:solid;border-color:var(--green-tint-2);color:#fff}
-  .cap-tile input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
-  .cap-tile .ci{width:30px;height:30px;border-radius:9px;background:var(--green-tint);color:var(--green-700);
-    display:grid;place-items:center;flex:0 0 auto}
-  .cap-tile .ci svg{width:18px;height:18px}
+  .cap-tile input[type=file]{display:none}
+  /* Zwei Wege pro Foto (nach dem MediScan-Muster): Kamera und Galerie, jeweils per
+     .click() aus echter Nutzergeste geöffnet — funktioniert auch bei versteckten
+     Inputs und auf Samsung Internet (ein <label for=> auf hidden tut das dort nicht). */
+  .cap-acts{display:flex;gap:6px;z-index:3}
+  .cap-btn{width:32px;height:32px;border:0;border-radius:9px;background:var(--green-tint);color:var(--green-700);
+    display:grid;place-items:center;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent}
+  .cap-btn:active{transform:scale(.93)}
+  .cap-btn svg{width:18px;height:18px}
   .cap-tile .num{position:absolute;top:5px;left:5px;width:19px;height:19px;border-radius:50%;background:var(--green);
-    color:#fff;display:grid;place-items:center;font-size:.72rem;z-index:2}
+    color:#fff;display:grid;place-items:center;font-size:.72rem;z-index:3}
   .cap-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
-  .cap-tile .cap-lbl{position:relative;z-index:2}
-  .cap-tile.has .cap-lbl{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);padding:3px 4px;
-    color:#fff;z-index:2}
+  .cap-tile .cap-lbl{position:relative;z-index:2;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .cap-tile.has .cap-lbl{position:absolute;left:0;bottom:0;right:60px;background:rgba(0,0,0,.55);padding:3px 6px;
+    color:#fff;z-index:2;border-top-right-radius:8px;text-align:left;white-space:nowrap}
+  .cap-tile.has .cap-acts{position:absolute;bottom:6px;right:6px}
+  .cap-tile.has .cap-btn{width:27px;height:27px;background:rgba(0,0,0,.58);color:#fff}
+  .cap-tile.has .cap-btn svg{width:15px;height:15px}
   .cap-tile .ck{position:absolute;top:5px;right:5px;width:19px;height:19px;border-radius:50%;background:var(--green);
     color:#fff;display:none;place-items:center;z-index:3}
   .cap-tile.has .ck{display:grid}
@@ -950,6 +960,8 @@
           '<div class="info"><div class="nm">' + esc(e.name) + '</div>' +
           (qt.length ? '<div class="qt">' + qt.join(" · ") + '</div>' : '') + '</div>' +
           '<span class="' + coinCls + '">' + (+e.points) + '</span>' +
+          '<button class="edit" data-edit-entry="' + esc(e.id) + '" aria-label="Bearbeiten">' +
+          '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>' +
           '<button class="del" data-del-entry="' + esc(e.id) + '" aria-label="Löschen">' +
           '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>' +
           '</div>';
@@ -1416,6 +1428,118 @@
       });
   }
 
+  /* ---------------------- TAGEBUCH-EINTRAG BEARBEITEN ----------------------
+     Einen bereits erfassten Eintrag nachträglich ändern: Mahlzeit, Menge (skaliert
+     Punkte & kcal proportional zum gespeicherten Wert — die ursprünglichen Nährwerte
+     liegen im Eintrag nicht vor) und, wie beim Hinzufügen, ein manueller
+     Punkte-Override (v9). Name/Quelle/Tag bleiben unverändert. */
+  function openEntryEditSheet(entry) {
+    var meal = MEALS.some(function (m) { return m.key === entry.meal; }) ? entry.meal : "snack";
+    var baseQty = +entry.qty > 0 ? +entry.qty : 1;   // Referenzmenge fürs Skalieren
+    var basePoints = +entry.points || 0;
+    var baseKcal = +entry.kcal || 0;
+    var unit = entry.unit || "";
+    var isPortion = unit === "Portion";
+    var gramLike = unit === "g" || unit === "ml";
+    var unitLabel = unit || "Menge";
+    var step = isPortion ? 0.5 : 10;
+
+    openSheet(entry.name,
+      '<label>Mahlzeit</label>' +
+      '<div class="seg" id="eMeal" style="margin-bottom:14px">' +
+      MEALS.map(function (m) { return '<button data-m="' + m.key + '"' + (m.key === meal ? ' class="on"' : '') + '>' + m.label + '</button>'; }).join("") +
+      '</div>' +
+      '<label>Menge (' + esc(unitLabel) + ')</label>' +
+      '<div class="stepper">' +
+      '<button type="button" id="eMinus">−</button>' +
+      '<input type="number" id="eAmount" inputmode="decimal" value="' + baseQty + '" step="' + step + '" min="0">' +
+      '<button type="button" id="ePlus">+</button>' +
+      '</div>' +
+      (gramLike ?
+        '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
+        [50, 100, 150, 200].map(function (g) { return '<button class="chip" data-preset="' + g + '">' + g + ' ' + unit + '</button>'; }).join("") +
+        '</div>' : '') +
+      '<p style="color:var(--muted);font-size:.82rem;margin:10px 0 2px">Menge ändern passt Punkte &amp; kcal proportional an – oder setze die Punkte unten selbst.</p>' +
+      '<div class="detail-points" id="ePtsBox"><span class="coin" id="ePts">0</span><span id="ePtsLbl">Punkte für diese Menge</span></div>' +
+      '<div class="pts-adjust">' +
+        '<button type="button" class="pts-toggle" id="ePtsEdit">✎ Punkte selbst anpassen</button>' +
+        '<div class="pts-custom" id="ePtsCustom" hidden>' +
+          '<div class="stepper">' +
+          '<button type="button" id="ecMinus">−</button>' +
+          '<input type="number" id="ePtsInput" inputmode="numeric" min="0" max="200" step="1" value="0" aria-label="Eigene Punkte">' +
+          '<button type="button" id="ecPlus">+</button>' +
+          '</div>' +
+          '<button type="button" class="pts-reset" id="ecReset">↺ Vorschlag übernehmen (<span id="ecSuggest">0</span>&nbsp;P)</button>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn primary block big" id="eSave">Änderungen speichern</button>' +
+      '<button class="btn ghost block" id="eDel" style="margin-top:10px">Eintrag löschen</button>',
+      function (root) {
+        var amtEl = $("#eAmount", root), ptsEl = $("#ePts", root);
+        var lblEl = $("#ePtsLbl", root), boxEl = $("#ePtsBox", root);
+        var custWrap = $("#ePtsCustom", root), custIn = $("#ePtsInput", root);
+        var editBtn = $("#ePtsEdit", root), suggEl = $("#ecSuggest", root);
+        var manual = false, manualPts = 0;
+
+        function clampPts(x) { x = Math.round(parseFloat(x) || 0); return x < 0 ? 0 : (x > 200 ? 200 : x); }
+        function suggestFor(v) { return clampPts(baseQty > 0 ? basePoints * v / baseQty : basePoints); }
+        function recalc() {
+          var v = parseFloat(amtEl.value) || 0;
+          var suggest = suggestFor(v);
+          if (suggEl) suggEl.textContent = suggest;
+          var pts = manual ? clampPts(manualPts) : suggest;
+          ptsEl.textContent = pts;
+          ptsEl.className = pts === 0 ? "coin zero" : "coin";
+          if (lblEl) lblEl.textContent = manual ? "Eigene Punkte" : "Punkte für diese Menge";
+          if (boxEl) boxEl.classList.toggle("is-custom", manual);
+          return pts;
+        }
+        function enterManual() {
+          manual = true;
+          manualPts = clampPts(suggestFor(parseFloat(amtEl.value) || 0));
+          custIn.value = manualPts; custWrap.hidden = false; editBtn.hidden = true;
+          recalc(); try { custIn.focus(); custIn.select(); } catch (e) {}
+        }
+        function leaveManual() { manual = false; custWrap.hidden = true; editBtn.hidden = false; recalc(); }
+
+        amtEl.addEventListener("input", recalc);
+        $("#eMinus", root).addEventListener("click", function () { amtEl.value = Math.max(0, (parseFloat(amtEl.value) || 0) - step); recalc(); });
+        $("#ePlus", root).addEventListener("click", function () { amtEl.value = (parseFloat(amtEl.value) || 0) + step; recalc(); });
+        $$("[data-preset]", root).forEach(function (c) { c.addEventListener("click", function () { amtEl.value = c.dataset.preset; recalc(); }); });
+        editBtn.addEventListener("click", enterManual);
+        $("#ecReset", root).addEventListener("click", leaveManual);
+        custIn.addEventListener("input", function () { manualPts = clampPts(custIn.value); recalc(); });
+        custIn.addEventListener("blur", function () { custIn.value = clampPts(custIn.value); });
+        $("#ecMinus", root).addEventListener("click", function () { manualPts = clampPts(manualPts - 1); custIn.value = manualPts; recalc(); });
+        $("#ecPlus", root).addEventListener("click", function () { manualPts = clampPts(manualPts + 1); custIn.value = manualPts; recalc(); });
+        $$("#eMeal button", root).forEach(function (b) {
+          b.addEventListener("click", function () {
+            $$("#eMeal button", root).forEach(function (x) { x.classList.remove("on"); });
+            b.classList.add("on"); meal = b.dataset.m;
+          });
+        });
+        recalc();
+
+        $("#eSave", root).addEventListener("click", async function () {
+          var v = parseFloat(amtEl.value) || 0;
+          if (v <= 0) return toast("Bitte eine Menge größer 0 eingeben.");
+          var pts = recalc();
+          var kcal = baseQty > 0 ? Math.round(baseKcal * v / baseQty) : baseKcal;
+          var patch = { id: entry.id, meal: meal, points: pts, qty: v, unit: entry.unit || null, kcal: kcal };
+          this.disabled = true;
+          var r = await guardWrite(function () { return API.data.diaryUpdate(patch); });
+          if (r) { closeSheet(); await refreshDay(); toast("Aktualisiert · " + pts + " P"); }
+          else this.disabled = false;
+        });
+        $("#eDel", root).addEventListener("click", async function () {
+          this.disabled = true;
+          var r = await guardWrite(function () { return API.data.diaryDel(entry.id); });
+          if (r) { closeSheet(); await refreshDay(); toast("Entfernt."); }
+          else this.disabled = false;
+        });
+      });
+  }
+
   /* ---------------------- BARCODE-SCAN ---------------------- */
   function openScanSheet() {
     var supported = ("BarcodeDetector" in window);
@@ -1675,40 +1799,55 @@
 
   function openCaptureSheet(pre) {
     pre = pre || {};
+    var editMode = !!pre._edit;                       // bestehendes eigenes Produkt bearbeiten
     var CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+    var GAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
     var CK = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
     var photos = { product: null, nutrition: null, barcode: null };
     var urls = [];
+    // Vorbelegung nur für Werte > 0 (wie im Lebensmittel-Sheet) — leere Felder bleiben leer.
+    function nv(x) { x = +x; return Number.isFinite(x) && x > 0 ? ' value="' + x + '"' : ''; }
+    // Pro Foto ZWEI Wege (MediScan-Muster): Kamera (capture) und Galerie (ohne capture).
+    // Beide Inputs sind versteckt und werden per .click() aus der Button-Geste geöffnet.
     function tile(key, num, label) {
-      return '<label class="cap-tile" data-tile="' + key + '">' +
+      return '<div class="cap-tile" data-tile="' + key + '">' +
         '<span class="num">' + num + '</span>' +
-        '<span class="ci">' + CAM + '</span>' +
-        '<span class="cap-lbl">' + label + '</span>' +
         '<span class="ck">' + CK + '</span>' +
-        '<input type="file" accept="image/*" capture="environment" data-cap="' + key + '"></label>';
+        '<span class="cap-lbl">' + label + '</span>' +
+        '<span class="cap-acts">' +
+          '<button type="button" class="cap-btn" data-cam="' + key + '" aria-label="' + label + ' fotografieren" title="Foto aufnehmen">' + CAM + '</button>' +
+          '<button type="button" class="cap-btn" data-gal="' + key + '" aria-label="' + label + ' aus Galerie wählen" title="Aus Galerie wählen">' + GAL + '</button>' +
+        '</span>' +
+        '<input type="file" accept="image/*" capture="environment" data-cap-cam="' + key + '" hidden>' +
+        '<input type="file" accept="image/*" data-cap-gal="' + key + '" hidden>' +
+      '</div>';
     }
 
-    openSheet("Produkt mit 3 Fotos",
-      '<p style="color:var(--muted);margin-top:-6px;font-size:.9rem">Fotografiere nacheinander Produkt, Nährwerte und Barcode. Die Nährwerte werden – wenn möglich – automatisch ausgelesen. <span class="badge-off">offline</span></p>' +
+    openSheet(editMode ? "Produkt bearbeiten" : "Produkt mit 3 Fotos",
+      '<p style="color:var(--muted);margin-top:-6px;font-size:.9rem">' +
+        (editMode
+          ? 'Ändere Name, Nährwerte oder Fotos. Die Punktzahl wird neu berechnet.'
+          : 'Nimm je ein Foto auf (📷) <b>oder</b> wähle ein vorhandenes aus der Galerie (🖼️): Produkt, Nährwerte, Barcode. Die Nährwerte werden – wenn möglich – automatisch ausgelesen.') +
+        ' <span class="badge-off">offline</span></p>' +
       '<div class="cap-tiles">' + tile("product", 1, "Produkt") + tile("nutrition", 2, "Zutaten &amp; Nährwerte") + tile("barcode", 3, "Barcode") + '</div>' +
       '<div class="ocr-status" id="cpOcr" hidden></div>' +
       '<div class="field"><label for="cpName">Name</label><input type="text" id="cpName" maxlength="80" placeholder="z. B. Bio-Haferflocken" value="' + esc(pre.name || "") + '"></div>' +
-      '<div class="row"><div class="field"><label for="cpBrand">Marke (optional)</label><input type="text" id="cpBrand" maxlength="60"></div>' +
+      '<div class="row"><div class="field"><label for="cpBrand">Marke (optional)</label><input type="text" id="cpBrand" maxlength="60" value="' + esc(pre.brand || "") + '"></div>' +
       '<div class="field"><label for="cpUnit">Einheit</label><select id="cpUnit"><option value="g">g (fest)</option><option value="ml">ml (flüssig)</option></select></div></div>' +
-      '<div class="row"><div class="field"><label for="cpBase">Bezug</label><input type="number" id="cpBase" inputmode="numeric" value="100" min="1" max="2000"></div>' +
-      '<div class="field"><label for="cpKcal">Kalorien</label><input type="number" id="cpKcal" inputmode="numeric" placeholder="kcal" min="0"></div></div>' +
+      '<div class="row"><div class="field"><label for="cpBase">Bezug</label><input type="number" id="cpBase" inputmode="numeric" value="' + (+pre.base_g > 0 ? +pre.base_g : 100) + '" min="1" max="2000"></div>' +
+      '<div class="field"><label for="cpKcal">Kalorien</label><input type="number" id="cpKcal" inputmode="numeric" placeholder="kcal" min="0"' + nv(pre.kcal) + '></div></div>' +
       '<p style="color:var(--muted);font-size:.85rem;margin:2px 0 10px">Nährwerte je Bezugsmenge (editierbar – so stimmt die Punktzahl exakt):</p>' +
-      '<div class="row"><div class="field"><label for="cpSat">ges. Fett (g)</label><input type="number" id="cpSat" inputmode="decimal" step="0.1" placeholder="0" min="0"></div>' +
-      '<div class="field"><label for="cpSugar">Zucker (g)</label><input type="number" id="cpSugar" inputmode="decimal" step="0.1" placeholder="0" min="0"></div></div>' +
-      '<div class="row"><div class="field"><label for="cpProt">Eiweiß (g)</label><input type="number" id="cpProt" inputmode="decimal" step="0.1" placeholder="0" min="0"></div>' +
-      '<div class="field"><label for="cpFiber">Ballaststoffe (g)</label><input type="number" id="cpFiber" inputmode="decimal" step="0.1" placeholder="0" min="0"></div></div>' +
+      '<div class="row"><div class="field"><label for="cpSat">ges. Fett (g)</label><input type="number" id="cpSat" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(pre.sat_fat_g) + '></div>' +
+      '<div class="field"><label for="cpSugar">Zucker (g)</label><input type="number" id="cpSugar" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(pre.sugar_g) + '></div></div>' +
+      '<div class="row"><div class="field"><label for="cpProt">Eiweiß (g)</label><input type="number" id="cpProt" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(pre.protein_g) + '></div>' +
+      '<div class="field"><label for="cpFiber">Ballaststoffe (g)</label><input type="number" id="cpFiber" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(pre.fiber_g) + '></div></div>' +
       '<div class="field"><label for="cpBarcode">Barcode</label><input type="text" id="cpBarcode" inputmode="numeric" placeholder="wird aus Foto 3 gelesen" value="' + esc(pre.barcode || "") + '"></div>' +
       '<div class="detail-points"><span class="coin" id="cpPts">0</span><span>Punkte je Bezugsmenge</span></div>' +
-      '<label class="cap-share"><input type="checkbox" id="cpShare">' +
+      '<label class="cap-share"><input type="checkbox" id="cpShare"' + (pre.shared ? " checked" : "") + '>' +
       '<span><b>Für die Gemeinschaft freigeben</b><br>' +
       '<span class="cap-share-note">Teile nur <b>Name, Marke, Nährwerte & Barcode</b> – <b>keine Fotos</b>. ' +
       'Nach Prüfung durch uns hilfst du damit anderen. Standard: bleibt nur auf deinem Gerät.</span></span></label>' +
-      '<button class="btn primary block big" id="cpSave">Produkt speichern</button>',
+      '<button class="btn primary block big" id="cpSave">' + (editMode ? "Änderungen speichern" : "Produkt speichern") + '</button>',
       function (root) {
         function vals() {
           return {
@@ -1802,13 +1941,38 @@
           }
         }
 
-        $$('input[type=file][data-cap]', root).forEach(function (inp) {
+        // Kamera-/Galerie-Buttons öffnen den jeweils passenden (versteckten) Input
+        // per .click() aus echter Nutzergeste — robust auch bei hidden-Inputs und auf
+        // Samsung Internet (ein <label for=> auf hidden tut das dort nicht).
+        $$(".cap-btn[data-cam]", root).forEach(function (b) {
+          b.addEventListener("click", function () {
+            var inp = $('input[data-cap-cam="' + b.dataset.cam + '"]', root);
+            if (inp) { try { inp.click(); } catch (e) {} }
+          });
+        });
+        $$(".cap-btn[data-gal]", root).forEach(function (b) {
+          b.addEventListener("click", function () {
+            var inp = $('input[data-cap-gal="' + b.dataset.gal + '"]', root);
+            if (inp) { try { inp.click(); } catch (e) {} }
+          });
+        });
+        $$('input[data-cap-cam], input[data-cap-gal]', root).forEach(function (inp) {
           inp.addEventListener("change", function () {
+            var key = inp.dataset.capCam || inp.dataset.capGal;
             var f = inp.files && inp.files[0];
-            onPick(inp.dataset.cap, f);
+            onPick(key, f);
             inp.value = "";   // erlaubt erneutes Wählen desselben Bildes
           });
         });
+
+        // Einheit + bereits vorhandene Fotos vorbelegen (Bearbeiten-Modus).
+        if (pre.unit === "ml") $("#cpUnit", root).value = "ml";
+        if (pre.photos) {
+          ["product", "nutrition", "barcode"].forEach(function (k) {
+            var b = pre.photos[k];
+            if (b && (b instanceof Blob)) { photos[k] = b; markTile(k, b); }
+          });
+        }
 
         $("#cpName", root).focus();
         recalc();
@@ -1840,11 +2004,18 @@
               rec.created_at = existing.created_at;
               // Einmal freigegeben bleibt freigegeben (Häkchen nicht heimlich zurücknehmen).
               if (existing.shared && !share) { rec.shared = true; rec.sync_status = existing.sync_status || "pending"; }
+            } else if (editMode && pre.created_at) {
+              rec.created_at = pre.created_at;   // Anlegedatum beim Bearbeiten bewahren
             }
             await PKStore.put(rec);
+            // Bearbeiten mit geändertem Barcode: der alte (umbenannte) Schlüssel
+            // würde sonst als Dublette zurückbleiben -> entfernen.
+            if (editMode && pre._origBarcode && pre._origBarcode !== barcode) {
+              try { await PKStore.del(pre._origBarcode); } catch (e) {}
+            }
             await refreshLocalProducts();
             closeSheet();
-            toast("Produkt gespeichert · " + rec.points + " P je " + base + " " + unit);
+            toast((editMode ? "Produkt aktualisiert · " : "Produkt gespeichert · ") + rec.points + " P je " + base + " " + unit);
             switchTab("viewFood"); switchFoodSub("own");
             // Freigabe: nur Whitelist (Name/Marke/Nährwerte/Barcode) — NIE Fotos.
             if (rec.shared && API.community) {
@@ -2080,6 +2251,7 @@
   }, 180);
 
   var DEL_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>';
+  var EDIT_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 
   /* Eigene, gerätelokale Produkte (3-Foto-Erfassung) — oben in „Eigene". */
   function renderLocalProductList() {
@@ -2095,11 +2267,24 @@
           '<div class="info"><div class="nm">📷 ' + esc(p.name) + (p.brand ? ' <span style="color:var(--muted);font-weight:400">· ' + esc(p.brand) + '</span>' : '') + '</div>' +
           '<div class="meta">' + esc((p.base_g || 100) + " " + (p.unit || "g")) + ' · ' + pts + ' P · Code ' + esc(p.barcode) + '</div></div>' +
           '<button class="btn ghost small" data-add-prod="' + i + '">+ Tag</button>' +
+          '<button class="edit" data-edit-prod="' + i + '" aria-label="Bearbeiten">' + EDIT_SVG + '</button>' +
           '<button class="del" data-del-prod="' + esc(p.barcode) + '" aria-label="Löschen">' + DEL_SVG + '</button>' +
           '</div>';
       }).join("");
     $$("[data-add-prod]", host).forEach(function (b) {
       b.addEventListener("click", function () { openFoodDetail(productToFood(host._map[+b.dataset.addProd])); });
+    });
+    $$("[data-edit-prod]", host).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var p = host._map[+b.dataset.editProd]; if (!p) return;
+        // Erfassungs-Sheet im Bearbeiten-Modus öffnen: alle Werte + Fotos vorbelegt.
+        openCaptureSheet({
+          _edit: true, _origBarcode: p.barcode, created_at: p.created_at,
+          name: p.name, brand: p.brand || "", unit: p.unit || "g", base_g: p.base_g || 100,
+          kcal: p.kcal, sat_fat_g: p.sat_fat_g, sugar_g: p.sugar_g, protein_g: p.protein_g, fiber_g: p.fiber_g,
+          barcode: p.barcode, shared: !!p.shared, photos: p.photos || null
+        });
+      });
     });
     $$("[data-del-prod]", host).forEach(function (b) {
       b.addEventListener("click", async function () {
@@ -2205,6 +2390,12 @@
 
     // Delegierte Klicks für dynamische Löschen/Hinzufügen im Tag
     $("#mealGroups").addEventListener("click", async function (e) {
+      var ed = e.target.closest("[data-edit-entry]");
+      if (ed) {
+        var entry = (S.data.diary || []).filter(function (x) { return String(x.id) === String(ed.dataset.editEntry); })[0];
+        if (entry) openEntryEditSheet(entry);
+        return;
+      }
       var del = e.target.closest("[data-del-entry]");
       if (del) {
         var r = await guardWrite(function () { return API.data.diaryDel(del.dataset.delEntry); });

@@ -1,4 +1,4 @@
-pk-v14-7c4a
+pk-v15-9d2f
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -134,5 +134,29 @@ v14-7c4a: OCR-Nährwertauslesen an ECHTEN Handyfotos repariert (der v12-Fix hiel
          einklappbar (nativer <details> -> Diagnose des naechsten Fehlerfalls).
          Reine Client-Aenderung (app.html + assets/pk-ocr.js), kein Backend-/Datenmodell-
          Change. SW-CACHE auf pk-app-v14 angehoben (pk-ocr.js im Shell-Precache -> Purge).
+v15-9d2f: Zwei Nutzerwuensche — Galerie-Fotos + eigene Eintraege bearbeiten.
+         (1) GALERIE in der 3-Foto-Erfassung: pro Foto gibt es jetzt ZWEI Wege —
+             📷 Kamera (capture="environment") UND 🖼️ Galerie (Input ohne capture).
+             Beide versteckten Inputs werden per .click() aus der Button-Geste
+             geoeffnet (robust auch bei hidden-Inputs und auf Samsung Internet — ein
+             <label for=> auf hidden tut das dort nicht; uebernommen aus MediScan).
+             Vorher war nur die Kamera moeglich (ein einzelner capture-Input laesst auf
+             Android keine Galerieauswahl zu).
+         (2) TAGEBUCH-EINTRAG BEARBEITEN: jeder Eintrag hat neben „Loeschen" jetzt ein
+             Stift-Icon -> openEntryEditSheet: Mahlzeit wechseln, Menge aendern (skaliert
+             Punkte & kcal proportional zum gespeicherten Wert), Punkte per v9-Override
+             selbst setzen, plus „Eintrag loeschen". Neuer Server-Endpunkt
+             punkto-data diary_update (WRITE-gated, aktualisiert meal/points/qty/unit/kcal
+             des eigenen Eintrags; Name/Tag/Quelle bleiben) + pk-app.js data.diaryUpdate.
+         (3) EIGENES PRODUKT BEARBEITEN: die „Eigene Produkte"-Liste (3-Foto) hat neben
+             „Loeschen" jetzt ein Stift-Icon -> openCaptureSheet im Bearbeiten-Modus mit
+             ALLEN Werten + Fotos vorbelegt (Name/Marke/Einheit/Bezug/Naehrwerte/Barcode/
+             Freigabe). So lassen sich OCR-Fehler nachtraeglich korrigieren. Rein
+             clientseitig (PKStore.put ueberschreibt per Barcode; geaenderter Barcode ->
+             alter Schluessel wird entfernt; Anlegedatum bleibt erhalten).
+         Geaendert: app.html, assets/pk-app.js, assets/punkto.css,
+         supabase/functions/punkto-data (diary_update). Edge Function neu deployt
+         (verify_jwt=false!). SW-CACHE auf pk-app-v15 angehoben (punkto.css + pk-app.js
+         im Shell-Precache -> Purge noetig).
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
