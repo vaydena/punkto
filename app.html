@@ -135,6 +135,50 @@
   .mini-list-item .del{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}
   .mini-list-item .del:hover{background:var(--danger-tint);color:var(--danger)}
 
+  /* Schnellzugriff „Zuletzt + Favoriten": Zeilen im Such-Sheet (Öffnen-Button +
+     Stern-Toggle), Favoriten-Button im Detail-Sheet und die horizontale
+     „Schnell eintragen"-Leiste im Hinzufügen-Sheet. Sterne: Outline = kein
+     Favorit, gefüllt-gold = Favorit (stroke-linejoin:round gegen Spitzen-Spikes). */
+  .qf-head{font-size:.76rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--muted);margin:14px 2px 6px}
+  .qf-head:first-child{margin-top:2px}
+  .qf-item{display:flex;align-items:stretch;gap:6px;margin-bottom:8px}
+  .qf-open{flex:1;min-width:0;display:flex;align-items:center;gap:12px;background:var(--card);border:0;
+    border-radius:var(--r);padding:10px 14px;box-shadow:var(--shadow-sm);cursor:pointer;font:inherit;text-align:left}
+  .qf-open:active{transform:scale(.99)}
+  .qf-open .info{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .qf-open .info .nm{font-weight:700;font-size:.95rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qf-open .info .meta{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qf-open .coin{flex:0 0 auto}
+  .fav-star{flex:0 0 auto;width:40px;display:grid;place-items:center;background:none;border:0;padding:0;
+    border-radius:10px;cursor:pointer;color:var(--muted)}
+  .fav-star:hover{background:var(--green-tint)}
+  .fav-star svg{width:20px;height:20px;display:block}
+  .fav-star path{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+  .fav-star.on path{fill:var(--amber);stroke:var(--amber-600)}
+
+  .fav-line{display:flex;align-items:center;gap:10px;width:100%;margin:0 0 14px;padding:11px 14px;
+    border:1.6px solid transparent;border-radius:var(--r);background:var(--green-tint);color:var(--green-800);
+    font:inherit;font-weight:700;font-size:.92rem;cursor:pointer;text-align:left}
+  .fav-line .fs{flex:0 0 auto;display:inline-flex}
+  .fav-line .fs svg{width:20px;height:20px;display:block}
+  .fav-line .fs path{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+  .fav-line.on{background:var(--amber-tint);border-color:#f1c879;color:#8a5c05}
+  .fav-line.on .fs path{fill:var(--amber);stroke:var(--amber-600)}
+
+  .qf-strip-wrap{margin:0 0 14px}
+  .qf-strip-h{font-size:.76rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0 2px 7px}
+  .qf-strip{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+    padding:2px 2px 4px;scroll-snap-type:x proximity}
+  .qf-strip::-webkit-scrollbar{display:none}
+  .qf-chip{flex:0 0 auto;max-width:190px;display:flex;align-items:center;gap:7px;scroll-snap-align:start;
+    background:var(--card);border:1.6px solid var(--line);border-radius:var(--r-pill);padding:7px 12px;
+    font:inherit;font-size:.9rem;font-weight:600;color:var(--ink);cursor:pointer}
+  .qf-chip:active{transform:scale(.97)}
+  .qf-chip-star{flex:0 0 auto;color:var(--amber-600);font-size:.95rem;line-height:1}
+  .qf-chip-nm{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qf-chip .coin{flex:0 0 auto}
+
   .recipe-items{margin:10px 0}
   .recipe-item-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
   .recipe-item-row input{padding:.55em .7em}
@@ -825,6 +869,164 @@
     Promise.resolve().then(function () { return API.community.syncPending(); }).catch(function () {});
   }
 
+  /* ======================================================================
+     ZULETZT + FAVORITEN (gerätelokal, localStorage)
+     ----------------------------------------------------------------------
+     Das Tagebuch liegt serverseitig PRO TAG — eine „Zuletzt"-Liste ließe sich
+     daraus nur über viele Tagesabrufe rekonstruieren. Stattdessen sichern wir
+     beim Eintragen einen schlanken, NORMALISIERTEN Schnappschuss des Lebens-
+     mittels gerätelokal (pro Gerät, kein Backend-Change). Favoriten sind manuell
+     angeheftete Lebensmittel. Beide Listen speisen die Schnellzugriff-Ansichten
+     (leere Suche) und die „Schnell eintragen"-Leiste im Hinzufügen-Sheet.
+     Blob-Vorschaubilder (object-URLs) werden NICHT gesichert (nach Reload tot);
+     lokale/Gemeinschafts-Einträge werden beim Anzeigen gegen die Live-Daten
+     aufgelöst (resolveLiveFood), damit Punkte/Thumbnails frisch bleiben. */
+  var LS_RECENT = "pk_recent_v1", LS_FAV = "pk_fav_v1", RECENT_MAX = 24;
+  var STAR_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 17.3l-5.4 3 1-6-4.4-4.3 6-.9L12 3l2.8 5.6 6 .9-4.4 4.3 1 6z"/></svg>';
+
+  function lsGet(k) { try { var s = localStorage.getItem(k); return s ? JSON.parse(s) : []; } catch (e) { return []; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* voll/gesperrt -> egal */ } }
+
+  /* Stabiler Schlüssel: Barcode gewinnt (quellenübergreifend eindeutig), sonst id,
+     sonst Name+Basismenge. So erkennen wir „dasselbe" Lebensmittel über Quellen. */
+  function foodKey(f) {
+    f = f || {};
+    var bc = String(f.barcode || "").replace(/\D/g, "");
+    if (bc) return "bc:" + bc;
+    if (f.id) return "id:" + String(f.id);
+    return "nm:" + String(f.name || "").trim().toLowerCase() + "|" + (f.base_g || 100);
+  }
+  /* Schlanker, speicherbarer Schnappschuss (normFood-Schema). Blob-object-URLs
+     sind nach einem Reload ungültig -> leeren (werden via resolveLiveFood neu aufgelöst). */
+  function foodSnap(f) {
+    var nf = normFood(f);
+    if (nf.photo_url && /^blob:/i.test(nf.photo_url)) nf.photo_url = "";
+    return nf;
+  }
+  /* Snapshot gegen Live-Daten auflösen: lokale Produkte (frischer Blob-Thumb via
+     productToFood) und Gemeinschaftsprodukte (frische signierte URL). Fällt auf
+     den gespeicherten Snapshot zurück, wenn nichts (mehr) passt. */
+  function resolveLiveFood(snap) {
+    if (snap && snap.source === "local" && snap.barcode) {
+      var p = (S.localProducts || []).filter(function (x) { return x.barcode === snap.barcode; })[0];
+      if (p) return productToFood(p);
+    }
+    if (snap && snap.source === "community") {
+      var cid = String(snap.id || "").replace(/^comm-/, "");
+      var c = (S.communityFoods || []).filter(function (x) { return String(x.id) === cid; })[0];
+      if (c) return communityToFood(c);
+    }
+    return snap;
+  }
+
+  function getRecent() { return lsGet(LS_RECENT); }
+  function getFavs() { return lsGet(LS_FAV); }
+  function isFav(f) { var k = foodKey(f); return getFavs().some(function (x) { return foodKey(x) === k; }); }
+
+  /* Beim Eintragen aufrufen: Lebensmittel in „Zuletzt" schieben (Dublette hoch-
+     ziehen, Zähler erhöhen, auf RECENT_MAX kürzen). */
+  function pushRecent(f) {
+    if (!f || !f.name) return;
+    var snap = foodSnap(f), k = foodKey(snap);
+    var list = getRecent();
+    var prev = list.filter(function (x) { return foodKey(x) === k; })[0];
+    list = list.filter(function (x) { return foodKey(x) !== k; });
+    snap._at = Date.now();
+    snap._n = ((prev && prev._n) || 0) + 1;
+    list.unshift(snap);
+    if (list.length > RECENT_MAX) list = list.slice(0, RECENT_MAX);
+    lsSet(LS_RECENT, list);
+  }
+  /* Favorit an/aus. Gibt den neuen Zustand zurück (true = jetzt Favorit). */
+  function toggleFav(f) {
+    var snap = foodSnap(f), k = foodKey(snap);
+    var list = getFavs();
+    var was = list.some(function (x) { return foodKey(x) === k; });
+    list = list.filter(function (x) { return foodKey(x) !== k; });
+    if (!was) { snap._at = Date.now(); list.unshift(snap); }
+    lsSet(LS_FAV, list);
+    return !was;
+  }
+
+  /* Eine Zeile in den Schnellzugriff-Listen: Öffnen-Button (Thumb + Info + Münze)
+     und daneben ein Favoriten-Stern. `ns` ("qf-fav"/"qf-rec") trennt die beiden
+     Listen im selben Host, damit der delegierte Handler den Index auflösen kann. */
+  function qfRowHTML(f, idx, ns) {
+    var nf = normFood(f);
+    var pts = nf.free ? 0 : (nf.points != null && !nf.kcal ? nf.points : PK.pointsFor(nf));
+    var meta = (nf.cat ? nf.cat + " · " : "") + "je " + nf.base_g + " " + (nf.unit || "g");
+    var coinCls = pts === 0 ? "coin zero sm" : "coin sm";
+    var fav = isFav(nf);
+    return '<div class="qf-item">' +
+      '<button class="qf-open" data-' + ns + '="' + idx + '">' +
+      (nf.photo_url ? '<img class="food-thumb" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
+      '<span class="info"><span class="nm">' + esc(nf.name) + '</span><span class="meta">' + esc(meta) + '</span></span>' +
+      '<span class="' + coinCls + '">' + pts + '</span></button>' +
+      '<button class="fav-star' + (fav ? ' on' : '') + '" data-favtoggle="' + ns + ':' + idx + '" aria-pressed="' + (fav ? 'true' : 'false') + '" aria-label="Favorit">' + STAR_SVG + '</button>' +
+      '</div>';
+  }
+  /* Einmal pro Host (attach-once) ein delegierter Klick-Handler: Öffnen-Button ->
+     Detail-Sheet (gegen Live-Daten aufgelöst), Stern -> Favorit togglen + neu zeichnen.
+     innerHTML wird bei jedem Render ersetzt; der Handler am Host selbst überlebt das. */
+  function wireQuick(host) {
+    if (host._qfWired) return;
+    host._qfWired = true;
+    host.addEventListener("click", function (e) {
+      var star = e.target.closest ? e.target.closest("[data-favtoggle]") : null;
+      if (star && host.contains(star)) {
+        var parts = String(star.dataset.favtoggle).split(":");
+        var arr = parts[0] === "qf-fav" ? host._qfFav : host._qfRec;
+        var snap = arr && arr[+parts[1]];
+        if (snap) { toggleFav(snap); renderQuickAccess(host, host._qfMeal); }
+        return;
+      }
+      var open = e.target.closest ? e.target.closest(".qf-open") : null;
+      if (open && host.contains(open)) {
+        var snapF = null;
+        if (open.dataset.qfFav != null) snapF = host._qfFav[+open.dataset.qfFav];
+        else if (open.dataset.qfRec != null) snapF = host._qfRec[+open.dataset.qfRec];
+        if (snapF) openFoodDetail(resolveLiveFood(snapF), host._qfMeal);
+      }
+    });
+  }
+  /* Schnellzugriff (leere Suche): „★ Favoriten" + „Zuletzt". Gibt true zurück,
+     wenn mindestens ein Eintrag vorhanden ist — sonst fällt der Aufrufer auf die
+     normale Suche zurück (kein Regress für neue Nutzer). */
+  function renderQuickAccess(host, preMeal) {
+    var favs = getFavs(), recs = getRecent();
+    host._qfFav = favs; host._qfRec = recs; host._qfMeal = preMeal;
+    if (!favs.length && !recs.length) { host.innerHTML = ""; return false; }
+    var html = "";
+    if (favs.length) html += '<div class="qf-head">★ Favoriten</div>' +
+      favs.map(function (f, i) { return qfRowHTML(f, i, "qf-fav"); }).join("");
+    if (recs.length) html += '<div class="qf-head">Zuletzt</div>' +
+      recs.map(function (f, i) { return qfRowHTML(f, i, "qf-rec"); }).join("");
+    host.innerHTML = html;
+    wireQuick(host);
+    return true;
+  }
+  /* Für die „Schnell eintragen"-Leiste: Favoriten zuerst, dann Zuletzt, dedupt, max. 10. */
+  function quickStripItems() {
+    var out = [], seen = {};
+    getFavs().concat(getRecent()).forEach(function (f) {
+      var k = foodKey(f); if (seen[k]) return; seen[k] = 1; out.push(f);
+    });
+    return out.slice(0, 10);
+  }
+  function quickStripHTML() {
+    var items = quickStripItems();
+    if (!items.length) return "";
+    return '<div class="qf-strip-wrap"><div class="qf-strip-h">Schnell eintragen</div><div class="qf-strip">' +
+      items.map(function (f, i) {
+        var nf = normFood(f);
+        var pts = nf.free ? 0 : (nf.points != null && !nf.kcal ? nf.points : PK.pointsFor(nf));
+        return '<button class="qf-chip" data-qf="' + i + '">' +
+          (isFav(nf) ? '<span class="qf-chip-star">★</span>' : '') +
+          '<span class="qf-chip-nm">' + esc(nf.name) + '</span>' +
+          '<span class="coin sm">' + pts + '</span></button>';
+      }).join("") + '</div></div>';
+  }
+
   function showApp() {
     $("#onboarding").hidden = true;
     $("#appShell").hidden = false;
@@ -1188,6 +1390,7 @@
   /* ---------------------- ADD-SHEET (FAB) ---------------------- */
   function openAddSheet() {
     openSheet("Hinzufügen",
+      quickStripHTML() +
       '<div class="quick-grid">' +
       '<button class="quick-act" data-q="search"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg></span>Essen suchen</button>' +
       '<button class="quick-act a" data-q="barcode"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg></span>Barcode scannen</button>' +
@@ -1197,6 +1400,14 @@
       '<button class="quick-act v" data-q="calc"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6.5h8M8 11h.01M12 11h.01M16 11h.01M8 14.5h.01M12 14.5h.01M16 14.5h.01M8 18h.01M12 18h.01M16 18h.01"/></svg></span>Punkte-Rechner</button>' +
       '</div>',
       function (root) {
+        // „Schnell eintragen"-Chips -> direkt ins Detail-Sheet (gegen Live-Daten aufgelöst).
+        var strip = quickStripItems();
+        $$(".qf-chip", root).forEach(function (b) {
+          b.addEventListener("click", function () {
+            var f = strip[+b.dataset.qf];
+            if (f) openFoodDetail(resolveLiveFood(f));
+          });
+        });
         $$(".quick-act", root).forEach(function (b) {
           b.addEventListener("click", function () {
             var q = b.dataset.q;
@@ -1354,6 +1565,8 @@
         input.focus();
         var run = debounce(async function () {
           var q = input.value.trim();
+          // Leere Suche -> Schnellzugriff (Favoriten + Zuletzt), falls vorhanden.
+          if (!q && renderQuickAccess(out, preMeal)) return;
           var res = await API.foods.search(q);
           // eigene Produkte (offline, 3-Foto) + eigene Lebensmittel zuerst
           var own = (S.data.custom_foods || []).filter(function (f) {
@@ -1406,6 +1619,9 @@
         '</div>' : '') +
       // „gekauft bei" – rein persoenlich, nur wenn hinterlegt (nie aus der Gemeinschaft).
       (nf.bought_at ? '<div class="buy-line">🛒 gekauft bei <b>' + esc(nf.bought_at) + '</b></div>' : '') +
+      // Favoriten-Umschalter (gerätelokal) — jedes Lebensmittel läuft durch dieses Sheet.
+      '<button type="button" class="fav-line' + (isFav(nf) ? ' on' : '') + '" id="dFav" aria-pressed="' + (isFav(nf) ? 'true' : 'false') + '">' +
+      '<span class="fs">' + STAR_SVG + '</span><span id="dFavTxt">' + (isFav(nf) ? 'Favorit' : 'Zu Favoriten') + '</span></button>' +
       '<label>Mahlzeit</label>' +
       '<div class="seg" id="dMeal" style="margin-bottom:14px">' +
       MEALS.map(function (m) { return '<button data-m="' + m.key + '"' + (m.key === meal ? ' class="on"' : '') + '>' + m.label + '</button>'; }).join("") +
@@ -1424,6 +1640,14 @@
       '<button class="btn primary block big" id="dAdd">Zum Tagebuch</button>',
       function (root) {
         var amtEl = $("#dAmount", root), ptsEl = $("#dPts", root);
+
+        var favBtn = $("#dFav", root);
+        if (favBtn) favBtn.addEventListener("click", function () {
+          var now = toggleFav(food);
+          favBtn.classList.toggle("on", now);
+          favBtn.setAttribute("aria-pressed", now ? "true" : "false");
+          var t = $("#dFavTxt", favBtn); if (t) t.textContent = now ? "Favorit" : "Zu Favoriten";
+        });
 
         function suggestFor(v) {
           if (portionMode) return Math.max(0, Math.round((nf.points || 0) * v));
@@ -1466,7 +1690,7 @@
           if (S.day !== S.today) entry.day = S.day;
           var btn = this; btn.disabled = true;
           var r = await guardWrite(function () { return API.data.diaryAdd(entry); });
-          if (r) { closeSheet(); await refreshDay(); toast("Hinzugefügt · " + pts + " P"); }
+          if (r) { pushRecent(food); closeSheet(); await refreshDay(); toast("Hinzugefügt · " + pts + " P"); }
           else { btn.disabled = false; }
         });
       });
@@ -2586,6 +2810,8 @@
 
   var runFoodSearch = debounce(async function () {
     var q = $("#foodSearchInput").value.trim();
+    // Leere Suche -> Schnellzugriff (Favoriten + Zuletzt), falls vorhanden.
+    if (!q && renderQuickAccess($("#foodResults"))) return;
     var res = await API.foods.search(q);
     var own = (S.data.custom_foods || []).filter(function (f) { return !q || f.name.toLowerCase().indexOf(q.toLowerCase()) >= 0; });
     renderFoodResults($("#foodResults"), localProductMatches(q).concat(own, communityMatches(q), res));

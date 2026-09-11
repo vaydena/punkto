@@ -1,4 +1,4 @@
-pk-v22-9622
+pk-v23-3e8a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -332,6 +332,32 @@ v22-9622: Produkt-Galerie (neuer Tab „Produkte") — foto-forward Browse aller
          2 Spalten @320 / 3 @360+, 2-Zeilen-Namensklammer greift. Reine Client-
          Aenderung (app.html). SW-CACHE auf pk-app-v22 angehoben (app.html-Inline
          im Shell-Precache -> Purge noetig).
+v23-3e8a: „Zuletzt + Favoriten" — Ein-Tipp-Wiedereintragen haeufig/kuerzlich
+         genutzter Lebensmittel, um die taegliche Eintrage-Reibung zu senken.
+         Drei Oberflaechen, alle rein clientseitig:
+         (1) SCHNELLZUGRIFF im Hinzufuegen-Sheet: Abschnitte „★ Favoriten" und
+             „Zuletzt" (renderQuickAccess). Tippen auf eine Zeile oeffnet das
+             bekannte Mengen-/Mahlzeit-Sheet (openFoodDetail) und traegt wie
+             gewohnt ins Tagebuch ein; rechts je Zeile ein Stern zum Favorisieren
+             (toggleFav). Leerer Zustand -> die Schnellzugriff-Bloecke bleiben aus.
+         (2) „Schnell eintragen"-Leiste (quickStripHTML): horizontale Chips
+             (Favoriten zuerst, dann Zuletzt, dedupliziert, max. 10) fuer den
+             kuerzesten Weg zum Wiedereintragen.
+         (3) DETAIL-SHEET: neuer Umschalt-Button „Zu Favoriten"/„Favorit"
+             (fav-line) — Outline-Stern = kein Favorit, gold gefuellt = Favorit.
+         PERSISTENZ geraetelokal in localStorage (pk_fav_v1, pk_recent_v1; Recent
+         max. 24 Eintraege), pro Geraet, KEIN Backend-/Datenmodell-Change. Jeder
+         Tagebucheintrag ruft pushRecent (Dedup nach foodKey: Barcode > id >
+         Name+Bezug; Nutzungszaehler _n, Neuestes zuerst). foodSnap legt einen
+         normFood-Snapshot ab (blob:-Fotos gestrippt, damit keine toten Objekt-URLs
+         persistiert werden); resolveLiveFood holt beim Antippen die aktuelle lokale
+         bzw. Gemeinschafts-Version des Produkts zurueck (Snapshot nur als Rueckfall).
+         Layout an echten Viewports (320/360/390 px, Headless-Chrome/CDP) geprueft:
+         kein horizontaler Ueberlauf; Stern-Zustaende (Outline aus / gold gefuellt
+         an), free -> gruene 0-Muenze, lange Namen mit Ellipse; Persistenz-Round-
+         trips + Klick-Delegation + echter App-Boot (0 Exceptions) gruen (41 Checks).
+         Reine Client-Aenderung (app.html). SW-CACHE auf pk-app-v23 angehoben
+         (app.html-Inline im Shell-Precache -> Purge noetig).
 
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
