@@ -162,12 +162,16 @@
       return list.filter(function (f) { return norm(f.name).indexOf(nq) >= 0 || (f.cat && norm(f.cat).indexOf(nq) >= 0); }).slice(0, 40);
     },
     /* Barcode -> Open Food Facts. Liefert ein Food-Objekt im Punkto-Schema
-       (Werte je 100 g) oder null, wenn nicht gefunden. */
+       (Werte je 100 g) oder null, wenn nicht gefunden.
+       Erkennt zusaetzlich Einheit (g/ml), Diaet-Flags (nur wenn SICHER) und die
+       OFF-Produktfotos (Front/Zutaten/Naehrwerte/Verpackung) fuer die Auto-Erfassung. */
     async byBarcode(code) {
       code = String(code || "").replace(/\D/g, "");
       if (!code) return null;
       var url = "https://world.openfoodfacts.org/api/v2/product/" + encodeURIComponent(code) +
-        ".json?fields=product_name,product_name_de,brands,nutriments,serving_quantity";
+        ".json?fields=product_name,product_name_de,brands,nutriments,serving_quantity," +
+        "product_quantity_unit,quantity,categories_tags,labels_tags,ingredients_analysis_tags," +
+        "image_front_url,image_ingredients_url,image_nutrition_url,image_packaging_url";
       var j;
       try {
         var res = await fetch(url, { headers: { "Accept": "application/json" } });
@@ -178,18 +182,56 @@
       var num = function (v) { var x = Number(v); return Number.isFinite(x) ? x : 0; };
       var kcal = num(n["energy-kcal_100g"]);
       if (!kcal && n["energy_100g"]) kcal = num(n["energy_100g"]) / 4.184; // kJ -> kcal
+
+      // --- Marke (erste aus der Komma-Liste) und reiner Produktname ---
+      var brand = p.brands ? String(p.brands).split(",")[0].trim() : "";
+      var name = p.product_name_de || p.product_name || "Produkt";
+
+      // --- Einheit: primaer product_quantity_unit, sonst "ml"/"l" in quantity,
+      //     sonst Getraenke-Kategorie -> ml; ansonsten g. ---
+      var unit = "g";
+      var pqu = String(p.product_quantity_unit || "").toLowerCase();
+      var qty = String(p.quantity || "").toLowerCase();
+      var cats = (p.categories_tags || []).join(" ").toLowerCase();
+      if (pqu === "ml" || pqu === "l") unit = "ml";
+      else if (/\d\s*m?l\b/.test(qty)) unit = "ml";
+      else if (/beverage|drink|getr[aä]nke|juice|soda|water|wasser|limonad/.test(cats)) unit = "ml";
+
+      // --- Diaet-Flags: NUR bei ausdruecklichem "en:vegan"/"en:vegetarian"
+      //     (in labels_tags ODER ingredients_analysis_tags). "maybe-*" = unsicher
+      //     -> gar nichts setzen (Ehrlichkeit; z. B. Cola = maybe-vegan). ---
+      var tags = [].concat(p.labels_tags || [], p.ingredients_analysis_tags || [])
+        .map(function (t) { return String(t).toLowerCase(); });
+      var isVegan = tags.indexOf("en:vegan") >= 0;
+      var isVegetarian = isVegan || tags.indexOf("en:vegetarian") >= 0;
+
+      var img = function (u) { return (typeof u === "string" && /^https?:\/\//.test(u)) ? u : ""; };
+      var imgFront = img(p.image_front_url);
+      var imgNutri = img(p.image_nutrition_url);
+      var imgIngr  = img(p.image_ingredients_url);
+      var imgPack  = img(p.image_packaging_url);
+
       return {
         id: "off-" + code,
         barcode: code,
-        name: (p.product_name_de || p.product_name || "Produkt") + (p.brands ? " (" + String(p.brands).split(",")[0].trim() + ")" : ""),
+        name: name,
+        brand: brand,
         cat: "Barcode",
-        unit: "g",
+        unit: unit,
         base_g: 100,
         kcal: Math.round(kcal),
         sat_fat_g: num(n["saturated-fat_100g"]),
         sugar_g: num(n["sugars_100g"]),
         protein_g: num(n["proteins_100g"]),
         fiber_g: num(n["fiber_100g"]),
+        vegan: isVegan,
+        vegetarian: isVegetarian,
+        // Produktfotos aus der OFF-Datenbank (Auto-Erfassung laedt sie best-effort herunter)
+        image_front: imgFront,
+        image_nutrition: imgNutri,
+        image_ingredients: imgIngr,
+        image_packaging: imgPack,
+        photo_url: imgFront,
         free: false,
         source: "openfoodfacts"
       };

@@ -237,6 +237,18 @@
   .cap-diet label{display:inline-flex;align-items:center;gap:.5em;font-size:.92rem;font-weight:600;cursor:pointer}
   .cap-diet input{width:18px;height:18px;accent-color:var(--green)}
 
+  /* Barcode-Treffer aus Open Food Facts: Vorschau-Karte im Scan-Ergebnis. */
+  .off-card{background:var(--card);border:1.6px solid var(--line);border-radius:var(--r);padding:14px;margin:4px 0 14px;text-align:left}
+  .off-head{display:flex;gap:12px;align-items:flex-start}
+  .off-thumb{width:64px;height:64px;flex:0 0 auto;border-radius:12px;object-fit:cover;background:var(--green-tint)}
+  .off-meta{min-width:0;flex:1}
+  .off-name{font-weight:800;color:var(--ink);line-height:1.25}
+  .off-brand{color:var(--muted);font-size:.86rem;margin-top:2px}
+  .off-facts{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin:12px 0 0;font-size:.9rem;color:var(--ink-2)}
+  .off-facts b{color:var(--ink);font-size:1.02rem}
+  .off-facts .off-per{color:var(--muted);font-size:.8rem;margin-left:auto}
+  .off-src{color:var(--green-800);font-size:.78rem;margin-top:10px}
+
   /* Offline-Hinweis oben in der App */
   .offline-banner{background:#eef3ef;color:var(--ink-2);border-radius:var(--r);padding:.6em 1em;margin-bottom:14px;
     font-size:.86rem;font-weight:600;display:flex;align-items:center;gap:.5em}
@@ -1572,7 +1584,7 @@
     if (navigator.onLine) {
       status.innerHTML = '<div class="list-empty"><div class="spin" style="width:26px;height:26px;border:3px solid var(--green-tint-2);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 8px"></div>Suche Produkt …</div>';
       try { food = await API.foods.byBarcode(norm); } catch (e) { food = null; }
-      if (food) { openFoodDetail(food); return; }
+      if (food) { showOffPreview(food, status); return; }
     }
 
     // 3) Nicht gefunden -> selbst anlegen (3 Fotos bevorzugt, manuell als Alternative).
@@ -1772,6 +1784,78 @@
       try { bmp.close && bmp.close(); } catch (e) {}
       return (codes && codes.length) ? String(codes[0].rawValue).replace(/\s+/g, "").replace(/\D/g, "") : "";
     } catch (e) { return ""; }
+  }
+
+  /* Ein Open-Food-Facts-Produktfoto best-effort herunterladen und klein rechnen
+     (das Canvas-Reencoding streift zugleich EXIF/GPS). Liefert einen JPEG-Blob oder
+     null — wirft NIE. OFF sendet Access-Control-Allow-Origin:* -> der Blob ist sauber
+     (nicht "tainted") und lässt sich weiterverarbeiten/speichern. */
+  async function fetchOffImage(url, maxDim) {
+    if (!url || !/^https?:\/\//.test(url) || !navigator.onLine) return null;
+    try {
+      var res = await fetch(url, { mode: "cors" });
+      if (!res || !res.ok) return null;
+      var blob = await res.blob();
+      if (!blob || !/^image\//.test(blob.type || "")) return null;
+      return await downscaleImage(blob, maxDim || 1280, 0.82);
+    } catch (e) { return null; }
+  }
+
+  /* Einen Open-Food-Facts-Fund in ein Prefill-Objekt für openCaptureSheet übersetzen.
+     Die Skalare füllen die Formularfelder sofort; die Bild-URLs unter _offImages werden
+     nach dem Öffnen asynchron geladen und an die Kacheln gehängt. Marke bleibt separat,
+     der Barcode kommt aus dem Scan. */
+  function offToPre(food) {
+    var f = food || {};
+    return {
+      name: f.name || "", brand: f.brand || "",
+      unit: f.unit === "ml" ? "ml" : "g",
+      base_g: +f.base_g > 0 ? +f.base_g : 100,
+      kcal: f.kcal, sat_fat_g: f.sat_fat_g, sugar_g: f.sugar_g,
+      protein_g: f.protein_g, fiber_g: f.fiber_g,
+      barcode: f.barcode || "",
+      vegan: !!f.vegan, vegetarian: !!f.vegetarian || !!f.vegan,
+      _off: true,
+      _offImages: {
+        product: f.image_front || "",
+        nutrition: f.image_nutrition || f.image_ingredients || ""
+      }
+    };
+  }
+
+  /* Treffer aus Open Food Facts als Vorschau-Karte im Scan-Ergebnis zeigen: erkanntes
+     Produkt mit Foto, Marke, Diät-Badges und Punktwert. Zwei Wege: alle Felder in die
+     3-Foto-Erfassung übernehmen (als eigenes Produkt speichern, mit heruntergeladenen
+     Fotos) ODER direkt ins Tagebuch. */
+  function showOffPreview(food, status) {
+    if (!status) return;
+    var nf = normFood(food);
+    var pts = PK.pointsFor({ kcal: nf.kcal, sat_fat_g: nf.sat_fat_g, sugar_g: nf.sugar_g, protein_g: nf.protein_g, fiber_g: nf.fiber_g });
+    var unit = nf.unit || "g";
+    status.innerHTML =
+      '<div class="off-card">' +
+        '<div class="off-head">' +
+          (nf.photo_url ? '<img class="off-thumb" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
+          '<div class="off-meta">' +
+            '<div class="off-name">' + esc(nf.name) + '</div>' +
+            (nf.brand ? '<div class="off-brand">' + esc(nf.brand) + '</div>' : '') +
+            ((nf.vegan || nf.vegetarian) ? '<div class="diet-badges" style="margin:8px 0 0">' +
+              (nf.vegan ? '<span class="diet-badge vegan">🌱 Vegan</span>'
+                        : (nf.vegetarian ? '<span class="diet-badge vegetarian">🥕 Vegetarisch</span>' : '')) +
+              '</div>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="off-facts">' +
+          '<span><b>' + Math.round(nf.kcal || 0) + '</b> kcal</span>' +
+          '<span><b>' + pts + '</b> Punkte</span>' +
+          '<span class="off-per">je ' + (nf.base_g || 100) + ' ' + esc(unit) + '</span>' +
+        '</div>' +
+        '<div class="off-src">✓ Erkannt über Open Food Facts – bitte Werte prüfen.</div>' +
+      '</div>' +
+      '<button class="btn primary block" id="offUse">Übernehmen &amp; als eigenes Produkt speichern</button>' +
+      '<button class="btn ghost block" id="offDiary" style="margin-top:10px">Nur direkt ins Tagebuch</button>';
+    $("#offUse", status).addEventListener("click", function () { openCaptureSheet(offToPre(food)); });
+    $("#offDiary", status).addEventListener("click", function () { openFoodDetail(food); });
   }
 
   function openCaptureSheet(pre) {
@@ -2116,6 +2200,33 @@
             var b = pre.photos[k];
             if (b && (b instanceof Blob)) { photos[k] = b; markTile(k, b); }
           });
+        }
+
+        // Auto-Fill aus Open Food Facts (Barcode erkannt): Hinweis zeigen und die
+        // Produktfotos best-effort nachladen. Läuft async nach dem Öffnen — das Sheet
+        // steht sofort; ohne Netz/Bild bleiben die Kacheln einfach leer. Die Skalar-
+        // werte kommen aus der OFF-API, daher wird für diese Fotos KEIN OCR gestartet.
+        if (pre._off) {
+          var offHint = $("#cpOcr", root);
+          var offImgs = pre._offImages || {};
+          var pend = [];
+          ["product", "nutrition"].forEach(function (k) { if (offImgs[k] && !photos[k]) pend.push([k, offImgs[k]]); });
+          if (offHint) {
+            offHint.hidden = false;
+            offHint.innerHTML = '<span>✓ Automatisch aus der Produktdatenbank übernommen (Open Food Facts).' +
+              (pend.length ? ' Lade Produktfotos …' : '') + ' Bitte Werte prüfen.</span>';
+          }
+          (async function () {
+            var got = 0;
+            for (var i = 0; i < pend.length; i++) {
+              var blob = await fetchOffImage(pend[i][1], 1280);
+              if (blob) { photos[pend[i][0]] = blob; markTile(pend[i][0], blob); got++; updatePhotoShareVis(); }
+            }
+            if (offHint) {
+              offHint.innerHTML = '<span>✓ Automatisch aus der Produktdatenbank übernommen (Open Food Facts)' +
+                (got ? ', inkl. ' + got + ' Foto' + (got > 1 ? 's' : '') : '') + '. Bitte Werte prüfen.</span>';
+            }
+          })();
         }
         updatePhotoShareVis();   // Bearbeiten-Modus: Foto-Freigabe ggf. sofort zeigen
 

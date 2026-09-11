@@ -1,4 +1,4 @@
-pk-v20-3d1b
+pk-v21-8c5a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -293,5 +293,22 @@ v20-3d1b: „Punkte selbst anpassen" wieder entfernt (Nutzerwunsch). Der in v9 e
          Aenderung (app.html), kein Backend-/Datenmodell-Change (Server clamped weiterhin
          0–200). SW-CACHE auf pk-app-v20 angehoben (app.html-Inline im Shell-Precache ->
          Purge noetig).
+v21-8c5a: Barcode-Scan erkennt jetzt das PRODUKT und fuellt die Erfassung automatisch.
+         Nach einem Treffer in Open Food Facts zeigt der Scanner eine Vorschau-Karte
+         (Foto, Name, Marke, Diaet-Badge, kcal + Punkte je Bezug) mit zwei Wegen:
+         „Uebernehmen & als eigenes Produkt speichern" oeffnet die 3-Foto-Erfassung mit
+         VORAUSGEFUELLTEN Feldern (Name, Marke, Einheit g/ml automatisch erkannt, Bezug,
+         Kalorien, ges. Fett, Zucker, Eiweiss, Ballaststoffe, Barcode) UND laedt die
+         OFF-Produktfotos (Front -> Kachel 1, Naehrwerte/Zutaten -> Kachel 2) best-effort
+         herunter (Canvas-Reencode streift EXIF/GPS); „Nur direkt ins Tagebuch" nutzt wie
+         bisher die Detailansicht. Vegan/Vegetarisch werden NUR bei ausdruecklichem
+         en:vegan / en:vegetarian gesetzt (unsichere „maybe-*"-Faelle bleiben leer).
+         Geaendert: assets/pk-app.js (foods.byBarcode liefert nun Marke, Einheit, Diaet-
+         Flags und die Bild-URLs) + app.html (Vorschau-Karte showOffPreview, Mapper
+         offToPre, Foto-Download fetchOffImage, Auto-Fill-Hinweis in openCaptureSheet,
+         .off-card-CSS). Reine Client-Aenderung, kein Backend-/Datenmodell-Change; die
+         Community-Freigabe uebertraegt weiterhin nur Skalare (nie Fotos, nie „gekauft
+         bei"). SW-CACHE auf pk-app-v21 angehoben (app.html/pk-app.js im Shell-Precache).
+
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

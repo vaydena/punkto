@@ -10,7 +10,7 @@
    - Dokumente (HTML): Netz zuerst -> live bleibt frisch; offline Rückfall auf den Cache.
    - Statische Assets (CSS/JS/Icons/Manifest): Cache zuerst -> schnell; sonst Netz + nachlegen. */
 
-const CACHE = "pk-app-v20";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
+const CACHE = "pk-app-v21";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
 const SHELL = [
   "./anmelden.html",
   "./app.html",
