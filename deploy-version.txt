@@ -1,4 +1,4 @@
-pk-v19-ec60
+pk-v20-3d1b
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -280,5 +280,18 @@ v19-ec60: Barcode aus einem bereits aufgenommenen Foto nachtraeglich lesen (Nutz
          (Buttons flex-shrinken 26->25,3 px, keine horizontale Ueberlaeufe). Reine
          Client-Aenderung (app.html). SW-CACHE auf pk-app-v19 angehoben (app.html-Inline
          im Shell-Precache -> Purge noetig).
+v20-3d1b: „Punkte selbst anpassen" wieder entfernt (Nutzerwunsch). Der in v9 eingefuehrte
+         manuelle Punkte-Override ist raus — sowohl im „Zum Tagebuch"-Hinzufuegen-Dialog
+         (openFoodDetail) als auch im Eintrag-Bearbeiten-Sheet (openEntryEditSheet). Der
+         angezeigte Punktwert kommt jetzt ausschliesslich aus der automatischen Berechnung
+         (Menge -> Punkte) und laesst sich nicht mehr von Hand ueberschreiben. Entfernt:
+         Button „✎ Punkte selbst anpassen" + Stepper-Eingabefeld + „↺ Vorschlag uebernehmen",
+         die zugehoerige JS-Logik (manual/manualPts/enterManual/leaveManual samt Element-
+         Refs und Event-Listenern) und die .pts-adjust/.pts-toggle/.pts-custom/.pts-reset/
+         .is-custom-CSS. Die Punkte-Anzeige und die proportionale Mengen-Skalierung bleiben
+         unveraendert; entry.points ist jetzt immer der berechnete Wert. Reine Client-
+         Aenderung (app.html), kein Backend-/Datenmodell-Change (Server clamped weiterhin
+         0–200). SW-CACHE auf pk-app-v20 angehoben (app.html-Inline im Shell-Precache ->
+         Purge noetig).
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
