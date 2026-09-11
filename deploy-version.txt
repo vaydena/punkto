@@ -1,4 +1,4 @@
-pk-v18-5f1c
+pk-v19-ec60
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -253,5 +253,32 @@ v18-5f1c: Barcode-Feld (Foto 3) der 3-Foto-Erfassung scannt jetzt LIVE statt zu
          Testfotos brauchen keine Migration (Bestand bleibt anzeigbar, ist aber nicht
          mehr Pflicht). Reine Client-Aenderung (app.html). SW-CACHE auf pk-app-v18
          angehoben (app.html-Inline im Shell-Precache -> Purge noetig).
+v19-ec60: Barcode aus einem bereits aufgenommenen Foto nachtraeglich lesen (Nutzer-
+         wunsch: Galerie-Fotos spaeter noch mit dem Barcode-Scanner auswerten). Der
+         v18-Live-Scanner setzt voraus, dass man im Moment der Erfassung eine Kamera
+         hat und live scannt; wer ein Produkt aus der GALERIE anlegt (oder ein schon
+         gespeichertes Produkt bearbeitet), hatte keinen Weg, den Strichcode aus dem
+         vorhandenen Bild zu ziehen. Neu: jede belegte Foto-Kachel (Produkt, Naehr-
+         werte, Barcode) hat jetzt einen gruenen Barcode-Knopf „Barcode aus Foto
+         lesen". Ein Klick decodiert das betreffende Foto per BarcodeDetector
+         (EAN-13/8, UPC-A/E, Code-128) und traegt die gefundene Nummer ins Barcode-Feld
+         ein (kurzes Aufblinken des Felds + Toast). Deliberate, pro Foto ausgeloeste
+         Aktion (kein Auto-Scan) — funktioniert auch rueckwirkend beim Bearbeiten eines
+         gespeicherten Produkts.
+         DETAILS: gelesen wird bevorzugt die SCHARFE Originaldatei (onPick merkt sich
+         originals[key] = die Datei, bevor sie klein gerechnet und als Foto gespeichert
+         wird); Rueckfall auf das gespeicherte (kleine) Foto. Wiederverwendet
+         decodeBarcodeFromBlob aus v18 (createImageBitmap -> BarcodeDetector). Der Knopf
+         erscheint NUR, wenn ein Foto anliegt (.cap-tile.has .cap-read -> display:grid,
+         sonst display:none), zeigt einen Busy-Zustand waehrend des Lesens und
+         UEBERSCHREIBT NIE das Barcode-Foto (Foto 3) — er fuellt ausschliesslich das
+         Nummernfeld. Rueckfaelle: Browser ohne BarcodeDetector (z. B. iOS Safari) ->
+         Hinweis auf manuelle Eingabe; kein Code gefunden -> Toast „Kein Barcode im Foto
+         erkannt" (schaerferes Foto/Barcode-Kachel vorschlagen). Layout an echten
+         Viewports (CDP/Headless-Chrome) geprueft: die nun dreielementige Aktionsleiste
+         (Galerie/Kamera/Barcode-lesen) passt ohne Clipping bis hinunter zu 320 px
+         (Buttons flex-shrinken 26->25,3 px, keine horizontale Ueberlaeufe). Reine
+         Client-Aenderung (app.html). SW-CACHE auf pk-app-v19 angehoben (app.html-Inline
+         im Shell-Precache -> Purge noetig).
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
