@@ -1,4 +1,4 @@
-pk-v21-8c5a
+pk-v22-9622
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -309,6 +309,29 @@ v21-8c5a: Barcode-Scan erkennt jetzt das PRODUKT und fuellt die Erfassung automa
          .off-card-CSS). Reine Client-Aenderung, kein Backend-/Datenmodell-Change; die
          Community-Freigabe uebertraegt weiterhin nur Skalare (nie Fotos, nie „gekauft
          bei"). SW-CACHE auf pk-app-v21 angehoben (app.html/pk-app.js im Shell-Precache).
+v22-9622: Produkt-Galerie (neuer Tab „Produkte") — foto-forward Browse aller
+         Produkte in einem Raster, statt nur ueber Suche/Barcode zu finden.
+         Zwei Segmente: „Meine" zeigt die geraetelokal per 3-Foto-Erfassung
+         angelegten Produkte (Kachelbild aus dem gespeicherten Produkt-/Naehr-
+         wertfoto via IndexedDB-Blob mit createObjectURL, Punkte je Bezug,
+         Marke); „Gemeinschaft" die freigegebenen Community-Produkte (nutzt die
+         bereits serverseitig lang signierte community_products.photo_url —
+         KEIN Storage-/Edge-Function-Change, reine Anzeige). Tippen auf eine
+         Kachel oeffnet das bestehende Mengen-/Mahlzeit-Sheet (openFoodDetail)
+         und traegt wie gewohnt ins Tagebuch ein. „Meine"-Kacheln haben zusaetz-
+         lich Bearbeiten (Stift -> openCaptureSheet im Bearbeiten-Modus, alle
+         Werte + Fotos vorbelegt) und Loeschen (inkl. Fotos vom Geraet,
+         PKStore.del); „Gemeinschaft" ist bewusst reine Ansicht (kein Edit/
+         Delete). Leerzustaende mit Hinweis; „Meine" bietet dort direkt „Produkt
+         mit 3 Fotos anlegen". Der 5. Tab ersetzt den bisherigen Tabbar-Platz-
+         halter (.tab-sp) — kein Tabbar-CSS-Change. Beim Oeffnen des Tabs wird
+         die Gemeinschaftsliste im Hintergrund aufgefrischt (API.community.list;
+         offline bleibt der Cache). Layout an echten Viewports (320/360/390 px,
+         Headless-Chrome/CDP) geprueft: kein horizontaler Ueberlauf, 5 gleich
+         breite Tabbar-Slots ohne Label-Clipping („Produkte" passt), Raster
+         2 Spalten @320 / 3 @360+, 2-Zeilen-Namensklammer greift. Reine Client-
+         Aenderung (app.html). SW-CACHE auf pk-app-v22 angehoben (app.html-Inline
+         im Shell-Precache -> Purge noetig).
 
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
