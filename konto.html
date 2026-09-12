@@ -72,6 +72,10 @@
     justify-content:center;gap:.5em;transition:all .12s ease}
   .pay-seg button svg{width:1.15em;height:1.15em}
   .pay-seg button.on{border-color:var(--green);background:var(--green-tint);color:var(--green-800)}
+  .plan-seg{margin-bottom:12px}
+  .plan-seg button{flex-direction:column;gap:.2em;line-height:1.15}
+  .plan-save{font-size:.72rem;font-weight:800;color:var(--green-800);background:var(--green-tint);border-radius:999px;padding:.12em .6em}
+  .plan-seg button.on .plan-save{background:#fff}
 
   /* Kopier-Zeilen */
   .pay-row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
@@ -308,9 +312,32 @@
       '</div>';
   }
 
+  // bankCard/paypalCard erwarten amount/reference/giro auf Top-Ebene — der
+  // gewählte Plan wird darüber gelegt, damit dieselben Karten monatlich wie
+  // jährlich funktionieren.
+  function planFor(d, plan) {
+    return Object.assign({}, d, { amount: plan.amount, reference: plan.reference, giro: plan.giro });
+  }
+  function planBlurb(plan) {
+    return plan.plan === "yearly"
+      ? "Ein Jahr Vollzugang auf einmal. Keine automatische Verlängerung — du entscheidest jedes Jahr neu."
+      : "Ein Monat Vollzugang. Keine automatische Abbuchung — du entscheidest jedes Mal neu.";
+  }
+  function planSaveNote(plans) {
+    var m = null, y = null;
+    plans.forEach(function (p) { if (p.plan === "monthly") m = p; else if (p.plan === "yearly") y = p; });
+    if (!m || !y || !(m.amount > 0) || !(y.amount > 0)) return "";
+    var saved = m.amount * 12 - y.amount;
+    if (saved <= 0) return "";
+    var months = Math.round(saved / m.amount);
+    return months >= 1 ? "≈ " + months + " Monate gratis" : "günstiger";
+  }
+
   function render(d) {
     var hv = heroView(d.subscription);
     var html = "";
+    var plans = (Array.isArray(d.plans) && d.plans.length) ? d.plans
+      : [{ plan: "monthly", amount: d.amount, reference: d.reference, giro: d.giro, label: "Monatlich", per: "Monat" }];
 
     // Status
     html += '<div class="card">' +
@@ -319,11 +346,23 @@
       '<div class="tx"><h2>' + esc(hv.h) + '</h2><p>' + esc(hv.p) + '</p>' + daysBadge(hv.dl) + '</div>' +
       '</div></div>';
 
-    // Preis + Zahlweg-Umschalter
+    // Plan-Wahl (Monatlich/Jährlich) + Preis + Zahlweg-Umschalter
+    var save = planSaveNote(plans);
     html += '<div class="card">' +
-      (hv.cta ? '<p style="color:var(--ink-2);font-weight:600;margin:0 0 6px">' + esc(hv.cta) + '</p>' : '') +
-      '<div class="price-line"><span class="amt">' + esc(fmtEuro(d.amount)) + '</span><span class="per">/ Monat</span></div>' +
-      '<p style="color:var(--muted);font-size:.88rem;margin:0 0 4px">Ein Monat Vollzugang. Keine automatische Abbuchung — du entscheidest jedes Mal neu.</p>' +
+      (hv.cta ? '<p style="color:var(--ink-2);font-weight:600;margin:0 0 10px">' + esc(hv.cta) + '</p>' : '') +
+      (plans.length > 1
+        ? '<div class="pay-seg plan-seg" id="planSeg">' +
+            plans.map(function (p, i) {
+              return '<button type="button" data-plan="' + i + '"' + (i === 0 ? ' class="on"' : '') + '>' +
+                '<span>' + esc(p.label) + '</span>' +
+                (p.plan === "yearly" && save ? '<span class="plan-save">' + esc(save) + '</span>' : '') +
+                '</button>';
+            }).join("") +
+          '</div>'
+        : '') +
+      '<div class="price-line"><span class="amt" id="planAmt">' + esc(fmtEuro(plans[0].amount)) + '</span>' +
+        '<span class="per" id="planPer">/ ' + esc(plans[0].per) + '</span></div>' +
+      '<p class="plan-note" id="planNote" style="color:var(--muted);font-size:.88rem;margin:0 0 4px">' + esc(planBlurb(plans[0])) + '</p>' +
       '<div class="pay-seg">' +
       '<button type="button" data-seg="bank" class="on">' + ICON.bank + ' Überweisung</button>' +
       '<button type="button" data-seg="paypal">' + ICON.paypal + ' PayPal</button>' +
@@ -336,7 +375,7 @@
       '<div class="card-h"><h3>So geht es weiter</h3></div>' +
       '<ol class="step-list">' +
       '<li><b>Betrag überweisen</b> oder per PayPal senden — mit dem angegebenen Verwendungszweck.</li>' +
-      '<li><b>Wir ordnen deine Zahlung zu</b> (am Verwendungszweck) und schalten deinen Zugang frei bzw. verlängern ihn um einen Monat.</li>' +
+      '<li><b>Wir ordnen deine Zahlung zu</b> (am Verwendungszweck) und schalten deinen Zugang frei bzw. verlängern ihn um den gewählten Zeitraum.</li>' +
       '<li><b>Fertig</b> — in der Regel innerhalb von 24 Stunden. Deine Daten bleiben die ganze Zeit erhalten.</li>' +
       '</ol></div>';
 
@@ -354,22 +393,45 @@
     var host = $("#kontoBody");
     host.innerHTML = html;
 
-    // Zahlweg-Karten einsetzen
     var slot = $("#paySlot", host);
-    slot.innerHTML = bankCard(d) + paypalCard(d);
+    var curPlan = plans[0];
 
-    // Umschalter
+    // aktuell gewählte Zahlweise (bank/paypal) — plan-seg trägt keine [data-seg]
+    function currentSeg() {
+      var on = $(".pay-seg [data-seg].on", host);
+      return on ? on.dataset.seg : "bank";
+    }
+    // Zahlkarten für den aktuellen Plan neu aufbauen und Kopier-Buttons verdrahten
+    function renderSlot() {
+      var pd = planFor(d, curPlan);
+      slot.innerHTML = bankCard(pd) + paypalCard(pd);
+      var seg = currentSeg();
+      $$("[data-pay]", slot).forEach(function (c) { c.hidden = (c.dataset.pay !== seg); });
+      $$(".pr-copy", slot).forEach(function (b) {
+        b.addEventListener("click", function () { copyText(b.dataset.copy, b.dataset.label, b); });
+      });
+    }
+    renderSlot();
+
+    // Plan-Umschalter (Monatlich/Jährlich)
+    $$("#planSeg [data-plan]", host).forEach(function (b) {
+      b.addEventListener("click", function () {
+        curPlan = plans[Number(b.dataset.plan) || 0] || plans[0];
+        $$("#planSeg [data-plan]", host).forEach(function (x) { x.classList.toggle("on", x === b); });
+        $("#planAmt", host).textContent = fmtEuro(curPlan.amount);
+        $("#planPer", host).textContent = "/ " + curPlan.per;
+        var note = $("#planNote", host); if (note) note.textContent = planBlurb(curPlan);
+        renderSlot();
+      });
+    });
+
+    // Zahlweg-Umschalter (Überweisung/PayPal)
     $$(".pay-seg [data-seg]", host).forEach(function (b) {
       b.addEventListener("click", function () {
         var seg = b.dataset.seg;
         $$(".pay-seg [data-seg]", host).forEach(function (x) { x.classList.toggle("on", x === b); });
         $$("[data-pay]", slot).forEach(function (c) { c.hidden = (c.dataset.pay !== seg); });
       });
-    });
-
-    // Kopier-Buttons
-    $$(".pr-copy", host).forEach(function (b) {
-      b.addEventListener("click", function () { copyText(b.dataset.copy, b.dataset.label, b); });
     });
 
     $("#loading").hidden = true;

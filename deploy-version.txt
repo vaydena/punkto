@@ -1,4 +1,4 @@
-pk-v23-3e8a
+pk-v24-248f
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -358,6 +358,31 @@ v23-3e8a: „Zuletzt + Favoriten" — Ein-Tipp-Wiedereintragen haeufig/kuerzlich
          trips + Klick-Delegation + echter App-Boot (0 Exceptions) gruen (41 Checks).
          Reine Client-Aenderung (app.html). SW-CACHE auf pk-app-v23 angehoben
          (app.html-Inline im Shell-Precache -> Purge noetig).
+v24-248f: Jahres-Abo + Community-Rueckbau (Crowdsourcing raus, zentrale DB bleibt) +
+         Play-Protect-Hinweis. Sammel-Deploy der Aufgabenrunde:
+         (1) JAHRES-ABO 29,99 EUR/Jahr (rund 2 Monate gratis ggue. 12x2,99). konto.html
+             bekommt einen Monatlich/Jaehrlich-Umschalter (Plan-Segment), der Preis,
+             Verwendungszweck und GiroCode je Plan umschaltet; Quelle sind die neuen
+             billing().plans (punkto-data, PRICE_CENTS_YEAR=2999). index.html + agb.html
+             nennen den Jahrespreis; Betreiber-Detail hat Schnell-Presets „Monat 2,99"/
+             „Jahr 29,99" und extend akzeptiert plan=monthly|yearly.
+         (2) COMMUNITY/CROWDSOURCING ENTFERNT — die zentrale Produkt-DB bleibt, aber
+             rein Betreiber-gepflegt: kein Opt-in-Teilen, keine Foto-Freigabe, keine
+             Galerie/Moderation mehr. app.html: „Gemeinschaft" -> „Datenbank",
+             letzte tote Sharing-Felder raus. betreiber.html: Moderations-UI (Produkt-
+             und Foto-Freigabe) ersetzt durch eine Nur-Lese-Ansicht „Zentrale Datenbank"
+             (central_list ansehen, central_delete entfernen). Aufnahme erfolgt in der
+             App beim Speichern via „In die zentrale Datenbank uebernehmen" (central_add,
+             is_admin-gated, Upsert per Barcode, NUR Skalare + optional OFF-Foto-URL).
+         (3) PLAY-PROTECT-HINWEIS im Install-Flow (nur Android, nicht installiert):
+             erklaert die „App wird geprueft"-Rueckfrage bei WebAPKs.
+         Mit an Bord (Vorarbeit, jetzt live): Vordergrund-Schrittzaehler
+         (DeviceMotionEvent, iPhone-Einmal-Permission), erweiterte Lebensmittel-DB
+         (372 Eintraege, punkto-foods.json pk-foods-2026-09-12-1, mit vegan/vegetarisch,
+         Invariante vegan=>vegetarisch), Diaet-Icons in der Lebensmittel-Suche.
+         Server: punkto-data + punkto-admin neu deployed (verify_jwt=false),
+         central_add/central_list/central_delete, billing-plans, extend-plan,
+         stats.central_count. SW-CACHE auf pk-app-v24 angehoben.
 
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

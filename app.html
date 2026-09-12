@@ -208,6 +208,9 @@
   #pkInstall .x{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;flex:0 0 auto}
   #pkInstall .btn{flex:0 0 auto}
   @media(max-width:420px){#pkInstall .tx span{display:none}}
+  #pkInstall .pp{margin:10px 0 0;padding:9px 11px;background:var(--green-tint-2);border-radius:12px;
+    font-size:.78rem;line-height:1.45;color:var(--ink-2)}
+  #pkInstall .pp b{color:var(--ink)}
 
   /* 3-Foto-Erfassung (eigenes Produkt, offline) */
   .cap-tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:4px 0 6px}
@@ -252,6 +255,10 @@
   .filled-flag{color:var(--green-700);font-weight:700}
   .badge-off{display:inline-block;font-size:.66rem;font-weight:800;letter-spacing:.02em;background:var(--green-tint);
     color:var(--green-800);border-radius:999px;padding:1px 7px;vertical-align:middle;margin-left:4px}
+  /* Vordergrund-Schrittzähler im Aktivität-Sheet */
+  .ped{margin-top:12px}
+  .ped-hint{color:var(--muted);font-size:.82rem;line-height:1.45;margin:8px 2px 0}
+  #aPedBtn.on{background:#fdecec;border-color:#f0c4c4;color:#c0392b}
   /* Gemeinschafts-Freigabe (Opt-in) im Erfassen-Sheet */
   .cap-share{display:flex;gap:10px;align-items:flex-start;background:var(--green-tint);border:1px solid var(--green-tint-2);
     border-radius:var(--r);padding:11px 13px;margin:2px 0 14px;cursor:pointer;font-size:.9rem;line-height:1.4}
@@ -567,7 +574,7 @@
       <h2 style="font-size:1.5rem;margin-bottom:14px">Produkte</h2>
       <div class="seg sub-seg" id="prodSeg">
         <button class="on" data-psub="mine">Meine</button>
-        <button data-psub="community">Gemeinschaft</button>
+        <button data-psub="community">Datenbank</button>
       </div>
       <div id="prodMine"></div>
       <div id="prodCommunity" hidden></div>
@@ -629,6 +636,7 @@
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>
   </div>
+  <p class="pp" id="pkPlayProtect" hidden><b>Kurzer Hinweis:</b> Android prüft neue Apps mit „Play Protect“. Beim Ablegen kann kurz „App wird geprüft“ erscheinen oder eine Rückfrage kommen — das ist bei Web-Apps ganz normal. Einfach auf <b>„Trotzdem installieren“</b> bzw. <b>„Öffnen“</b> tippen. Punkto kommt ohne App-Store direkt von punkto.vaydena.de.</p>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -657,7 +665,8 @@
     localProducts: [],         // eigene Produkte aus PKStore (IndexedDB, offline)
     communityFoods: [],        // freigegebene Gemeinschaftsprodukte (gecacht, offline)
     offline: false,            // true = aus Cache geladen (kein Netz beim Start)
-    camStream: null
+    camStream: null,
+    pedometer: null            // laufender Vordergrund-Schrittzähler (Aktivität-Sheet)
   };
 
   /* ---- Helfer ---- */
@@ -703,6 +712,11 @@
       vegan: !!f.vegan, vegetarian: !!f.vegetarian || !!f.vegan, bought_at: f.bought_at || ""
     };
   }
+
+  /* Betreiber-/Admin-Konto? (Server setzt is_admin in pubUser; steuert nur, ob die
+     „In die zentrale Datenbank übernehmen"-Option im Erfassen-Sheet erscheint. Die
+     eigentliche Berechtigung prüft die Edge-Function erneut.) */
+  function isAdmin() { return !!(S.user && S.user.is_admin); }
 
   /* Fehler-Handling für schreibende Aktionen (Zugang nötig). */
   function isNoAccess(e) { return e && (e.code === "no_access" || e.status === 402); }
@@ -834,7 +848,7 @@
   function communityToFood(p) {
     return {
       id: "comm-" + p.id, barcode: p.barcode || "", name: p.name, brand: p.brand || "",
-      cat: "Gemeinschaft", unit: p.unit || "g", base_g: +p.base_g || 100,
+      cat: "Datenbank", unit: p.unit || "g", base_g: +p.base_g || 100,
       kcal: +p.kcal || 0, sat_fat_g: +p.sat_fat_g || 0, sugar_g: +p.sugar_g || 0,
       protein_g: +p.protein_g || 0, fiber_g: +p.fiber_g || 0,
       free: false, points: undefined, source: "community",
@@ -857,16 +871,15 @@
     }).map(communityToFood);
   }
 
-  /* Gemeinschafts-DB initialisieren: sofort aus dem Cache (offline-fähig), dann im
-     Hintergrund frisch laden und eigene freigegebene Vorschläge nachreichen. */
+  /* Zentrale Datenbank initialisieren: sofort aus dem Cache (offline-fähig), dann im
+     Hintergrund frisch laden. Gepflegt wird sie ausschließlich vom Betreiber-Konto
+     (in der App via „In die zentrale Datenbank übernehmen") — kein Crowdsourcing mehr. */
   function initCommunity() {
     if (!API.community) return;
     try { S.communityFoods = API.community.cached() || []; } catch (e) { S.communityFoods = []; }
     API.community.list().then(function (d) {
       S.communityFoods = (d && d.products) || [];
     }).catch(function () { /* offline -> Cache bleibt */ });
-    // Als „shared" markierte, noch nicht synchronisierte eigene Produkte nachreichen.
-    Promise.resolve().then(function () { return API.community.syncPending(); }).catch(function () {});
   }
 
   /* ======================================================================
@@ -1380,6 +1393,7 @@
   function closeSheet() {
     var back = $("#sheetBack"); back.classList.remove("on");
     stopCamera();
+    if (S.pedometer) { S.pedometer.stop(); S.pedometer = null; }   // Schrittzähler-Listener abräumen
     setTimeout(function () { back.hidden = true; $("#sheetContent").innerHTML = ""; }, 200);
     document.body.style.overflow = "";
   }
@@ -1893,6 +1907,54 @@
       });
   }
 
+  /* ---------------------- VORDERGRUND-SCHRITTZÄHLER ----------------------
+     Zählt Schritte, solange die App offen ist und das Aktivität-Sheet läuft —
+     über den Bewegungssensor (DeviceMotionEvent). Kein Hintergrund-Tracking,
+     kein Standort, nichts verlässt das Gerät: die gezählte Zahl landet nur im
+     Schritte-Feld. Android braucht keine Freigabe (HTTPS reicht), iOS 13+
+     verlangt einmalig DeviceMotionEvent.requestPermission() aus einer Geste. */
+  function motionSupported() { return typeof window.DeviceMotionEvent !== "undefined"; }
+  function motionNeedsPermission() {
+    return motionSupported() && typeof window.DeviceMotionEvent.requestPermission === "function";
+  }
+  /* Einfacher, robuster Peak-Zähler auf dem Beschleunigungsbetrag:
+     schnelles Glätten (lp) gegen langsame Schwerkraft-Basislinie (base); ein
+     Schritt = Aufwärts-Überschreiten einer Schwelle mit Refraktärzeit. */
+  function createPedometer(onStep) {
+    var lp = 0, base = 0, primed = 0, wasAbove = false, lastStep = 0, count = 0, running = false;
+    var LP = 0.2, BASE = 0.02, THRESH = 1.1, DROP = 0.45, MIN_DT = 260;
+    function onMotion(e) {
+      var a = e.accelerationIncludingGravity || e.acceleration;
+      if (!a) return;
+      var x = a.x || 0, y = a.y || 0, z = a.z || 0;
+      var m = Math.sqrt(x * x + y * y + z * z);
+      if (!isFinite(m)) return;
+      if (primed < 8) { lp = m; base = m; primed++; return; }   // Filter einschwingen lassen
+      lp += LP * (m - lp);
+      base += BASE * (m - base);
+      var dyn = lp - base, now = Date.now();
+      if (dyn > THRESH && !wasAbove && (now - lastStep) > MIN_DT) {
+        wasAbove = true; lastStep = now; count++;
+        try { onStep(count); } catch (err) {}
+      } else if (dyn < THRESH * DROP) {
+        wasAbove = false;
+      }
+    }
+    return {
+      isRunning: function () { return running; },
+      start: function () {
+        if (running) return;
+        window.addEventListener("devicemotion", onMotion, { passive: true });
+        running = true;
+      },
+      stop: function () {
+        if (!running) return;
+        window.removeEventListener("devicemotion", onMotion);
+        running = false;
+      }
+    };
+  }
+
   /* ---------------------- AKTIVITÄT ---------------------- */
   function openActivitySheet() {
     var kind = "steps", steps = 0, minutes = 0;
@@ -1900,7 +1962,9 @@
       '<div class="seg" id="aKind" style="margin-bottom:16px">' +
       '<button class="on" data-k="steps">👟 Schritte</button><button data-k="workout">🏋️ Sport</button></div>' +
       '<div id="aSteps"><div class="field"><label for="aStepsN">Schritte heute</label>' +
-      '<input type="number" id="aStepsN" inputmode="numeric" placeholder="8000" min="0" max="200000"></div></div>' +
+      '<input type="number" id="aStepsN" inputmode="numeric" placeholder="8000" min="0" max="200000"></div>' +
+      '<div class="ped"><button type="button" class="btn ghost block" id="aPedBtn">▶︎ Schritt-Zähler starten</button>' +
+      '<p class="ped-hint" id="aPedHint">Zählt Schritte, solange die App offen ist – über den Bewegungssensor. Kein Standort, nichts verlässt das Gerät.</p></div></div>' +
       '<div id="aWork" hidden><div class="row"><div class="field"><label for="aMin">Minuten</label>' +
       '<input type="number" id="aMin" inputmode="numeric" placeholder="30" min="0" max="1440"></div>' +
       '<div class="field"><label for="aType">Art</label><select id="aType">' +
@@ -1917,10 +1981,46 @@
           else pts = PK.activityPoints($("#aType", root).value, +$("#aMin", root).value);
           $("#aPts", root).textContent = pts; return pts;
         }
+        // Vordergrund-Schrittzähler starten/stoppen
+        var pedBtn = $("#aPedBtn", root), pedHint = $("#aPedHint", root);
+        var HINT_IDLE = "Zählt Schritte, solange die App offen ist – über den Bewegungssensor. Kein Standort, nichts verlässt das Gerät.";
+        function stopPed() {
+          if (S.pedometer) { S.pedometer.stop(); S.pedometer = null; }
+          if (pedBtn) { pedBtn.classList.remove("on"); pedBtn.textContent = "▶︎ Schritt-Zähler starten"; }
+          if (pedHint) pedHint.textContent = HINT_IDLE;
+        }
+        function startPed() {
+          var baseSteps = +$("#aStepsN", root).value || 0;   // schon eingetippte Schritte behalten
+          if (S.pedometer) S.pedometer.stop();
+          S.pedometer = createPedometer(function (c) {
+            var el = $("#aStepsN", root);
+            if (el) { el.value = baseSteps + c; recalc(); }
+          });
+          S.pedometer.start();
+          pedBtn.classList.add("on");
+          pedBtn.textContent = "⏹ Zähler stoppen";
+          pedHint.textContent = "Zähler läuft … nimm das Handy mit und geh los. Zum Beenden „Zähler stoppen“.";
+        }
+        if (!motionSupported()) {
+          if (pedBtn) pedBtn.hidden = true;
+          if (pedHint) pedHint.textContent = "Automatisches Zählen wird auf diesem Gerät nicht unterstützt – Schritte bitte von Hand eintragen.";
+        } else if (pedBtn) {
+          pedBtn.addEventListener("click", async function () {
+            if (S.pedometer && S.pedometer.isRunning()) { stopPed(); return; }
+            if (motionNeedsPermission()) {   // iOS: einmalige Freigabe aus dieser Geste
+              var res;
+              try { res = await window.DeviceMotionEvent.requestPermission(); }
+              catch (e) { res = "denied"; }
+              if (res !== "granted") { toast("Sensor-Freigabe abgelehnt. Schritte bitte von Hand eintragen."); return; }
+            }
+            startPed();
+          });
+        }
         $$("#aKind button", root).forEach(function (b) {
           b.addEventListener("click", function () {
             $$("#aKind button", root).forEach(function (x) { x.classList.remove("on"); });
             b.classList.add("on"); kind = b.dataset.k;
+            if (kind !== "steps") stopPed();   // Zähler beim Wechsel zu Sport beenden
             $("#aSteps", root).hidden = kind !== "steps";
             $("#aWork", root).hidden = kind === "steps";
             recalc();
@@ -2019,21 +2119,6 @@
         cv.toBlob(function (b) { resolve(b || file); }, "image/jpeg", quality);
       });
     } catch (e) { return file; }
-  }
-
-  /* Produktfoto für den Gemeinschafts-Vorschlag aufbereiten: klein rechnen (das
-     Canvas-Reencoding strippt zugleich EXIF/GPS) und als JPEG-DataURL liefern.
-     Ergebnis bleibt deutlich unter der 800-KB-Grenze der Edge-Function. */
-  async function blobToShareJpeg(blob) {
-    try {
-      var small = await downscaleImage(blob, 1000, 0.8);   // Blob (image/jpeg)
-      return await new Promise(function (resolve) {
-        var fr = new FileReader();
-        fr.onload = function () { resolve(String(fr.result || "")); };
-        fr.onerror = function () { resolve(""); };
-        fr.readAsDataURL(small);
-      });
-    } catch (e) { return ""; }
   }
 
   /* Barcode aus einem Standbild lesen (BarcodeDetector auf ImageBitmap). */
@@ -2206,14 +2291,14 @@
         '<datalist id="cpStores">' + STORE_OPTS + '</datalist>' +
         '<span class="cap-share-note" style="display:block;margin-top:4px">Nur für dich – bleibt auf deinem Gerät.</span></div>' +
       '<div class="detail-points"><span class="coin" id="cpPts">0</span><span>Punkte je Bezugsmenge</span></div>' +
-      '<label class="cap-share"><input type="checkbox" id="cpShare"' + (pre.shared ? " checked" : "") + '>' +
-      '<span><b>Für die Gemeinschaft freigeben</b><br>' +
-      '<span class="cap-share-note">Teile <b>Name, Marke, Nährwerte, Barcode & Vegan/Vegetarisch</b> (nicht „gekauft bei"). ' +
-      'Nach Prüfung durch uns hilfst du damit anderen. Standard: bleibt nur auf deinem Gerät.</span></span></label>' +
-      '<label class="cap-share cap-share-photo" id="cpSharePhotoWrap" hidden><input type="checkbox" id="cpSharePhoto"' + (pre.share_photo ? " checked" : "") + '>' +
-      '<span><b>Produktfoto mitteilen</b><br>' +
-      '<span class="cap-share-note">Zusätzlich dein <b>Produktfoto</b> (Vorderseite, Foto 1) vorschlagen. ' +
-      'Wird separat geprüft und erst nach Freigabe am Gemeinschaftsartikel gezeigt.</span></span></label>' +
+      // Betreiber-Konto: Produkt in die zentrale Datenbank übernehmen (nur Skalare,
+      // keine persönlichen Angaben; Foto nur, wenn öffentlich von Open Food Facts).
+      (isAdmin()
+        ? '<label class="cap-share"><input type="checkbox" id="cpCentral"' + (pre.central ? " checked" : "") + '>' +
+          '<span><b>In die zentrale Datenbank übernehmen</b><br>' +
+          '<span class="cap-share-note">Betreiber: <b>Name, Marke, Nährwerte, Barcode &amp; Vegan/Vegetarisch</b> für alle Nutzer bereitstellen. ' +
+          'Keine persönlichen Angaben, kein „gekauft bei“; ein Produktfoto nur, wenn es öffentlich von Open Food Facts stammt.</span></span></label>'
+        : '') +
       '<button class="btn primary block big" id="cpSave">' + (editMode ? "Änderungen speichern" : "Produkt speichern") + '</button>',
       function (root) {
         function vals() {
@@ -2225,18 +2310,6 @@
         }
         function recalc() { var p = PK.pointsFor(vals()); $("#cpPts", root).textContent = p; return p; }
         ["#cpKcal", "#cpSat", "#cpSugar", "#cpProt", "#cpFiber"].forEach(function (s) { $(s, root).addEventListener("input", recalc); });
-
-        // Foto-Freigabe (zweites Opt-in) nur einblenden, wenn die Freigabe angehakt
-        // ist UND ein Produktfoto vorliegt — ohne Foto gibt es nichts zu teilen.
-        function updatePhotoShareVis() {
-          var wrap = $("#cpSharePhotoWrap", root);
-          if (!wrap) return;
-          var shareOn = !!($("#cpShare", root) && $("#cpShare", root).checked);
-          var hasPhoto = !!photos.product;
-          wrap.hidden = !(shareOn && hasPhoto);
-          if (wrap.hidden) { var cb = $("#cpSharePhoto", root); if (cb) cb.checked = false; }
-        }
-        if ($("#cpShare", root)) $("#cpShare", root).addEventListener("change", updatePhotoShareVis);
 
         // Vegan impliziert vegetarisch: ist "Vegan" an, wird "Vegetarisch" automatisch
         // gesetzt und gesperrt (nicht abwählbar, solange vegan). Sonst wieder frei.
@@ -2409,7 +2482,6 @@
           var blob = await downscaleImage(file, maxDim, 0.82);
           photos[key] = blob;
           markTile(key, blob);
-          if (key === "product") updatePhotoShareVis();   // Foto-Freigabe kann jetzt sichtbar werden
           // OCR bekommt bewusst das ORIGINAL (nicht das klein gespeicherte JPEG):
           // PKOcr sucht darin die Naehrwerttabelle, schneidet sie frei und rechnet
           // sie hoch (s. scanNutrition/brightBox in pk-ocr.js). Auf 1280 verkleinert
@@ -2484,7 +2556,7 @@
             var got = 0;
             for (var i = 0; i < pend.length; i++) {
               var blob = await fetchOffImage(pend[i][1], 1280);
-              if (blob) { photos[pend[i][0]] = blob; markTile(pend[i][0], blob); got++; updatePhotoShareVis(); }
+              if (blob) { photos[pend[i][0]] = blob; markTile(pend[i][0], blob); got++; }
             }
             if (offHint) {
               offHint.innerHTML = '<span>✓ Automatisch aus der Produktdatenbank übernommen (Open Food Facts)' +
@@ -2492,7 +2564,6 @@
             }
           })();
         }
-        updatePhotoShareVis();   // Bearbeiten-Modus: Foto-Freigabe ggf. sofort zeigen
 
         $("#cpName", root).focus();
         recalc();
@@ -2506,10 +2577,9 @@
           var v = vals();
           var unit = $("#cpUnit", root).value === "ml" ? "ml" : "g";
           var base = +$("#cpBase", root).value || 100;
-          var share = !!($("#cpShare", root) && $("#cpShare", root).checked);
-          // Zweites, getrenntes Opt-in: nur wenn Freigabe an, Häkchen gesetzt UND ein
-          // Produktfoto vorliegt. Ohne all das wird kein Foto vorgeschlagen.
-          var sharePhoto = share && !!($("#cpSharePhoto", root) && $("#cpSharePhoto", root).checked) && !!photos.product;
+          // Betreiber: Übernahme in die zentrale Datenbank (nur Skalare). Nur wirksam,
+          // wenn dies ein Betreiber-Konto ist (der Server prüft is_admin zusätzlich).
+          var toCentral = isAdmin() && !!($("#cpCentral", root) && $("#cpCentral", root).checked);
           // Diaet-Flags (vegan impliziert vegetarisch) + persoenliche Einkaufsinfo.
           var vegan = !!($("#cpVegan", root) && $("#cpVegan", root).checked);
           var vegetarian = vegan || !!($("#cpVegetarian", root) && $("#cpVegetarian", root).checked);
@@ -2519,15 +2589,8 @@
             unit: unit, base_g: base,
             kcal: v.kcal, sat_fat_g: v.sat_fat_g, sugar_g: v.sugar_g, protein_g: v.protein_g, fiber_g: v.fiber_g,
             free: false, source: "local", points: recalc(),
-            // vegan/vegetarian gehen mit in die Gemeinschaft; bought_at bleibt geraetelokal.
+            // vegan/vegetarian + bought_at bleiben rein geraetelokal.
             vegan: vegan, vegetarian: vegetarian, bought_at: boughtAt,
-            // Gemeinschaft: Opt-in merken. "pending" -> beim nächsten Online-Start
-            // reicht syncPending() den Vorschlag nach (falls hier offline/kein Zugang).
-            shared: share, sync_status: share ? "pending" : undefined,
-            // Optionales Produktfoto (eigenes Opt-in). "pending" -> der Inline-Upload
-            // unten bzw. syncPending() reicht es nach, sobald das Produkt eine
-            // community_id hat. Freigabe des Fotos erfolgt separat durch den Betreiber.
-            share_photo: sharePhoto, photo_sync_status: sharePhoto ? "pending" : undefined,
             photos: { product: photos.product, nutrition: photos.nutrition, barcode: photos.barcode }
           };
           this.disabled = true;
@@ -2535,15 +2598,6 @@
             var existing = await PKStore.get(barcode);
             if (existing) {
               rec.created_at = existing.created_at;
-              // Einmal freigegeben bleibt freigegeben (Häkchen nicht heimlich zurücknehmen).
-              if (existing.shared && !share) { rec.shared = true; rec.sync_status = existing.sync_status || "pending"; }
-              // Community-Zuordnung bewahren; ein bereits geteiltes Foto bleibt geteilt
-              // und wird nicht erneut hochgeladen (photo_sync_status "synced" behalten).
-              if (existing.community_id) rec.community_id = existing.community_id;
-              if (existing.share_photo && !sharePhoto) rec.share_photo = true;
-              if (rec.share_photo) {
-                rec.photo_sync_status = existing.photo_sync_status === "synced" ? "synced" : (rec.photo_sync_status || "pending");
-              }
             } else if (editMode && pre.created_at) {
               rec.created_at = pre.created_at;   // Anlegedatum beim Bearbeiten bewahren
             }
@@ -2557,31 +2611,23 @@
             closeSheet();
             toast((editMode ? "Produkt aktualisiert · " : "Produkt gespeichert · ") + rec.points + " P je " + base + " " + unit);
             switchTab("viewFood"); switchFoodSub("own");
-            // Freigabe: Werte-Whitelist (Name/Marke/Nährwerte/Barcode). Das Produktfoto
-            // geht NUR mit dem zweiten Opt-in und als separater Vorschlag mit.
-            if (rec.shared && API.community) {
-              API.community.submit(rec).then(async function (d) {
-                rec.sync_status = "synced"; rec.synced_at = Date.now();
-                if (d && d.id) rec.community_id = d.id;   // für die Foto-Zuordnung merken
-                try { await PKStore.put(rec); } catch (e) {}
-                // Optionales Produktfoto separat vorschlagen. Klein gerechnet als
-                // JPEG-DataURL (strippt EXIF/GPS); scheitert der Upload -> bleibt
-                // "pending" und syncPending() versucht es beim nächsten Start erneut.
-                if (rec.share_photo && rec.community_id && rec.photo_sync_status !== "synced"
-                    && photos.product && API.community.submitPhoto) {
-                  try {
-                    var dataUrl = await blobToShareJpeg(photos.product);
-                    if (dataUrl) {
-                      await API.community.submitPhoto(rec.community_id, dataUrl);
-                      rec.photo_sync_status = "synced"; rec.photo_synced_at = Date.now();
-                      try { await PKStore.put(rec); } catch (e) {}
-                    }
-                  } catch (e) { /* bleibt pending -> später erneut */ }
-                }
-                toast(rec.share_photo
-                  ? "Danke! Dein Vorschlag & das Foto werden von uns geprüft."
-                  : "Danke! Dein Vorschlag wird von uns geprüft.");
-              }).catch(function () { /* bleibt pending -> später erneut */ });
+            // Betreiber: dasselbe Produkt zusätzlich in die zentrale Datenbank
+            // aufnehmen — nur Skalare (Name/Marke/Nährwerte/Barcode/Diät). Ein Foto
+            // nur, wenn es öffentlich von Open Food Facts stammt (der Server prüft die
+            // Herkunft). Läuft im Hintergrund; scheitert es, bleibt das lokale Produkt
+            // trotzdem gespeichert.
+            if (toCentral && API.community && API.community.centralAdd) {
+              var offPhoto = String((pre._offImages && pre._offImages.product) || pre.photo_url || "");
+              API.community.centralAdd({
+                barcode: barcode, name: name, brand: rec.brand, unit: unit, base_g: base,
+                kcal: v.kcal, sat_fat_g: v.sat_fat_g, sugar_g: v.sugar_g,
+                protein_g: v.protein_g, fiber_g: v.fiber_g,
+                vegan: vegan, vegetarian: vegetarian, photo_url: offPhoto
+              }).then(function () {
+                toast("In die zentrale Datenbank übernommen.");
+              }).catch(function () {
+                toast("Zentrale Übernahme fehlgeschlagen – bitte erneut versuchen.");
+              });
             }
           } catch (e) {
             this.disabled = false;
@@ -2849,7 +2895,7 @@
           _edit: true, _origBarcode: p.barcode, created_at: p.created_at,
           name: p.name, brand: p.brand || "", unit: p.unit || "g", base_g: p.base_g || 100,
           kcal: p.kcal, sat_fat_g: p.sat_fat_g, sugar_g: p.sugar_g, protein_g: p.protein_g, fiber_g: p.fiber_g,
-          barcode: p.barcode, shared: !!p.shared, photos: p.photos || null,
+          barcode: p.barcode, photos: p.photos || null,
           vegan: !!p.vegan, vegetarian: !!p.vegetarian, bought_at: p.bought_at || ""
         });
       });
@@ -2996,7 +3042,7 @@
     var host = $("#prodCommunity"); if (!host) return;
     var list = S.communityFoods || [];
     if (!list.length) {
-      host.innerHTML = '<div class="prod-empty">Noch keine freigegebenen Gemeinschaftsprodukte.<br>Teile beim Anlegen ein Produkt mit der Gemeinschaft – nach Freigabe erscheint es hier.</div>';
+      host.innerHTML = '<div class="prod-empty">Noch keine Produkte in der zentralen Datenbank.<br>Sie wird laufend gepflegt – schau später wieder vorbei.</div>';
       return;
     }
     host._map = {};
@@ -3007,7 +3053,7 @@
       var img = nf.photo_url ? '<img src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : "";
       return '<div class="prod-tile">' +
         '<button class="prod-open" data-open-comm="' + i + '" aria-label="' + esc(nf.name) + ' eintragen">' +
-          '<span class="prod-badge">Gemeinschaft</span>' +
+          '<span class="prod-badge">Datenbank</span>' +
           '<div class="prod-ph"><span class="ini">' + esc(prodInitial(nf.name)) + '</span>' + img + '</div>' +
           '<div class="prod-body"><div class="prod-nm">' + esc(nf.name) + (nf.brand ? ' <span class="prod-br">· ' + esc(nf.brand) + '</span>' : '') + '</div>' +
           '<div class="prod-meta"><span class="pts">' + pts + ' P</span> · ' + esc((nf.base_g || 100) + " " + (nf.unit || "g")) + '</div></div>' +
@@ -3063,7 +3109,7 @@
           _edit: true, _origBarcode: pe.barcode, created_at: pe.created_at,
           name: pe.name, brand: pe.brand || "", unit: pe.unit || "g", base_g: pe.base_g || 100,
           kcal: pe.kcal, sat_fat_g: pe.sat_fat_g, sugar_g: pe.sugar_g, protein_g: pe.protein_g, fiber_g: pe.fiber_g,
-          barcode: pe.barcode, shared: !!pe.shared, photos: pe.photos || null,
+          barcode: pe.barcode, photos: pe.photos || null,
           vegan: !!pe.vegan, vegetarian: !!pe.vegetarian, bought_at: pe.bought_at || ""
         });
         return;
@@ -3169,11 +3215,13 @@
     return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
   }
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  var isAndroid = /android/i.test(navigator.userAgent);
 
   var banner = document.getElementById("pkInstall");
   var btn = document.getElementById("pkInstallBtn");
   var hint = document.getElementById("pkInstallHint");
   var xBtn = document.getElementById("pkInstallX");
+  var playProtect = document.getElementById("pkPlayProtect");
   var shown = false;
 
   function showBanner() {
@@ -3195,6 +3243,8 @@
       btn.hidden = true;
       hint.textContent = "Browser-Menü ⋮ → „App installieren / Zum Startbildschirm“.";
     }
+    // Play-Protect-Hinweis nur auf Android — dort prüft das System neue Apps.
+    if (playProtect) playProtect.hidden = !(isAndroid && !isStandalone());
     showBanner();
   }
 

@@ -59,32 +59,14 @@
   /* Gemeinschaftsprodukte-Moderation */
   .pend-badge{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 7px;border-radius:999px;
     background:var(--amber-600,#c77d16);color:#fff;font-size:.8rem;font-weight:800;font-variant-numeric:tabular-nums}
-  #commList{display:flex;flex-direction:column;gap:12px;padding:4px 4px 6px}
+  #centralList{display:flex;flex-direction:column;gap:12px;padding:4px 4px 6px}
   .comm-item{border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;background:var(--card-2)}
-  .comm-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+  .comm-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
   .comm-bc{font-size:.82rem;color:var(--muted)}
-  .comm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 10px}
-  @media(max-width:560px){.comm-grid{grid-template-columns:repeat(2,1fr)}}
-  .comm-f{display:flex;flex-direction:column;gap:3px;font-size:.75rem;color:var(--muted);font-weight:600}
-  .comm-f input{padding:.42em .55em;font-size:.9rem;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
-  .comm-check{flex-direction:row;align-items:center;gap:7px}
-  .comm-check input{flex:none;width:18px;height:18px;accent-color:var(--green);cursor:pointer}
-  .comm-check input:disabled{cursor:not-allowed;opacity:.65}
+  .diet-tag{color:var(--green-700,#2f7d32);font-weight:700;font-size:.82rem;white-space:nowrap}
+  .central-meta{font-size:.84rem;color:var(--ink);line-height:1.5}
   .comm-actions{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
-  .comm-reason{flex:1;min-width:150px;padding:.5em .7em;font-size:.86rem;border:1px solid var(--line);border-radius:9px}
   .btn.small{padding:.5em 1em;font-size:.86rem}
-
-  /* Produktfoto-Moderation */
-  #photoList{display:flex;flex-direction:column;gap:12px;padding:4px 4px 6px}
-  .photo-item{display:flex;gap:14px;border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;background:var(--card-2)}
-  @media(max-width:560px){.photo-item{flex-direction:column}}
-  .photo-preview{flex:0 0 auto;width:120px;height:120px;border-radius:10px;overflow:hidden;background:var(--line-2);display:grid;place-items:center}
-  @media(max-width:560px){.photo-preview{width:100%;height:200px}}
-  .photo-preview img{width:100%;height:100%;object-fit:cover;display:block}
-  .photo-preview.noimg img{display:none}
-  .photo-noimg{font-size:.78rem;color:var(--muted);text-align:center;padding:0 8px}
-  .photo-body{flex:1;min-width:0}
-  .photo-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 
   /* Nutzer-Detail (nutzt .sheet-back/.sheet aus punkto.css) */
   .icon-btn{background:none;border:0;font-size:1.2rem;line-height:1;color:var(--muted);cursor:pointer;padding:.2em .4em;border-radius:8px}
@@ -206,42 +188,24 @@
       </div>
     </div>
 
-    <!-- GEMEINSCHAFTSPRODUKTE -->
+    <!-- ZENTRALE DATENBANK -->
     <div class="sec-head">
-      <h2>Gemeinschaftsprodukte <span class="pend-badge hide" id="commBadge">0</span></h2>
+      <h2>Zentrale Datenbank <span class="pend-badge hide" id="centralBadge">0</span></h2>
     </div>
     <div class="table-card">
       <div class="th">
-        <h3>Vorschläge zur Prüfung</h3>
+        <h3>Freigegebene Produkte</h3>
         <span class="sp" style="flex:1"></span>
-        <button class="btn outline small" id="commReload">Aktualisieren</button>
+        <button class="btn outline small" id="centralReload">Aktualisieren</button>
       </div>
       <p class="muted" style="font-size:.85rem;padding:0 4px 6px">
-        Von Nutzern freigegebene Produkte (Name, Marke, Nährwerte, Barcode).
-        Werte vor dem Freigeben bei Bedarf korrigieren. Freigegebene erscheinen für alle in der Suche.
-        Optional geteilte <b>Produktfotos</b> werden separat unten geprüft.
+        Produkte, die für alle Nutzer in der Suche erscheinen (Name, Marke, Nährwerte, Barcode,
+        Vegan/Vegetarisch). Neue Einträge legst du direkt in der App an – beim Speichern eines
+        Produkts <b>„In die zentrale Datenbank übernehmen“</b>. Hier kannst du bestehende Einträge
+        ansehen und bei Bedarf entfernen.
       </p>
-      <div id="commList"></div>
-      <div class="empty hide" id="commEmpty">Keine offenen Vorschläge. 👍</div>
-    </div>
-
-    <!-- PRODUKTFOTOS -->
-    <div class="sec-head">
-      <h2>Produktfotos <span class="pend-badge hide" id="photoBadge">0</span></h2>
-    </div>
-    <div class="table-card">
-      <div class="th">
-        <h3>Foto-Vorschläge zur Prüfung</h3>
-        <span class="sp" style="flex:1"></span>
-        <button class="btn outline small" id="photoReload">Aktualisieren</button>
-      </div>
-      <p class="muted" style="font-size:.85rem;padding:0 4px 6px">
-        Optional von Nutzern geteilte Produktfotos. Nach <b>Freigabe</b> wird das Foto am
-        zugehörigen Gemeinschaftsartikel gezeigt (Vorschau &amp; Suche). Bei <b>Ablehnung</b>
-        wird das Bild dauerhaft gelöscht. Die Vorschau-Links sind kurzlebig signiert.
-      </p>
-      <div id="photoList"></div>
-      <div class="empty hide" id="photoEmpty">Keine offenen Foto-Vorschläge. 👍</div>
+      <div id="centralList"></div>
+      <div class="empty hide" id="centralEmpty">Noch keine Produkte in der zentralen Datenbank.</div>
     </div>
 
     <!-- WERKZEUGE -->
@@ -369,8 +333,7 @@
     showView("dash");
     renderStats(stats);
     loadUsers(true);
-    loadCommunity();
-    loadPhotos();
+    loadCentral();
   }
 
   /* --------------------------------------------------------------- stats */
@@ -520,6 +483,10 @@
     var actions =
       '<div class="divider"></div>' +
       "<h3 style='font-size:1rem'>Zugang verlängern</h3>" +
+      '<div class="ex-presets" style="display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap">' +
+      '<button type="button" class="btn outline small" data-ex-m="1" data-ex-a="2.99">Monat · 2,99 €</button>' +
+      '<button type="button" class="btn outline small" data-ex-m="12" data-ex-a="29.99">Jahr · 29,99 €</button>' +
+      "</div>" +
       '<div class="form-row">' +
       '<div class="field"><label>Monate</label><input type="number" id="exMonths" value="1" min="1" max="36"></div>' +
       '<div class="field"><label>Betrag (€)</label><input type="number" id="exAmount" value="2.99" min="0" step="0.01"></div>' +
@@ -555,6 +522,12 @@
       "<h3 style='font-size:1rem;margin-top:16px'>Zahlungen</h3>" + payList +
       actions;
 
+    document.querySelectorAll(".ex-presets [data-ex-m]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        $("exMonths").value = b.getAttribute("data-ex-m");
+        $("exAmount").value = b.getAttribute("data-ex-a");
+      });
+    });
     $("exBtn").addEventListener("click", doExtend);
     $("stBtn").addEventListener("click", doSetStatus);
     $("ntBtn").addEventListener("click", doAddNote);
@@ -600,182 +573,78 @@
     try { renderStats(await API.admin.stats(KEY)); } catch (e) { /* leise */ }
   }
 
-  /* --------------------------------------------------------- community mod */
-  var commItems = [];
+  /* ---------------------------------------------------------- zentrale DB */
+  // Nur-Lese-Ansicht der freigegebenen Produkte. Neue Eintraege entstehen
+  // ausschliesslich in der App ueber „In die zentrale Datenbank uebernehmen".
+  var centralItems = [];
   function nf(v) { return String(v == null || v === "" ? "" : v); }
-  function commRow(p) {
-    // Editierbare Nährwerte -> Betreiber kann vor der Freigabe korrigieren.
+  function onFlag(v) { return v === true || v === "true" || v === 1; }
+  function centralDiet(p) {
+    if (onFlag(p.vegan)) return '<span class="diet-tag">🌱 Vegan</span>';
+    if (onFlag(p.vegetarian)) return '<span class="diet-tag">🥕 Vegetarisch</span>';
+    return "";
+  }
+  function centralMeta(p) {
+    var base = (p.base_g ? esc(nf(p.base_g)) : "100") + (p.unit === "ml" ? " ml" : " g");
+    var bits = [];
+    if (nf(p.kcal) !== "") bits.push(esc(nf(p.kcal)) + " kcal");
+    if (nf(p.sat_fat_g) !== "") bits.push("Fett " + esc(nf(p.sat_fat_g)) + " g");
+    if (nf(p.sugar_g) !== "") bits.push("Zucker " + esc(nf(p.sugar_g)) + " g");
+    if (nf(p.protein_g) !== "") bits.push("Eiweiß " + esc(nf(p.protein_g)) + " g");
+    if (nf(p.fiber_g) !== "") bits.push("Ballastst. " + esc(nf(p.fiber_g)) + " g");
+    return '<span class="muted">je ' + base + '</span>' + (bits.length ? " · " + bits.join(" · ") : "");
+  }
+  function centralRow(p) {
+    var diet = centralDiet(p);
     return '<div class="comm-item" data-id="' + esc(p.id) + '">' +
       '<div class="comm-head">' +
-        '<div><b>' + esc(p.name) + '</b>' + (p.brand ? ' <span class="muted">· ' + esc(p.brand) + '</span>' : '') + '</div>' +
+        '<div><b>' + esc(p.name) + '</b>' +
+          (p.brand ? ' <span class="muted">· ' + esc(p.brand) + '</span>' : '') +
+          (diet ? ' ' + diet : '') + '</div>' +
         '<span class="comm-bc mono">' + (p.barcode ? esc(p.barcode) : '—') + '</span>' +
       '</div>' +
-      '<div class="comm-grid">' +
-        commField(p.id, "name", "Name", p.name, "text") +
-        commField(p.id, "brand", "Marke", p.brand, "text") +
-        commField(p.id, "unit", "Einheit", p.unit || "g", "text") +
-        commField(p.id, "base_g", "Bezug", p.base_g, "num") +
-        commField(p.id, "kcal", "kcal", p.kcal, "num") +
-        commField(p.id, "sat_fat_g", "ges. Fett", p.sat_fat_g, "num") +
-        commField(p.id, "sugar_g", "Zucker", p.sugar_g, "num") +
-        commField(p.id, "protein_g", "Eiweiß", p.protein_g, "num") +
-        commField(p.id, "fiber_g", "Ballastst.", p.fiber_g, "num") +
-        commCheck(p.id, "vegan", "🌱 Vegan", p.vegan) +
-        commCheck(p.id, "vegetarian", "🥕 Vegetarisch", p.vegetarian) +
-      '</div>' +
+      '<div class="central-meta">' + centralMeta(p) + '</div>' +
       '<div class="comm-actions">' +
-        '<input type="text" class="comm-reason" data-r="' + esc(p.id) + '" placeholder="Grund (bei Ablehnung, optional)">' +
-        '<button class="btn outline small comm-reject" data-x="' + esc(p.id) + '">Ablehnen</button>' +
-        '<button class="btn dark small comm-approve" data-a="' + esc(p.id) + '">Freigeben</button>' +
+        '<span style="flex:1"></span>' +
+        '<button class="btn outline small central-del" data-x="' + esc(p.id) + '">Entfernen</button>' +
       '</div>' +
     '</div>';
   }
-  function commField(id, key, label, val, type) {
-    return '<label class="comm-f"><span>' + esc(label) + '</span>' +
-      '<input type="' + (type === "num" ? "number" : "text") + '"' + (type === "num" ? ' step="0.1"' : '') +
-      ' data-f="' + esc(key) + '" data-id="' + esc(id) + '" value="' + esc(nf(val)) + '"></label>';
+  function setCentralBadge() {
+    var badge = $("centralBadge");
+    badge.textContent = centralItems.length;
+    badge.classList.toggle("hide", centralItems.length === 0);
+    $("centralEmpty").classList.toggle("hide", centralItems.length > 0);
   }
-  function commCheck(id, key, label, val) {
-    var on = val === true || val === "true" || val === 1;
-    return '<label class="comm-f comm-check"><span>' + esc(label) + '</span>' +
-      '<input type="checkbox" data-f="' + esc(key) + '" data-id="' + esc(id) + '"' + (on ? ' checked' : '') + '></label>';
-  }
-  function patchFor(id, root) {
-    var patch = {};
-    (root || document).querySelectorAll('.comm-item[data-id="' + cssEsc(id) + '"] input[data-f]').forEach(function (inp) {
-      var k = inp.getAttribute("data-f"), v = inp.value;
-      if (inp.type === "checkbox") patch[k] = inp.checked;
-      else if (k === "unit") patch[k] = (v === "ml" ? "ml" : "g");
-      else if (k === "name" || k === "brand") patch[k] = v;
-      else patch[k] = Number(v) || 0;
-    });
-    return patch;
-  }
-  function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
-
-  async function loadCommunity() {
+  async function loadCentral() {
     try {
-      var d = await API.admin.productsPending(KEY, 200);
-      commItems = d.products || [];
-      var host = $("commList");
-      host.innerHTML = commItems.map(commRow).join("");
-      $("commEmpty").classList.toggle("hide", commItems.length > 0);
-      var badge = $("commBadge");
-      badge.textContent = commItems.length;
-      badge.classList.toggle("hide", commItems.length === 0);
-      wireCommButtons(host);
-    } catch (e) { handleErr(e, "Vorschläge konnten nicht geladen werden"); }
+      var d = await API.admin.centralList(KEY, 500);
+      centralItems = d.products || [];
+      var host = $("centralList");
+      host.innerHTML = centralItems.map(centralRow).join("");
+      setCentralBadge();
+      host.querySelectorAll(".central-del").forEach(function (b) {
+        b.addEventListener("click", function () { removeCentral(b.getAttribute("data-x"), b); });
+      });
+    } catch (e) { handleErr(e, "Zentrale Datenbank konnte nicht geladen werden"); }
   }
-  function wireCommButtons(host) {
-    // Server erwartet die Vergangenheitsform: "approved" / "rejected".
-    host.querySelectorAll(".comm-approve").forEach(function (b) {
-      b.addEventListener("click", function () { moderate(b.getAttribute("data-a"), "approved", b); });
-    });
-    host.querySelectorAll(".comm-reject").forEach(function (b) {
-      b.addEventListener("click", function () { moderate(b.getAttribute("data-x"), "rejected", b); });
-    });
-    // Vegan impliziert vegetarisch: vegan an -> vegetarisch an + gesperrt (Wert bleibt
-    // trotz disabled per .checked lesbar). Der Server erzwingt dieselbe Invariante.
-    host.querySelectorAll(".comm-item").forEach(function (card) {
-      var vg = card.querySelector('input[data-f="vegan"]');
-      var ve = card.querySelector('input[data-f="vegetarian"]');
-      if (!vg || !ve) return;
-      var sync = function () { if (vg.checked) { ve.checked = true; ve.disabled = true; } else { ve.disabled = false; } };
-      vg.addEventListener("change", sync);
-      sync();
-    });
-  }
-  async function moderate(id, decision, btn) {
+  async function removeCentral(id, btn) {
+    if (!confirm("Diesen Eintrag aus der zentralen Datenbank entfernen?\nEr erscheint dann nicht mehr in der Suche der Nutzer.")) return;
     var card = btn.closest(".comm-item");
-    var reasonInp = card ? card.querySelector(".comm-reason") : null;
-    var reason = reasonInp ? reasonInp.value.trim() : "";
-    if (decision === "rejected" && !reason && !confirm("Ohne Grund ablehnen?")) return;
-    var patch = decision === "approved" ? patchFor(id, document) : null;
-    // Buttons der Karte sperren
     if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
     try {
-      await API.admin.productModerate(KEY, id, decision, patch, reason);
+      await API.admin.centralDelete(KEY, id);
       if (card) { card.style.opacity = ".35"; card.style.pointerEvents = "none"; }
-      toast(decision === "approved" ? "Freigegeben." : "Abgelehnt.");
-      commItems = commItems.filter(function (p) { return String(p.id) !== String(id); });
-      var badge = $("commBadge");
-      badge.textContent = commItems.length;
-      badge.classList.toggle("hide", commItems.length === 0);
-      $("commEmpty").classList.toggle("hide", commItems.length > 0);
+      toast("Aus zentraler Datenbank entfernt.");
+      centralItems = centralItems.filter(function (p) { return String(p.id) !== String(id); });
+      setCentralBadge();
       refreshStats();
     } catch (e) {
       if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = false; });
-      handleErr(e, "Aktion fehlgeschlagen");
+      handleErr(e, "Entfernen fehlgeschlagen");
     }
   }
-  $("commReload").addEventListener("click", function () { loadCommunity(); });
-
-  /* ------------------------------------------------------------- photo mod */
-  var photoItems = [];
-  function photoRow(p) {
-    var title = p.product_name ? esc(p.product_name) : '(Produkt nicht gefunden)';
-    var brand = p.product_brand ? ' <span class="muted">· ' + esc(p.product_brand) + '</span>' : '';
-    var hint = (p.product_status && p.product_status !== "approved")
-      ? '<p class="muted" style="font-size:.8rem;margin:0 0 8px">Hinweis: zugehöriges Produkt ist noch „' + esc(p.product_status) + '" (nicht freigegeben).</p>'
-      : '';
-    return '<div class="photo-item" data-id="' + esc(p.id) + '">' +
-      '<div class="photo-preview">' +
-        (p.review_url
-          ? '<img src="' + esc(p.review_url) + '" alt="" loading="lazy" onerror="this.closest(\'.photo-preview\').classList.add(\'noimg\');this.insertAdjacentHTML(\'afterend\',\'<span class=&quot;photo-noimg&quot;>Bild nicht ladbar</span>\')">'
-          : '<span class="photo-noimg">Kein Vorschau-Link</span>') +
-      '</div>' +
-      '<div class="photo-body">' +
-        '<div class="photo-head"><div><b>' + title + '</b>' + brand + '</div>' +
-          '<span class="comm-bc mono">' + (p.barcode ? esc(p.barcode) : '—') + '</span></div>' +
-        hint +
-        '<div class="comm-actions">' +
-          '<input type="text" class="comm-reason" data-r="' + esc(p.id) + '" placeholder="Grund (bei Ablehnung, optional)">' +
-          '<button class="btn outline small photo-reject" data-x="' + esc(p.id) + '">Ablehnen</button>' +
-          '<button class="btn dark small photo-approve" data-a="' + esc(p.id) + '">Freigeben</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }
-  function setPhotoBadge() {
-    var badge = $("photoBadge");
-    badge.textContent = photoItems.length;
-    badge.classList.toggle("hide", photoItems.length === 0);
-    $("photoEmpty").classList.toggle("hide", photoItems.length > 0);
-  }
-  async function loadPhotos() {
-    try {
-      var d = await API.admin.photosPending(KEY, 100);
-      photoItems = d.photos || [];
-      var host = $("photoList");
-      host.innerHTML = photoItems.map(photoRow).join("");
-      setPhotoBadge();
-      host.querySelectorAll(".photo-approve").forEach(function (b) {
-        b.addEventListener("click", function () { moderatePhoto(b.getAttribute("data-a"), "approved", b); });
-      });
-      host.querySelectorAll(".photo-reject").forEach(function (b) {
-        b.addEventListener("click", function () { moderatePhoto(b.getAttribute("data-x"), "rejected", b); });
-      });
-    } catch (e) { handleErr(e, "Foto-Vorschläge konnten nicht geladen werden"); }
-  }
-  async function moderatePhoto(id, decision, btn) {
-    var card = btn.closest(".photo-item");
-    var reasonInp = card ? card.querySelector(".comm-reason") : null;
-    var reason = reasonInp ? reasonInp.value.trim() : "";
-    if (decision === "rejected" && !confirm("Foto ablehnen und dauerhaft löschen?")) return;
-    if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
-    try {
-      await API.admin.photoModerate(KEY, id, decision, reason);
-      if (card) { card.style.opacity = ".35"; card.style.pointerEvents = "none"; }
-      toast(decision === "approved" ? "Foto freigegeben." : "Foto abgelehnt & gelöscht.");
-      photoItems = photoItems.filter(function (p) { return String(p.id) !== String(id); });
-      setPhotoBadge();
-      refreshStats();
-    } catch (e) {
-      if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = false; });
-      handleErr(e, "Aktion fehlgeschlagen");
-    }
-  }
-  $("photoReload").addEventListener("click", function () { loadPhotos(); });
+  $("centralReload").addEventListener("click", function () { loadCentral(); });
 
   /* --------------------------------------------------------------- export */
   $("exportBtn").addEventListener("click", async function () {

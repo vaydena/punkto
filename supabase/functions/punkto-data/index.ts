@@ -19,7 +19,8 @@ const num = (v: any, d = 0) => { const n = Number(v); return Number.isFinite(n) 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 // --- Zahlung (manuell): feste Betreiber-Bankdaten + Preis --------------------
-const PRICE_CENTS = 299; // 2,99 EUR / Monat
+const PRICE_CENTS = 299;        // 2,99 EUR / Monat
+const PRICE_CENTS_YEAR = 2999;  // 29,99 EUR / Jahr (rund 2 Monate gratis ggue. 12x2,99 = 35,88)
 const BANK = { holder: "Karl-Heinz Bicker", iban: "DE95700510030000785303", bic: "BYLADEM1FSI" };
 const PAYPAL = { email: "kontakt@vaydena.de", link: "" }; // link leer => "an E-Mail senden"-Weg
 const ISSUER = {
@@ -80,35 +81,10 @@ async function sha256hex(s: string) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// --- Community-Fotos: privater Storage-Bucket --------------------------------
-// Produktfotos liegen in einem NICHT-oeffentlichen Bucket; Uploads laufen mit dem
-// Service-Role-Key ueber die Storage-REST-API. Anonymer Zugriff ist unmoeglich —
-// ausstehende Fotos sieht niemand ausser dem Betreiber (per Signed-URL im Admin).
-const SUPA_URL = Deno.env.get("SUPABASE_URL") || "";
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const PHOTO_BUCKET = "punkto-community";
-// data:-URL oder rohes base64 -> Bytes. null bei Unsinn.
-function decodeImage(s: string): Uint8Array | null {
-  const b64 = s.startsWith("data:") ? (s.split(",")[1] || "") : s;
-  if (!b64) return null;
-  try {
-    const bin = atob(b64.replace(/\s+/g, ""));
-    const arr = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-    return arr.length ? arr : null;
-  } catch { return null; }
-}
-async function storageUpload(path: string, bytes: Uint8Array): Promise<boolean> {
-  if (!SERVICE_KEY || !SUPA_URL) return false;
-  try {
-    const res = await fetch(`${SUPA_URL}/storage/v1/object/${PHOTO_BUCKET}/${path}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "image/jpeg", "x-upsert": "true" },
-      body: bytes,
-    });
-    return res.ok;
-  } catch { return false; }
-}
+// Hinweis: Der fruehere Community-Foto-Upload (privater Storage-Bucket) wurde entfernt.
+// Die zentrale Lebensmittel-Datenbank pflegt jetzt ausschliesslich der Betreiber ueber
+// die App; Produktbilder kommen als stabile, oeffentliche Open-Food-Facts-https-URL
+// (kein Upload, kein Bucket -> keine PII, kein EXIF).
 
 async function auth(req: Request) {
   const token = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
@@ -117,7 +93,7 @@ async function auth(req: Request) {
   const r = await sql`
     select u.id, u.email, u.display_name, u.sex, u.birth_year, u.height_cm,
            u.start_weight_kg, u.goal_weight_kg, u.activity_level, u.daily_budget,
-           u.weekly_extra, u.onboarded, u.email_verified, u.created_at,
+           u.weekly_extra, u.onboarded, u.email_verified, u.is_admin, u.created_at,
            sb.status as sub_status, sb.plan as sub_plan,
            sb.trial_ends_at, sb.current_period_end,
            greatest(coalesce(sb.trial_ends_at,'epoch'::timestamptz), coalesce(sb.current_period_end,'epoch'::timestamptz)) as ends_at,
@@ -133,7 +109,7 @@ function pubUser(u: any) {
     id: u.id, email: u.email, display_name: u.display_name, sex: u.sex, birth_year: u.birth_year,
     height_cm: u.height_cm, start_weight_kg: u.start_weight_kg, goal_weight_kg: u.goal_weight_kg,
     activity_level: u.activity_level, daily_budget: u.daily_budget, weekly_extra: u.weekly_extra,
-    onboarded: u.onboarded, email_verified: u.email_verified, created_at: u.created_at,
+    onboarded: u.onboarded, email_verified: u.email_verified, is_admin: !!u.is_admin, created_at: u.created_at,
   };
 }
 function subView(u: any) {
@@ -151,7 +127,6 @@ function weekRange(dayStr: string) {
 const WRITE = new Set([
   "diary_add", "diary_update", "diary_del", "weight_set", "weight_del", "activity_add", "activity_del",
   "food_add", "food_update", "food_del", "recipe_add", "recipe_update", "recipe_del",
-  "product_submit", "product_photo_submit",
 ]);
 
 Deno.serve(async (req: Request) => {
@@ -204,6 +179,16 @@ Deno.serve(async (req: Request) => {
       const amount = PRICE_CENTS / 100;
       const reference = `Punkto ${u.email}`.slice(0, 140);
       const giro = buildGiro({ holder: BANK.holder, iban: BANK.iban, bic: BANK.bic, amount, reference });
+      // Zwei Zahlweisen: Monat (2,99) und Jahr (29,99, rund 2 Monate gratis). Jede hat
+      // einen eigenen Verwendungszweck (enthaelt weiterhin die E-Mail zur Zuordnung)
+      // und einen eigenen GiroCode. Die Top-Level-Felder bleiben monatlich (Kompat.).
+      const yearAmount = PRICE_CENTS_YEAR / 100;
+      const yearReference = `Punkto Jahr ${u.email}`.slice(0, 140);
+      const yearGiro = buildGiro({ holder: BANK.holder, iban: BANK.iban, bic: BANK.bic, amount: yearAmount, reference: yearReference });
+      const plans = [
+        { plan: "monthly", months: 1, price_cents: PRICE_CENTS, amount, reference, giro, label: "Monatlich", per: "Monat" },
+        { plan: "yearly", months: 12, price_cents: PRICE_CENTS_YEAR, amount: yearAmount, reference: yearReference, giro: yearGiro, label: "Jährlich", per: "Jahr" },
+      ];
       return json({
         ok: true,
         subscription: subView(u),
@@ -215,6 +200,7 @@ Deno.serve(async (req: Request) => {
         bank: { holder: BANK.holder, iban: BANK.iban, iban_pretty: formatIban(BANK.iban), bic: BANK.bic },
         paypal: PAYPAL,
         giro,
+        plans,
         issuer: ISSUER,
         tax_note: TAX_NOTE,
       });
@@ -367,12 +353,15 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true });
     }
 
-    if (action === "product_submit") {
-      // Eigenes (geraetelokal erfasstes) Produkt der Community VORSCHLAGEN.
-      // Uebertragen werden NUR Name/Marke/Naehrwerte/Barcode -> KEINE Fotos, keine
-      // sonstigen personenbezogenen Daten. Landet als status='pending' und wird
-      // erst nach Betreiber-Freigabe fuer andere sichtbar. submitted_by dient nur
-      // der internen Zuordnung/Rate-Limitierung und wird nie oeffentlich ausgegeben.
+    if (action === "central_add") {
+      // Nur der Betreiber (Admin-Konto) darf Produkte in die zentrale Datenbank
+      // aufnehmen -- kein Crowdsourcing mehr. Beim Scannen/Speichern in der App
+      // landet das Produkt direkt als status='approved' und ist damit sofort in
+      // der Lebensmittel-Suche aller Nutzer sichtbar. Uebertragen werden AUSSCHLIESSLICH
+      // Skalare (Name/Marke/Einheit/Naehrwerte/Barcode/Diaet-Flags) -> NIE selbst
+      // aufgenommene Fotos, keine PII, kein "gekauft bei". Ein optionales Produktfoto
+      // ist nur als oeffentliche Open-Food-Facts-URL erlaubt (kein Storage-Bucket).
+      if (!u.is_admin) return json({ error: "forbidden" }, 403);
       const name = String(body.name || "").trim().slice(0, 120);
       if (!name) return json({ error: "bad_name" }, 400);
       const barcode = String(body.barcode || "").replace(/\D/g, "").slice(0, 40);
@@ -384,53 +373,44 @@ Deno.serve(async (req: Request) => {
       const sugar = clamp(num(body.sugar_g), 0, 1000);
       const protein = clamp(num(body.protein_g), 0, 1000);
       const fiber = clamp(num(body.fiber_g), 0, 1000);
-      // Diaet-Flags (optional). vegan impliziert vegetarisch. Bewusst NICHT Teil des
-      // submit_hash -> derselbe Artikel bleibt dedupliziert, egal wie die Flags stehen
-      // (erster Vorschlag gewinnt; der Betreiber kann sie bei der Freigabe korrigieren).
+      // vegan impliziert vegetarisch (serverseitig erzwungen).
       const vegan = body.vegan === true || body.vegan === "true" || body.vegan === 1;
       const vegetarian = vegan || body.vegetarian === true || body.vegetarian === "true" || body.vegetarian === 1;
-      const hash = await sha256hex(
-        [barcode, name.toLowerCase(), brand.toLowerCase(), unit, base_g, kcal, sat, sugar, protein, fiber].join("|"),
-      );
-      // Dedup: derselbe Vorschlag (gleicher Hash) erzeugt keine Dublette. Das
-      // no-op-Update sorgt dafuer, dass RETURNING auch bei Konflikt den aktuellen
-      // Status liefert (pending/approved/rejected -> Client kann Feedback zeigen).
-      const r = await sql`
-        insert into punkto.community_products
-          (barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, vegan, vegetarian, submitted_by, submit_hash)
-        values (${barcode}, ${name}, ${brand}, ${unit}, ${base_g}, ${kcal}, ${sat}, ${sugar}, ${protein}, ${fiber}, ${vegan}, ${vegetarian}, ${u.id}, ${hash})
-        on conflict (submit_hash) do update set submit_hash = excluded.submit_hash
-        returning id, status`;
-      // id wird zurueckgegeben, damit der Client ein optionales Produktfoto
-      // eindeutig diesem Vorschlag zuordnen kann (product_photo_submit).
-      return json({ ok: true, id: r[0]?.id || null, status: r[0]?.status || "pending" });
-    }
-
-    if (action === "product_photo_submit") {
-      // Optionales Produktfoto zu einem vorgeschlagenen/freigegebenen Community-
-      // Produkt beisteuern (separates Opt-in, NICHT automatisch mit den Werten).
-      // Das Foto landet als status='pending' im privaten Bucket und wird erst nach
-      // Betreiber-Freigabe an den Artikel angehaengt. submitted_by bleibt intern.
-      const cpid = String(body.community_product_id || "");
-      if (!UUID_RE.test(cpid)) return json({ error: "bad_product" }, 400);
-      const prod = await sql`select id, barcode from punkto.community_products where id = ${cpid} limit 1`;
-      if (!prod[0]) return json({ error: "product_not_found" }, 404);
-      const bytes = decodeImage(String(body.photo || ""));
-      if (!bytes) return json({ error: "bad_image" }, 400);
-      if (bytes.length > 800 * 1024) return json({ error: "image_too_large" }, 413);
-      // Muss ein JPEG sein (Client re-encodiert per Canvas -> streift auch EXIF/GPS).
-      if (!(bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)) return json({ error: "not_jpeg" }, 415);
-      // Missbrauch bremsen: hoechstens 50 offene Fotos je Nutzer.
-      const openN = await sql`select count(*)::int as n from punkto.community_photos
-                                where submitted_by = ${u.id} and status = 'pending'`;
-      if ((openN[0]?.n || 0) >= 50) return json({ error: "too_many_pending" }, 429);
-      const path = `photos/${crypto.randomUUID()}.jpg`;
-      if (!(await storageUpload(path, bytes))) return json({ error: "upload_failed" }, 502);
-      const r = await sql`
-        insert into punkto.community_photos (community_product_id, barcode, storage_path, submitted_by)
-        values (${cpid}, ${prod[0].barcode || ""}, ${path}, ${u.id})
-        returning id, status`;
-      return json({ ok: true, id: r[0]?.id || null, status: r[0]?.status || "pending" });
+      // Foto NUR als oeffentliche Open-Food-Facts-URL zulassen (Whitelist), sonst leer.
+      let photo_url = "";
+      const pu = String(body.photo_url || "").trim();
+      if (pu && /^https:\/\/[a-z0-9.-]*openfoodfacts\.org\//i.test(pu) && pu.length <= 500) photo_url = pu;
+      let row: Array<{ id: string; status: string }> | undefined;
+      // Vorhandenes Produkt gleicher Barcode aktualisieren (bevorzugt das freigegebene,
+      // sonst das neueste), damit der Betreiber Eintraege pflegen kann statt zu duplizieren.
+      if (barcode) {
+        const ex = await sql`select id from punkto.community_products
+                               where barcode = ${barcode}
+                               order by (status = 'approved') desc, created_at desc limit 1`;
+        if (ex[0]) {
+          row = await sql`update punkto.community_products set
+                            name = ${name}, brand = ${brand}, unit = ${unit}, base_g = ${base_g},
+                            kcal = ${kcal}, sat_fat_g = ${sat}, sugar_g = ${sugar},
+                            protein_g = ${protein}, fiber_g = ${fiber},
+                            vegan = ${vegan}, vegetarian = ${vegetarian},
+                            photo_url = case when ${photo_url} <> '' then ${photo_url} else photo_url end,
+                            status = 'approved', moderated_at = now(), moderated_by = 'operator', reject_reason = ''
+                          where id = ${ex[0].id}
+                          returning id, status`;
+        }
+      }
+      // Kein Barcode oder noch nicht vorhanden -> neu anlegen. submit_hash bleibt NOT NULL
+      // (UNIQUE) -> Zufalls-UUID, da ohne Crowdsourcing keine Dedup-Semantik mehr noetig ist.
+      if (!row || !row[0]) {
+        const hash = crypto.randomUUID();
+        row = await sql`insert into punkto.community_products
+            (barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g,
+             vegan, vegetarian, photo_url, submitted_by, submit_hash, status, moderated_at, moderated_by)
+          values (${barcode}, ${name}, ${brand}, ${unit}, ${base_g}, ${kcal}, ${sat}, ${sugar}, ${protein}, ${fiber},
+             ${vegan}, ${vegetarian}, ${photo_url}, ${u.id}, ${hash}, 'approved', now(), 'operator')
+          returning id, status`;
+      }
+      return json({ ok: true, id: row[0]?.id || null, status: row[0]?.status || "approved" });
     }
 
     if (action === "product_list") {
