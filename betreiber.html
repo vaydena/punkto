@@ -202,7 +202,7 @@
         Produkte, die für alle Nutzer in der Suche erscheinen (Name, Marke, Nährwerte, Barcode,
         Vegan/Vegetarisch). Neue Einträge legst du direkt in der App an – beim Speichern eines
         Produkts <b>„In die zentrale Datenbank übernehmen“</b>. Hier kannst du bestehende Einträge
-        ansehen und bei Bedarf entfernen.
+        ansehen, <b>bearbeiten</b> und bei Bedarf entfernen.
       </p>
       <div id="centralList"></div>
       <div class="empty hide" id="centralEmpty">Noch keine Produkte in der zentralen Datenbank.</div>
@@ -606,8 +606,8 @@
   }
 
   /* ---------------------------------------------------------- zentrale DB */
-  // Nur-Lese-Ansicht der freigegebenen Produkte. Neue Eintraege entstehen
-  // ausschliesslich in der App ueber „In die zentrale Datenbank uebernehmen".
+  // Freigegebene Produkte ansehen, per id bearbeiten und entfernen. Neue Eintraege
+  // entstehen weiterhin in der App ueber „In die zentrale Datenbank uebernehmen".
   var centralItems = [];
   function nf(v) { return String(v == null || v === "" ? "" : v); }
   function onFlag(v) { return v === true || v === "true" || v === 1; }
@@ -638,6 +638,7 @@
       '<div class="central-meta">' + centralMeta(p) + '</div>' +
       '<div class="comm-actions">' +
         '<span style="flex:1"></span>' +
+        '<button class="btn outline small central-edit" data-x="' + esc(p.id) + '">Bearbeiten</button>' +
         '<button class="btn outline small central-del" data-x="' + esc(p.id) + '">Entfernen</button>' +
       '</div>' +
     '</div>';
@@ -648,33 +649,125 @@
     badge.classList.toggle("hide", centralItems.length === 0);
     $("centralEmpty").classList.toggle("hide", centralItems.length > 0);
   }
+  function renderCentral() {
+    var host = $("centralList");
+    host.innerHTML = centralItems.map(centralRow).join("");
+    setCentralBadge();
+    wireCentralRows(host);
+  }
+  function wireCentralRows(host) {
+    host.querySelectorAll(".central-edit").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-x");
+        var p = centralItems.filter(function (x) { return String(x.id) === String(id); })[0];
+        if (p) centralEdit(p);
+      });
+    });
+    host.querySelectorAll(".central-del").forEach(function (b) {
+      b.addEventListener("click", function () { removeCentral(b.getAttribute("data-x")); });
+    });
+  }
   async function loadCentral() {
     try {
       var d = await API.admin.centralList(KEY, 500);
       centralItems = d.products || [];
-      var host = $("centralList");
-      host.innerHTML = centralItems.map(centralRow).join("");
-      setCentralBadge();
-      host.querySelectorAll(".central-del").forEach(function (b) {
-        b.addEventListener("click", function () { removeCentral(b.getAttribute("data-x"), b); });
-      });
+      renderCentral();
     } catch (e) { handleErr(e, "Zentrale Datenbank konnte nicht geladen werden"); }
   }
-  async function removeCentral(id, btn) {
+  async function removeCentral(id) {
     if (!confirm("Diesen Eintrag aus der zentralen Datenbank entfernen?\nEr erscheint dann nicht mehr in der Suche der Nutzer.")) return;
-    var card = btn.closest(".comm-item");
-    if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
     try {
       await API.admin.centralDelete(KEY, id);
-      if (card) { card.style.opacity = ".35"; card.style.pointerEvents = "none"; }
-      toast("Aus zentraler Datenbank entfernt.");
       centralItems = centralItems.filter(function (p) { return String(p.id) !== String(id); });
-      setCentralBadge();
+      renderCentral();
       refreshStats();
+      toast("Aus zentraler Datenbank entfernt.");
     } catch (e) {
-      if (card) card.querySelectorAll("button").forEach(function (x) { x.disabled = false; });
       handleErr(e, "Entfernen fehlgeschlagen");
     }
+  }
+
+  // Scalar-Bearbeitung eines zentralen Eintrags (kein Foto-Upload, kein Punkte-Preview –
+  // pk-engine ist im Betreiber-Bereich nicht geladen). Speichert per id ueber central_update.
+  function centralEdit(p) {
+    $("shTitle").textContent = "Eintrag bearbeiten";
+    var unitG = (p.unit === "ml") ? "" : " selected";
+    var unitMl = (p.unit === "ml") ? " selected" : "";
+    $("shBody").innerHTML =
+      '<div class="field"><label>Name</label><input type="text" id="ceName" maxlength="120" value="' + esc(nf(p.name)) + '"></div>' +
+      '<div class="form-row">' +
+        '<div class="field"><label>Marke</label><input type="text" id="ceBrand" maxlength="80" value="' + esc(nf(p.brand)) + '"></div>' +
+        '<div class="field"><label>Barcode</label><input type="text" id="ceBarcode" inputmode="numeric" value="' + esc(nf(p.barcode)) + '"></div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="field"><label>Basis</label><input type="number" id="ceBase" min="1" step="1" value="' + esc(nf(p.base_g) || "100") + '"></div>' +
+        '<div class="field"><label>Einheit</label><select id="ceUnit"><option value="g"' + unitG + '>g</option><option value="ml"' + unitMl + '>ml</option></select></div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="field"><label>kcal</label><input type="number" id="ceKcal" min="0" step="1" value="' + esc(nf(p.kcal)) + '"></div>' +
+        '<div class="field"><label>ges. Fettsäuren (g)</label><input type="number" id="ceSat" min="0" step="0.1" value="' + esc(nf(p.sat_fat_g)) + '"></div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="field"><label>Zucker (g)</label><input type="number" id="ceSugar" min="0" step="0.1" value="' + esc(nf(p.sugar_g)) + '"></div>' +
+        '<div class="field"><label>Eiweiß (g)</label><input type="number" id="ceProt" min="0" step="0.1" value="' + esc(nf(p.protein_g)) + '"></div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="field"><label>Ballaststoffe (g)</label><input type="number" id="ceFiber" min="0" step="0.1" value="' + esc(nf(p.fiber_g)) + '"></div>' +
+        '<div class="field" style="display:flex;align-items:flex-end;gap:14px">' +
+          '<label style="display:flex;align-items:center;gap:6px;font-weight:600;margin:0 0 12px"><input type="checkbox" id="ceVegan" style="width:auto;margin:0"' + (onFlag(p.vegan) ? " checked" : "") + '> vegan</label>' +
+          '<label style="display:flex;align-items:center;gap:6px;font-weight:600;margin:0 0 12px"><input type="checkbox" id="ceVegetarian" style="width:auto;margin:0"' + (onFlag(p.vegetarian) ? " checked" : "") + '> vegetarisch</label>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn primary block" id="ceSave">Änderungen speichern</button>' +
+      '<button class="btn outline block" id="ceDelete" style="margin-top:8px;color:var(--danger)">Aus zentraler Datenbank entfernen</button>';
+
+    var vg = $("ceVegan"), vt = $("ceVegetarian");
+    vg.addEventListener("change", function () { if (vg.checked) vt.checked = true; });
+    vt.addEventListener("change", function () { if (!vt.checked) vg.checked = false; });
+
+    $("ceSave").addEventListener("click", async function () {
+      var btn = this;
+      var name = $("ceName").value.trim();
+      if (!name) { toast("Name darf nicht leer sein.", true); return; }
+      btn.disabled = true;
+      var num = function (id) { var x = parseFloat(String($(id).value).replace(",", ".")); return Number.isFinite(x) ? x : 0; };
+      var payload = {
+        name: name,
+        brand: $("ceBrand").value.trim(),
+        barcode: $("ceBarcode").value.replace(/\D/g, ""),
+        unit: $("ceUnit").value === "ml" ? "ml" : "g",
+        base_g: num("ceBase") || 100,
+        kcal: num("ceKcal"),
+        sat_fat_g: num("ceSat"),
+        sugar_g: num("ceSugar"),
+        protein_g: num("ceProt"),
+        fiber_g: num("ceFiber"),
+        vegan: $("ceVegan").checked,
+        vegetarian: $("ceVegetarian").checked || $("ceVegan").checked
+      };
+      try {
+        var d = await API.admin.centralUpdate(KEY, p.id, payload);
+        if (d && d.product) {
+          centralItems = centralItems.map(function (x) { return String(x.id) === String(p.id) ? d.product : x; });
+          renderCentral();
+        } else {
+          await loadCentral();
+        }
+        refreshStats();
+        closeSheet();
+        toast("Eintrag aktualisiert.");
+      } catch (e) {
+        btn.disabled = false;
+        handleErr(e, "Speichern fehlgeschlagen");
+      }
+    });
+
+    $("ceDelete").addEventListener("click", function () {
+      closeSheet();
+      removeCentral(p.id);
+    });
+
+    openSheet();
   }
   $("centralReload").addEventListener("click", function () { loadCentral(); });
 

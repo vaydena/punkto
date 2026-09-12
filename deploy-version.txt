@@ -1,4 +1,4 @@
-pk-v26-4f2a
+pk-v27-3452
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -416,6 +416,18 @@ v26-4f2a: Install-Hilfe erweitert — aufklappbarer, eskalierender Troubleshooti
              kein APK-Download); stattdessen der PWA-passende, sicherheitsbewusste Weg.
          Reine Client-Aenderung (anmelden.html, app.html, konto.html; natives <details>,
          kein JS noetig), kein Backend-/Datenmodell-Change. SW-CACHE auf pk-app-v26 angehoben.
+v27-3452: Zentrale Datenbank nachtraeglich BEARBEITEN und LOESCHEN — vom Smartphone (Admin)
+         wie auch aus dem Betreiber-Bereich. Neue Endpunkte central_update/central_delete per
+         server-seitiger UUID-id (nicht per Barcode, da central_add nur upsert-by-barcode kann
+         und sonst Dubletten fuer barcode-lose Produkte entstuenden). Backend: punkto-data
+         (Admin via Bearer + u.is_admin; central_update behaelt photo_url, nur gueltige
+         openfoodfacts.org-URLs ueberschreiben) und punkto-admin (Operator via x-admin-key;
+         kein photo_url-Touch, da keine OFF-Suche). Client: pk-app.js (community.centralUpdate/
+         centralDelete + admin.centralUpdate/centralDelete), app.html (Admin-Edit/Loeschen je
+         Kachel in „Zentrale Datenbank" + openCentralEditSheet mit Live-Punkten via PK.pointsFor),
+         betreiber.html (Bearbeiten-Button je Zeile + centralEdit-Sheet, OHNE Punkte-Preview —
+         pk-engine dort nicht geladen). Invariante vegan⇒vegetarisch server- und clientseitig.
+         SW-CACHE auf pk-app-v27 angehoben.
 
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

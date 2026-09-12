@@ -3095,6 +3095,9 @@
       return;
     }
     host._map = {};
+    // Nur das Betreiber-/Admin-Konto darf zentrale Einträge nachträglich bearbeiten
+    // oder entfernen (gelöscht/geändert per Server-id). Normale Nutzer sehen nur an.
+    var adm = isAdmin();
     host.innerHTML = '<div class="prod-grid">' + list.map(function (p, i) {
       host._map[i] = p;
       var nf = communityToFood(p);
@@ -3106,11 +3109,96 @@
           '<div class="prod-ph"><span class="ini">' + esc(prodInitial(nf.name)) + '</span>' + img + '</div>' +
           '<div class="prod-body"><div class="prod-nm">' + esc(nf.name) + (nf.brand ? ' <span class="prod-br">· ' + esc(nf.brand) + '</span>' : '') + '</div>' +
           '<div class="prod-meta"><span class="pts">' + pts + ' P</span> · ' + esc((nf.base_g || 100) + " " + (nf.unit || "g")) + '</div></div>' +
-        '</button></div>';
+        '</button>' +
+        (adm
+          ? '<div class="prod-acts">' +
+              '<button class="pd-edit" data-edit-comm="' + i + '" aria-label="Bearbeiten">' + EDIT_SVG + '</button>' +
+              '<button class="pd-del" data-del-comm="' + i + '" aria-label="Löschen">' + DEL_SVG + '</button>' +
+            '</div>'
+          : '') +
+        '</div>';
     }).join("") + '</div>';
   }
 
   function renderProductGallery() { renderProductMine(); renderProductCommunity(); }
+
+  /* Einen Eintrag der ZENTRALEN Datenbank (Server) nachträglich bearbeiten — nur
+     Betreiber-Konto (der Server prüft is_admin zusätzlich). Reine Skalare, keine
+     Fotos; ein evtl. vorhandenes Open-Food-Facts-Foto bleibt unverändert. Die
+     Punktzahl wird wie überall clientseitig aus den Nährwerten gerechnet. */
+  function openCentralEditSheet(row) {
+    if (!row || !row.id) return;
+    openSheet("Datenbank-Eintrag bearbeiten",
+      '<p style="color:var(--muted);margin-top:-6px;font-size:.9rem">Änderungen gelten sofort für alle Nutzer in der Lebensmittel-Suche. <span class="badge-off">zentral</span></p>' +
+      '<div class="field"><label for="ceName">Name</label><input type="text" id="ceName" maxlength="80" value="' + esc(row.name || "") + '"></div>' +
+      '<div class="row"><div class="field"><label for="ceBrand">Marke (optional)</label><input type="text" id="ceBrand" maxlength="60" value="' + esc(row.brand || "") + '"></div>' +
+      '<div class="field"><label for="ceUnit">Einheit</label><select id="ceUnit"><option value="g">g (fest)</option><option value="ml">ml (flüssig)</option></select></div></div>' +
+      '<div class="row"><div class="field"><label for="ceBase">Bezug</label><input type="number" id="ceBase" inputmode="numeric" value="' + (+row.base_g > 0 ? +row.base_g : 100) + '" min="1" max="2000"></div>' +
+      '<div class="field"><label for="ceKcal">Kalorien</label><input type="number" id="ceKcal" inputmode="numeric" placeholder="kcal" min="0"' + nv(row.kcal) + '></div></div>' +
+      '<p style="color:var(--muted);font-size:.85rem;margin:2px 0 10px">Nährwerte je Bezugsmenge (editierbar – so stimmt die Punktzahl exakt):</p>' +
+      '<div class="row"><div class="field"><label for="ceSat">ges. Fett (g)</label><input type="number" id="ceSat" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(row.sat_fat_g) + '></div>' +
+      '<div class="field"><label for="ceSugar">Zucker (g)</label><input type="number" id="ceSugar" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(row.sugar_g) + '></div></div>' +
+      '<div class="row"><div class="field"><label for="ceProt">Eiweiß (g)</label><input type="number" id="ceProt" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(row.protein_g) + '></div>' +
+      '<div class="field"><label for="ceFiber">Ballaststoffe (g)</label><input type="number" id="ceFiber" inputmode="decimal" step="0.1" placeholder="0" min="0"' + nv(row.fiber_g) + '></div></div>' +
+      '<div class="field"><label for="ceBarcode">Barcode</label><input type="text" id="ceBarcode" inputmode="numeric" placeholder="optional" value="' + esc(row.barcode || "") + '"></div>' +
+      '<div class="cap-diet">' +
+        '<label><input type="checkbox" id="ceVegan"' + (row.vegan ? " checked" : "") + '> 🌱 Vegan</label>' +
+        '<label><input type="checkbox" id="ceVegetarian"' + (row.vegetarian ? " checked" : "") + '> 🥕 Vegetarisch</label>' +
+      '</div>' +
+      '<div class="detail-points"><span class="coin" id="cePts">0</span><span>Punkte je Bezugsmenge</span></div>' +
+      '<button class="btn primary block big" id="ceSave">Änderungen speichern</button>' +
+      '<button class="btn ghost block" id="ceDel" style="margin-top:8px;color:var(--danger)">Eintrag löschen</button>',
+      function (root) {
+        $("#ceUnit", root).value = row.unit === "ml" ? "ml" : "g";
+        function vals() {
+          return {
+            kcal: +$("#ceKcal", root).value || 0, sat_fat_g: +$("#ceSat", root).value || 0,
+            sugar_g: +$("#ceSugar", root).value || 0, protein_g: +$("#ceProt", root).value || 0,
+            fiber_g: +$("#ceFiber", root).value || 0
+          };
+        }
+        function recalc() { $("#cePts", root).textContent = PK.pointsFor(vals()); }
+        ["#ceKcal", "#ceSat", "#ceSugar", "#ceProt", "#ceFiber"].forEach(function (s) { $(s, root).addEventListener("input", recalc); });
+        recalc();
+
+        var vg = $("#ceVegan", root), ve = $("#ceVegetarian", root);
+        function syncDiet() { if (vg.checked) { ve.checked = true; ve.disabled = true; } else { ve.disabled = false; } }
+        vg.addEventListener("change", syncDiet); syncDiet();
+
+        function refreshList() {
+          renderProductCommunity();
+          if (API.community && API.community.list) API.community.list().then(function (r) { if (r && r.products) { S.communityFoods = r.products; renderProductCommunity(); } }).catch(function () {});
+        }
+
+        $("#ceSave", root).addEventListener("click", async function () {
+          var name = $("#ceName", root).value.trim();
+          if (!name) { toast("Bitte einen Namen angeben."); return; }
+          var v = vals(), btn = this; btn.disabled = true;
+          try {
+            var d = await API.community.centralUpdate(row.id, {
+              name: name, brand: $("#ceBrand", root).value.trim(),
+              barcode: ($("#ceBarcode", root).value || "").replace(/\D/g, ""),
+              unit: $("#ceUnit", root).value === "ml" ? "ml" : "g", base_g: +$("#ceBase", root).value || 100,
+              kcal: v.kcal, sat_fat_g: v.sat_fat_g, sugar_g: v.sugar_g, protein_g: v.protein_g, fiber_g: v.fiber_g,
+              vegan: vg.checked, vegetarian: ve.checked
+            });
+            if (d && d.product) S.communityFoods = (S.communityFoods || []).map(function (x) { return String(x.id) === String(row.id) ? d.product : x; });
+            refreshList(); closeSheet(); toast("Zentraler Eintrag aktualisiert.");
+          } catch (e) { btn.disabled = false; toast("Speichern fehlgeschlagen."); }
+        });
+
+        $("#ceDel", root).addEventListener("click", async function () {
+          if (!confirm("Diesen Eintrag aus der zentralen Datenbank entfernen?\nEr erscheint dann nicht mehr in der Suche der Nutzer.")) return;
+          var btn = this; btn.disabled = true;
+          try {
+            await API.community.centralDelete(row.id);
+            S.communityFoods = (S.communityFoods || []).filter(function (x) { return String(x.id) !== String(row.id); });
+            refreshList(); closeSheet(); toast("Aus zentraler Datenbank entfernt.");
+          } catch (e) { btn.disabled = false; toast("Entfernen fehlgeschlagen."); }
+        });
+      }
+    );
+  }
 
   function switchProdSub(sub) {
     $$("#prodSeg button").forEach(function (b) { b.classList.toggle("on", b.dataset.psub === sub); });
@@ -3176,9 +3264,29 @@
       }
     });
     $("#prodCommunity").addEventListener("click", function (e) {
+      var host = $("#prodCommunity");
+      // Betreiber: zentralen Eintrag bearbeiten (per Server-id).
+      var ed = e.target.closest("[data-edit-comm]");
+      if (ed) { var pe = host._map && host._map[+ed.dataset.editComm]; if (pe) openCentralEditSheet(pe); return; }
+      // Betreiber: zentralen Eintrag entfernen (per Server-id).
+      var dl = e.target.closest("[data-del-comm]");
+      if (dl) {
+        var pd = host._map && host._map[+dl.dataset.delComm]; if (!pd) return;
+        if (!confirm("Diesen Eintrag aus der zentralen Datenbank entfernen?\nEr erscheint dann nicht mehr in der Suche der Nutzer.")) return;
+        (async function () {
+          try {
+            await API.community.centralDelete(pd.id);
+            S.communityFoods = (S.communityFoods || []).filter(function (x) { return String(x.id) !== String(pd.id); });
+            renderProductCommunity();
+            // Im Hintergrund frisch laden (aktualisiert auch den Offline-Cache).
+            if (API.community && API.community.list) API.community.list().then(function (r) { if (r && r.products) { S.communityFoods = r.products; renderProductCommunity(); } }).catch(function () {});
+            toast("Aus zentraler Datenbank entfernt.");
+          } catch (e2) { toast("Entfernen fehlgeschlagen."); }
+        })();
+        return;
+      }
       var o = e.target.closest("[data-open-comm]");
       if (!o) return;
-      var host = $("#prodCommunity");
       var p = host._map && host._map[+o.dataset.openComm];
       if (p) openFoodDetail(communityToFood(p));
     });

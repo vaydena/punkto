@@ -3,7 +3,8 @@
 // Aktionen: stats, users, user, extend (Abo verlaengern, plan monthly|yearly),
 // grant_free (dauerhaft kostenlos freischalten, plan='comp', ohne Zahlung),
 // set_status, add_note, export, central_list (zentrale DB ansehen),
-// central_delete (Eintrag entfernen), set_key (Schluessel rotieren).
+// central_update (Eintrag bearbeiten), central_delete (Eintrag entfernen),
+// set_key (Schluessel rotieren).
 import postgres from "npm:postgres@3";
 
 const cors = {
@@ -209,6 +210,36 @@ Deno.serve(async (req: Request) => {
           from punkto.community_products where status = 'approved'
           order by moderated_at desc nulls last, created_at desc limit ${limit}`;
       return json({ ok: true, products: rows, count: rows.length });
+    }
+
+    if (action === "central_update") {
+      // Einen bestehenden Eintrag der zentralen Datenbank per id bearbeiten. Nur
+      // Skalare + Diaet-Flags (vegan impliziert vegetarisch). Das Produktfoto (falls
+      // vorhanden, ausschliesslich eine oeffentliche OFF-URL) bleibt unveraendert.
+      const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
+      const name = String(body.name || "").trim().slice(0, 120);
+      if (!name) return json({ error: "bad_name" }, 400);
+      const barcode = String(body.barcode || "").replace(/\D/g, "").slice(0, 40);
+      const brand = String(body.brand || "").trim().slice(0, 80);
+      const unit = String(body.unit) === "ml" ? "ml" : "g";
+      const base_g = clamp(num(body.base_g, 100), 1, 100000);
+      const kcal = clamp(num(body.kcal), 0, 99999);
+      const sat = clamp(num(body.sat_fat_g), 0, 1000);
+      const sugar = clamp(num(body.sugar_g), 0, 1000);
+      const protein = clamp(num(body.protein_g), 0, 1000);
+      const fiber = clamp(num(body.fiber_g), 0, 1000);
+      const vegan = body.vegan === true || body.vegan === "true" || body.vegan === 1;
+      const vegetarian = vegan || body.vegetarian === true || body.vegetarian === "true" || body.vegetarian === 1;
+      const r = await sql`update punkto.community_products set
+            barcode = ${barcode}, name = ${name}, brand = ${brand}, unit = ${unit}, base_g = ${base_g},
+            kcal = ${kcal}, sat_fat_g = ${sat}, sugar_g = ${sugar}, protein_g = ${protein}, fiber_g = ${fiber},
+            vegan = ${vegan}, vegetarian = ${vegetarian},
+            status = 'approved', moderated_at = now(), moderated_by = 'operator'
+          where id = ${id}
+          returning id, barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g,
+                    vegan, vegetarian, photo_url, created_at, moderated_at`;
+      if (!r[0]) return json({ error: "not_found" }, 404);
+      return json({ ok: true, product: r[0] });
     }
 
     if (action === "central_delete") {

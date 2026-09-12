@@ -429,6 +429,53 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, id: row[0]?.id || null, status: row[0]?.status || "approved" });
     }
 
+    if (action === "central_update") {
+      // Einen bestehenden zentralen Eintrag NACHTRAEGLICH per id aendern (nur der
+      // Betreiber/Admin, vom Smartphone aus). Nur Skalare + Diaet-Flags; ein evtl.
+      // vorhandenes Open-Food-Facts-Foto bleibt erhalten und wird nur ueberschrieben,
+      // wenn wieder eine gueltige oeffentliche OFF-URL mitkommt.
+      if (!u.is_admin) return json({ error: "forbidden" }, 403);
+      const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
+      const name = String(body.name || "").trim().slice(0, 120);
+      if (!name) return json({ error: "bad_name" }, 400);
+      const barcode = String(body.barcode || "").replace(/\D/g, "").slice(0, 40);
+      const brand = String(body.brand || "").trim().slice(0, 80);
+      const unit = String(body.unit) === "ml" ? "ml" : "g";
+      const base_g = clamp(num(body.base_g, 100), 1, 100000);
+      const kcal = clamp(num(body.kcal), 0, 99999);
+      const sat = clamp(num(body.sat_fat_g), 0, 1000);
+      const sugar = clamp(num(body.sugar_g), 0, 1000);
+      const protein = clamp(num(body.protein_g), 0, 1000);
+      const fiber = clamp(num(body.fiber_g), 0, 1000);
+      // vegan impliziert vegetarisch (serverseitig erzwungen).
+      const vegan = body.vegan === true || body.vegan === "true" || body.vegan === 1;
+      const vegetarian = vegan || body.vegetarian === true || body.vegetarian === "true" || body.vegetarian === 1;
+      let photo_url = "";
+      const pu = String(body.photo_url || "").trim();
+      if (pu && /^https:\/\/[a-z0-9.-]*openfoodfacts\.org\//i.test(pu) && pu.length <= 500) photo_url = pu;
+      const r = await sql`update punkto.community_products set
+            barcode = ${barcode}, name = ${name}, brand = ${brand}, unit = ${unit}, base_g = ${base_g},
+            kcal = ${kcal}, sat_fat_g = ${sat}, sugar_g = ${sugar}, protein_g = ${protein}, fiber_g = ${fiber},
+            vegan = ${vegan}, vegetarian = ${vegetarian},
+            photo_url = case when ${photo_url} <> '' then ${photo_url} else photo_url end,
+            status = 'approved', moderated_at = now(), moderated_by = 'operator'
+          where id = ${id}
+          returning id, barcode, name, brand, unit, base_g, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, vegan, vegetarian, photo_url`;
+      if (!r[0]) return json({ error: "not_found" }, 404);
+      return json({ ok: true, product: r[0] });
+    }
+
+    if (action === "central_delete") {
+      // Einen zentralen Eintrag per id entfernen (nur der Betreiber/Admin, vom
+      // Smartphone aus). Harte Loeschung -- die Tabelle enthaelt nur Skalare/
+      // oeffentliche URLs, keine PII/Fotos im Storage.
+      if (!u.is_admin) return json({ error: "forbidden" }, 403);
+      const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
+      const r = await sql`delete from punkto.community_products where id = ${id} returning id`;
+      if (!r.length) return json({ error: "not_found" }, 404);
+      return json({ ok: true, id: r[0].id });
+    }
+
     if (action === "product_list") {
       // Freigegebene Community-Produkte fuer die Lebensmittel-Suche (Merge im
       // Client). Bewusst schlank und OHNE submitted_by (keine PII nach aussen).

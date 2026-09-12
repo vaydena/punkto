@@ -135,8 +135,19 @@
     addNote(key, id, notes) { return call("admin", "add_note", { id: id, notes: notes }, { token: null, adminKey: key }); },
     export(key) { return call("admin", "export", {}, { token: null, adminKey: key }); },
     setKey(key, new_key) { return call("admin", "set_key", { new_key: new_key }, { token: null, adminKey: key }); },
-    // Zentrale Datenbank (nur Betreiber-Ansicht; gepflegt wird in der App via central_add)
+    // Zentrale Datenbank im Betreiber-Bereich: ansehen, per id bearbeiten, entfernen.
     centralList(key, limit) { return call("admin", "central_list", { limit: limit || 500 }, { token: null, adminKey: key }); },
+    centralUpdate(key, id, p) {
+      p = p || {};
+      var n = function (v) { var x = Number(v); return Number.isFinite(x) ? x : 0; };
+      return call("admin", "central_update", {
+        id: id, name: String(p.name || ""), brand: String(p.brand || ""),
+        barcode: String(p.barcode || ""), unit: p.unit === "ml" ? "ml" : "g", base_g: n(p.base_g) || 100,
+        kcal: n(p.kcal), sat_fat_g: n(p.sat_fat_g), sugar_g: n(p.sugar_g),
+        protein_g: n(p.protein_g), fiber_g: n(p.fiber_g),
+        vegan: !!p.vegan, vegetarian: !!p.vegetarian || !!p.vegan
+      }, { token: null, adminKey: key });
+    },
     centralDelete(key, id) { return call("admin", "central_delete", { id: id }, { token: null, adminKey: key }); }
   };
 
@@ -272,6 +283,15 @@
        werden ausschliesslich die Whitelist-Skalare + optionale oeffentliche OFF-Foto-URL.
        Der Eintrag ist danach sofort fuer alle in der Lebensmittel-Suche sichtbar. */
     centralAdd(product) { return call("data", "central_add", centralPayload(product)); },
+    /* Einen bestehenden zentralen Eintrag per id bearbeiten (nur Betreiber/Admin —
+       der Server prueft is_admin). Uebertragen wird dieselbe Whitelist wie bei
+       centralAdd; photo_url bleibt serverseitig erhalten, wenn keine neue OFF-URL kommt. */
+    centralUpdate(id, product) {
+      var p = centralPayload(product); p.id = String(id);
+      return call("data", "central_update", p);
+    },
+    /* Einen zentralen Eintrag per id entfernen (nur Betreiber/Admin). */
+    centralDelete(id) { return call("data", "central_delete", { id: String(id) }); },
     /* Freigegebene Produkte laden und geraetelokal cachen (fuer Offline-Suche). */
     async list() {
       var d = await call("data", "product_list", {});
