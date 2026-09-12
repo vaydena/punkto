@@ -121,6 +121,17 @@
   #pkInstall .x{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;flex:0 0 auto}
   #pkInstall .btn{flex:0 0 auto}
   @media(max-width:420px){#pkInstall .tx span{display:none}}
+  #pkInstall .pp{margin:10px 0 0;padding:9px 11px;background:var(--green-tint-2);border-radius:12px;
+    font-size:.78rem;line-height:1.45;color:var(--ink-2)}
+  #pkInstall .pp p{margin:0}
+  #pkInstall .pp b{color:var(--ink)}
+  #pkInstall .pp-help{margin-top:8px}
+  #pkInstall .pp-help>summary{cursor:pointer;font-weight:800;color:var(--ink);list-style:none}
+  #pkInstall .pp-help>summary::-webkit-details-marker{display:none}
+  #pkInstall .pp-help>summary::before{content:"▸ ";color:var(--muted)}
+  #pkInstall .pp-help[open]>summary::before{content:"▾ "}
+  #pkInstall .pp-help ol{margin:8px 0 0;padding-left:1.25em;display:flex;flex-direction:column;gap:7px}
+  #pkInstall .pp-help i{font-style:normal;color:var(--muted)}
 
   .toast{position:fixed;left:50%;bottom:calc(24px + var(--sab));transform:translateX(-50%) translateY(20px);
     background:var(--ink);color:#fff;padding:.7em 1.2em;border-radius:var(--r-pill);font-size:.9rem;font-weight:600;
@@ -167,6 +178,17 @@
     <button class="x" id="pkInstallX" aria-label="Später">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
     </button>
+  </div>
+  <div class="pp" id="pkPlayProtect" hidden>
+    <p><b>Kurzer Hinweis:</b> Android prüft neue Apps mit „Play Protect“. Beim Ablegen kann kurz „App wird geprüft“ erscheinen — bei Web-Apps ganz normal. Einfach auf <b>„Trotzdem installieren“</b> bzw. <b>„Öffnen“</b> tippen. Punkto kommt ohne App-Store direkt von punkto.vaydena.de.</p>
+    <details class="pp-help">
+      <summary>Installation wird blockiert? So klappt's trotzdem</summary>
+      <ol>
+        <li>Beim Ablegen auf <b>„Trotzdem installieren“</b> bzw. <b>„Öffnen“</b> tippen — die kurze Prüfung ist bei Web-Apps normal.</li>
+        <li>Kommt die Meldung <b>„Unbekannte App“</b>: dem Browser das Installieren erlauben — <i>Einstellungen → Apps → Spezieller App-Zugriff → Unbekannte Apps installieren → [dein Browser] → erlauben</i>.</li>
+        <li><b>Nur falls es dann noch klemmt</b>, Play Protect kurz pausieren: <i>Play&nbsp;Store → Profilbild → „Play&nbsp;Protect“ → ⚙️ → „Apps mit Play Protect scannen“ aus</i>. <b>Danach direkt wieder einschalten</b> — das ist wichtig.</li>
+      </ol>
+    </details>
   </div>
 </div>
 
@@ -476,11 +498,13 @@
     return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
   }
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  var isAndroid = /android/i.test(navigator.userAgent);
 
   var banner = document.getElementById("pkInstall");
   var btn = document.getElementById("pkInstallBtn");
   var hint = document.getElementById("pkInstallHint");
   var xBtn = document.getElementById("pkInstallX");
+  var pp = document.getElementById("pkPlayProtect");
   var shown = false;
 
   function showBanner() {
@@ -502,6 +526,7 @@
       btn.hidden = true;
       hint.textContent = "Browser-Menü ⋮ → „App installieren / Zum Startbildschirm\".";
     }
+    if (pp) pp.hidden = !(isAndroid && !isStandalone());
     showBanner();
   }
 

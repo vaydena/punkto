@@ -1,4 +1,4 @@
-pk-v25-9cf0
+pk-v26-4f2a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -404,6 +404,18 @@ v25-9cf0: Schritte aus der Health-App uebernehmen + Gratis-Freischaltung fuer Fr
              (Zahl-Block + JS-Verdrahtung fuer Comp-Konten uebersprungen).
          Server: punkto-data + punkto-admin neu deployed (verify_jwt=false).
          SW-CACHE auf pk-app-v25 angehoben.
+v26-4f2a: Install-Hilfe erweitert — aufklappbarer, eskalierender Troubleshooting-Block
+         im Play-Protect-Hinweis (nur Android, nicht installiert), der hilft, wenn sich
+         die App partout nicht ablegen laesst. Drei Stufen, harmlos zuerst:
+         (1) beim Ablegen auf „Trotzdem installieren"/„Oeffnen" tippen (die kurze Pruefung
+             ist bei Web-Apps normal); (2) bei „Unbekannte App" dem Browser das Installieren
+             erlauben (Einstellungen -> Apps -> Spezieller App-Zugriff -> Unbekannte Apps);
+         (3) NUR als letztes Mittel Play Protect kurz pausieren — mit fett hervorgehobenem
+             „Danach direkt wieder einschalten". Die APK-Sideload-Schritte aus der Nutzer-
+             vorlage wurden bewusst NICHT woertlich uebernommen (Punkto ist eine PWA/WebAPK,
+             kein APK-Download); stattdessen der PWA-passende, sicherheitsbewusste Weg.
+         Reine Client-Aenderung (anmelden.html, app.html, konto.html; natives <details>,
+         kein JS noetig), kein Backend-/Datenmodell-Change. SW-CACHE auf pk-app-v26 angehoben.
 
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
