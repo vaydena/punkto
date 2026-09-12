@@ -255,8 +255,18 @@
   .filled-flag{color:var(--green-700);font-weight:700}
   .badge-off{display:inline-block;font-size:.66rem;font-weight:800;letter-spacing:.02em;background:var(--green-tint);
     color:var(--green-800);border-radius:999px;padding:1px 7px;vertical-align:middle;margin-left:4px}
-  /* Vordergrund-Schrittzähler im Aktivität-Sheet */
-  .ped{margin-top:12px}
+  /* Schritte-Import aus der Health-App + Vordergrund-„Geh-Modus" im Aktivität-Sheet */
+  .steps-import-hint{display:flex;gap:9px;align-items:flex-start;background:var(--green-tint);
+    border:1px solid var(--green-tint-2);border-radius:var(--r);padding:11px 13px;margin:4px 0 6px;
+    color:var(--ink-2);font-size:.86rem;line-height:1.5}
+  .steps-import-hint .em{font-size:1.15rem;line-height:1;flex:0 0 auto;margin-top:1px}
+  .ped-more{margin-top:6px}
+  .ped-more>summary{cursor:pointer;color:var(--muted);font-size:.86rem;font-weight:600;
+    list-style:none;padding:6px 2px}
+  .ped-more>summary::-webkit-details-marker{display:none}
+  .ped-more>summary::before{content:"▸ ";color:var(--muted)}
+  .ped-more[open]>summary::before{content:"▾ "}
+  .ped{margin-top:8px}
   .ped-hint{color:var(--muted);font-size:.82rem;line-height:1.45;margin:8px 2px 0}
   #aPedBtn.on{background:#fdecec;border-color:#f0c4c4;color:#c0392b}
   /* Gemeinschafts-Freigabe (Opt-in) im Erfassen-Sheet */
@@ -1963,8 +1973,10 @@
       '<button class="on" data-k="steps">👟 Schritte</button><button data-k="workout">🏋️ Sport</button></div>' +
       '<div id="aSteps"><div class="field"><label for="aStepsN">Schritte heute</label>' +
       '<input type="number" id="aStepsN" inputmode="numeric" placeholder="8000" min="0" max="200000"></div>' +
-      '<div class="ped"><button type="button" class="btn ghost block" id="aPedBtn">▶︎ Schritt-Zähler starten</button>' +
-      '<p class="ped-hint" id="aPedHint">Zählt Schritte, solange die App offen ist – über den Bewegungssensor. Kein Standort, nichts verlässt das Gerät.</p></div></div>' +
+      '<div class="steps-import-hint"><span class="em">📲</span><span>Dein Handy zählt Schritte den ganzen Tag im Hintergrund – <b>auch bei ausgeschaltetem Display</b>. Öffne kurz deine Fitness-App (z. B. Google&nbsp;Fit, Samsung&nbsp;Health, Apple&nbsp;Health, Fitbit), lies die <b>heutige</b> Schrittzahl ab und trag sie hier ein. Der Wert ersetzt die heutigen Schritte – kein Doppeltzählen.</span></div>' +
+      '<details class="ped-more"><summary>Lieber jetzt live mitzählen (Geh-Modus)?</summary>' +
+      '<div class="ped"><button type="button" class="btn ghost block" id="aPedBtn">▶︎ Geh-Modus starten</button>' +
+      '<p class="ped-hint" id="aPedHint">Zählt live über den Bewegungssensor, solange Punkto geöffnet bleibt (Bildschirm an) – ideal für einen Spaziergang mit dem Handy in der Hand. Kein Standort, nichts verlässt das Gerät.</p></div></details></div>' +
       '<div id="aWork" hidden><div class="row"><div class="field"><label for="aMin">Minuten</label>' +
       '<input type="number" id="aMin" inputmode="numeric" placeholder="30" min="0" max="1440"></div>' +
       '<div class="field"><label for="aType">Art</label><select id="aType">' +
@@ -1981,16 +1993,23 @@
           else pts = PK.activityPoints($("#aType", root).value, +$("#aMin", root).value);
           $("#aPts", root).textContent = pts; return pts;
         }
-        // Vordergrund-Schrittzähler starten/stoppen
+        // Heutige Schritte vorbelegen: Schritte sind ein Tageswert, der beim Speichern
+        // ersetzt wird. Beim erneuten Öffnen (oder Nach-Import) startet man vom Ist-Stand.
+        var todaySteps = (S.data.activity || []).filter(function (a) { return a.kind === "steps"; })
+          .reduce(function (s, a) { return s + (+a.steps || 0); }, 0);
+        if (todaySteps > 0) { var _sn = $("#aStepsN", root); if (_sn) _sn.value = todaySteps; }
+        recalc();
+
+        // Vordergrund-„Geh-Modus" starten/stoppen (live zählen, solange die App offen ist)
         var pedBtn = $("#aPedBtn", root), pedHint = $("#aPedHint", root);
-        var HINT_IDLE = "Zählt Schritte, solange die App offen ist – über den Bewegungssensor. Kein Standort, nichts verlässt das Gerät.";
+        var HINT_IDLE = "Zählt live über den Bewegungssensor, solange Punkto geöffnet bleibt (Bildschirm an) – ideal für einen Spaziergang mit dem Handy in der Hand. Kein Standort, nichts verlässt das Gerät.";
         function stopPed() {
           if (S.pedometer) { S.pedometer.stop(); S.pedometer = null; }
-          if (pedBtn) { pedBtn.classList.remove("on"); pedBtn.textContent = "▶︎ Schritt-Zähler starten"; }
+          if (pedBtn) { pedBtn.classList.remove("on"); pedBtn.textContent = "▶︎ Geh-Modus starten"; }
           if (pedHint) pedHint.textContent = HINT_IDLE;
         }
         function startPed() {
-          var baseSteps = +$("#aStepsN", root).value || 0;   // schon eingetippte Schritte behalten
+          var baseSteps = +$("#aStepsN", root).value || 0;   // schon vorhandene/getippte Schritte behalten
           if (S.pedometer) S.pedometer.stop();
           S.pedometer = createPedometer(function (c) {
             var el = $("#aStepsN", root);
@@ -1998,8 +2017,8 @@
           });
           S.pedometer.start();
           pedBtn.classList.add("on");
-          pedBtn.textContent = "⏹ Zähler stoppen";
-          pedHint.textContent = "Zähler läuft … nimm das Handy mit und geh los. Zum Beenden „Zähler stoppen“.";
+          pedBtn.textContent = "⏹ Geh-Modus stoppen";
+          pedHint.textContent = "Läuft … nimm das Handy mit und geh los. Zum Beenden „Geh-Modus stoppen“, dann unten „Eintragen“.";
         }
         if (!motionSupported()) {
           if (pedBtn) pedBtn.hidden = true;
@@ -2031,13 +2050,25 @@
         });
         $("#aSave", root).addEventListener("click", async function () {
           var pts = recalc();
-          var a = { kind: kind === "steps" ? "steps" : "workout", bonus_points: pts };
-          if (kind === "steps") { a.steps = +$("#aStepsN", root).value || 0; if (!a.steps) return toast("Bitte Schritte eingeben."); }
-          else { a.minutes = +$("#aMin", root).value || 0; a.note = $("#aType", root).selectedOptions[0].text + ($("#aNote", root).value ? " · " + $("#aNote", root).value : ""); if (!a.minutes) return toast("Bitte Minuten eingeben."); }
-          if (S.day !== S.today) a.day = S.day;
+          var day = (S.day !== S.today) ? S.day : null;
+          var apiCall;
+          if (kind === "steps") {
+            var steps = +$("#aStepsN", root).value || 0;
+            if (!steps) return toast("Bitte Schritte eingeben.");
+            // Schritte = EIN Tageswert -> ersetzen (kein Doppeltzählen beim Health-App-Import).
+            apiCall = function () { return API.data.activitySetSteps(steps, pts, day); };
+          } else {
+            var minutes = +$("#aMin", root).value || 0;
+            if (!minutes) return toast("Bitte Minuten eingeben.");
+            var a = { kind: "workout", bonus_points: pts, minutes: minutes,
+              note: $("#aType", root).selectedOptions[0].text + ($("#aNote", root).value ? " · " + $("#aNote", root).value : "") };
+            if (day) a.day = day;
+            apiCall = function () { return API.data.activityAdd(a); };
+          }
+          if (S.pedometer) { S.pedometer.stop(); S.pedometer = null; }   // Geh-Modus beenden
           this.disabled = true;
-          var r = await guardWrite(function () { return API.data.activityAdd(a); });
-          if (r) { closeSheet(); await refreshDay(); toast("Aktivität gespeichert · +" + pts + " P"); }
+          var r = await guardWrite(apiCall);
+          if (r) { closeSheet(); await refreshDay(); toast((kind === "steps" ? "Schritte gespeichert · +" : "Aktivität gespeichert · +") + pts + " P"); }
           else this.disabled = false;
         });
       });

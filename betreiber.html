@@ -480,6 +480,16 @@
         }).join("") + "</ul>"
       : '<p class="muted" style="font-size:.88rem">Noch keine Zahlungen erfasst.</p>';
 
+    var isComp = sub.plan === "comp" && !!sub.access; // nach dem Aufheben bleibt plan='comp', aber ohne Zugang -> wieder freischaltbar
+    var gratis =
+      '<div class="divider"></div>' +
+      "<h3 style='font-size:1rem'>Gratis (Freund)</h3>" +
+      (isComp
+        ? '<p class="muted" style="font-size:.88rem;margin:0 0 10px">✓ Dieses Konto ist <b>dauerhaft kostenlos</b> freigeschaltet – es muss nichts bezahlen.</p>' +
+          '<button class="btn outline block" id="gfRevokeBtn">Gratis-Freischaltung aufheben</button>'
+        : '<p class="muted" style="font-size:.88rem;margin:0 0 10px">Schaltet dieses Konto mit einem Klick <b>dauerhaft kostenlos</b> frei – ohne Zahlung. Ideal für Freunde.</p>' +
+          '<button class="btn primary block" id="gfGrantBtn">Dauerhaft gratis freischalten</button>');
+
     var actions =
       '<div class="divider"></div>' +
       "<h3 style='font-size:1rem'>Zugang verlängern</h3>" +
@@ -518,10 +528,12 @@
       '<button class="btn outline block" id="ntBtn">Notiz speichern</button>';
 
     $("shBody").innerHTML =
-      profile + subBox +
+      profile + subBox + gratis +
       "<h3 style='font-size:1rem;margin-top:16px'>Zahlungen</h3>" + payList +
       actions;
 
+    if (isComp) { var _rv = $("gfRevokeBtn"); if (_rv) _rv.addEventListener("click", doRevokeFree); }
+    else { var _gr = $("gfGrantBtn"); if (_gr) _gr.addEventListener("click", doGrantFree); }
     document.querySelectorAll(".ex-presets [data-ex-m]").forEach(function (b) {
       b.addEventListener("click", function () {
         $("exMonths").value = b.getAttribute("data-ex-m");
@@ -567,6 +579,26 @@
       toast("Notiz gespeichert.");
       btn.disabled = false;
     } catch (e) { handleErr(e, "Notiz fehlgeschlagen"); btn.disabled = false; }
+  }
+  async function doGrantFree() {
+    if (!confirm("Dieses Konto dauerhaft kostenlos freischalten? Es muss dann nichts mehr bezahlen.")) return;
+    var btn = $("gfGrantBtn"); if (btn) btn.disabled = true;
+    try {
+      await API.admin.grantFree(KEY, curUserId, "Gratis (Freund)");
+      toast("Dauerhaft gratis freigeschaltet.");
+      await openUser(curUserId);
+      refreshStats();
+    } catch (e) { handleErr(e, "Freischalten fehlgeschlagen"); if (btn) btn.disabled = false; }
+  }
+  async function doRevokeFree() {
+    if (!confirm("Gratis-Freischaltung aufheben? Das Konto braucht danach wieder ein aktives Abo.")) return;
+    var btn = $("gfRevokeBtn"); if (btn) btn.disabled = true;
+    try {
+      await API.admin.setStatus(KEY, curUserId, "canceled", true);
+      toast("Gratis-Freischaltung aufgehoben.");
+      await openUser(curUserId);
+      refreshStats();
+    } catch (e) { handleErr(e, "Aufheben fehlgeschlagen"); if (btn) btn.disabled = false; }
   }
 
   async function refreshStats() {

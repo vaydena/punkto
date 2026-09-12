@@ -244,6 +244,10 @@
       return { cls: "expired", ic: ICON.lock, h: "Konto gesperrt",
         p: "Dein Zugang wurde gesperrt. Bitte wende dich an kontakt@vaydena.de." };
     }
+    if (access && sub && sub.plan === "comp") {
+      return { cls: "ok", ic: ICON.check, h: "Gratis freigeschaltet", comp: true,
+        p: "Du nutzt Punkto dauerhaft kostenlos – nichts zu bezahlen. Viel Erfolg auf deinem Weg!" };
+    }
     if (access && status === "trial") {
       return { cls: "trial", ic: ICON.clock, h: "Testphase läuft",
         p: "Deine kostenlose Testphase endet am " + fmtDate(ends) + ".", dl: dl,
@@ -346,8 +350,9 @@
       '<div class="tx"><h2>' + esc(hv.h) + '</h2><p>' + esc(hv.p) + '</p>' + daysBadge(hv.dl) + '</div>' +
       '</div></div>';
 
-    // Plan-Wahl (Monatlich/Jährlich) + Preis + Zahlweg-Umschalter
+    // Plan-Wahl (Monatlich/Jährlich) + Preis + Zahlweg-Umschalter — für Gratis-Konten entfällt der Zahl-Block.
     var save = planSaveNote(plans);
+    if (!hv.comp) {
     html += '<div class="card">' +
       (hv.cta ? '<p style="color:var(--ink-2);font-weight:600;margin:0 0 10px">' + esc(hv.cta) + '</p>' : '') +
       (plans.length > 1
@@ -378,6 +383,7 @@
       '<li><b>Wir ordnen deine Zahlung zu</b> (am Verwendungszweck) und schalten deinen Zugang frei bzw. verlängern ihn um den gewählten Zeitraum.</li>' +
       '<li><b>Fertig</b> — in der Regel innerhalb von 24 Stunden. Deine Daten bleiben die ganze Zeit erhalten.</li>' +
       '</ol></div>';
+    }
 
     // Rechtliches / Kontakt
     var iss = d.issuer || {};
@@ -393,6 +399,7 @@
     var host = $("#kontoBody");
     host.innerHTML = html;
 
+    if (!hv.comp) {
     var slot = $("#paySlot", host);
     var curPlan = plans[0];
 
@@ -433,6 +440,7 @@
         $$("[data-pay]", slot).forEach(function (c) { c.hidden = (c.dataset.pay !== seg); });
       });
     });
+    } // Ende if (!hv.comp)
 
     $("#loading").hidden = true;
     host.hidden = false;

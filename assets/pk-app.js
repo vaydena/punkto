@@ -109,6 +109,8 @@
     weightSet(kg, day) { return call("data", "weight_set", { weight_kg: kg, day: day }); },
     weightDel(day) { return call("data", "weight_del", { day: day }); },
     activityAdd(a) { return call("data", "activity_add", a); },
+    // Schritte als EINEN Tageswert setzen (ersetzt heutige Schritte; idempotent, kein Doppeltzaehlen).
+    activitySetSteps(steps, bonus_points, day) { return call("data", "activity_set_steps", { steps: steps, bonus_points: bonus_points, day: day || undefined }); },
     activityDel(id) { return call("data", "activity_del", { id: id }); },
     foodAdd(food) { return call("data", "food_add", food); },
     foodUpdate(food) { return call("data", "food_update", food); },
@@ -127,6 +129,8 @@
     extend(key, id, months, amount_cents, method, ref, note, plan) {
       return call("admin", "extend", { id: id, months: months, amount_cents: amount_cents, method: method, ref: ref, note: note, plan: plan || "monthly" }, { token: null, adminKey: key });
     },
+    // Dauerhaft kostenlos freischalten (Freund/Tester) — ohne Zahlung zu verbuchen.
+    grantFree(key, id, note) { return call("admin", "grant_free", { id: id, note: note || "" }, { token: null, adminKey: key }); },
     setStatus(key, id, status, clear_period) { return call("admin", "set_status", { id: id, status: status, clear_period: !!clear_period }, { token: null, adminKey: key }); },
     addNote(key, id, notes) { return call("admin", "add_note", { id: id, notes: notes }, { token: null, adminKey: key }); },
     export(key) { return call("admin", "export", {}, { token: null, adminKey: key }); },

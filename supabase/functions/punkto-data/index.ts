@@ -125,7 +125,8 @@ function weekRange(dayStr: string) {
 }
 
 const WRITE = new Set([
-  "diary_add", "diary_update", "diary_del", "weight_set", "weight_del", "activity_add", "activity_del",
+  "diary_add", "diary_update", "diary_del", "weight_set", "weight_del",
+  "activity_add", "activity_set_steps", "activity_del",
   "food_add", "food_update", "food_del", "recipe_add", "recipe_update", "recipe_del",
 ]);
 
@@ -257,6 +258,21 @@ Deno.serve(async (req: Request) => {
       const r = await sql`insert into punkto.activity_logs (user_id, day, kind, steps, minutes, bonus_points, note)
         values (${u.id}, ${day}, ${kind}, ${body.steps != null ? clamp(num(body.steps), 0, 200000) : null},
                 ${body.minutes != null ? clamp(num(body.minutes), 0, 1440) : null}, ${clamp(num(body.bonus_points), 0, 50)},
+                ${body.note ? String(body.note).slice(0, 120) : null})
+        returning id, kind, steps, minutes, bonus_points, note, created_at`;
+      return json({ ok: true, entry: r[0] });
+    }
+    if (action === "activity_set_steps") {
+      // Schritte sind EIN Tageswert. Health-Apps zaehlen den ganzen Tag im Hintergrund
+      // (auch bei ausgeschaltetem Display); der uebernommene Wert ist die kumulierte
+      // Tagessumme. Deshalb ERSETZEN wir die Schritt-Zeile(n) des Tages, statt anzuhaengen
+      // -> idempotent, kein Doppeltzaehlen beim wiederholten Uebernehmen. Workouts bleiben.
+      const steps = clamp(num(body.steps), 0, 200000);
+      const bonus = clamp(num(body.bonus_points), 0, 50);
+      await sql`delete from punkto.activity_logs where user_id = ${u.id} and day = ${day} and kind = 'steps'`;
+      if (steps <= 0) return json({ ok: true, entry: null });
+      const r = await sql`insert into punkto.activity_logs (user_id, day, kind, steps, minutes, bonus_points, note)
+        values (${u.id}, ${day}, 'steps', ${steps}, null, ${bonus},
                 ${body.note ? String(body.note).slice(0, 120) : null})
         returning id, kind, steps, minutes, bonus_points, note, created_at`;
       return json({ ok: true, entry: r[0] });

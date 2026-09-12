@@ -1,4 +1,4 @@
-pk-v24-248f
+pk-v25-9cf0
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -383,6 +383,27 @@ v24-248f: Jahres-Abo + Community-Rueckbau (Crowdsourcing raus, zentrale DB bleib
          Server: punkto-data + punkto-admin neu deployed (verify_jwt=false),
          central_add/central_list/central_delete, billing-plans, extend-plan,
          stats.central_count. SW-CACHE auf pk-app-v24 angehoben.
+v25-9cf0: Schritte aus der Health-App uebernehmen + Gratis-Freischaltung fuer Freunde.
+         (1) SCHRITTZAEHLER „auch bei ausgeschaltetem Display": ein Web-PWA kann im
+             Hintergrund nicht selbst zaehlen (gesperrte Seite ist eingefroren). Statt
+             dessen uebernimmt Punkto den Tageswert, den das Handy ohnehin den ganzen
+             Tag im Hintergrund zaehlt. app.html: das Aktivitaet-Sheet zeigt „Schritte
+             heute" als Eingabe + Hinweis, kurz die Fitness-App (Google Fit/Samsung
+             Health/Apple Health/Fitbit) zu oeffnen und die heutige Zahl abzulesen; der
+             Vordergrund-„Geh-Modus" (Live-Sensor) rutscht in ein <details>. Schritte
+             sind EIN Tageswert -> neuer Endpunkt activity_set_steps ERSETZT die
+             Schritt-Zeile des Tages (idempotent, kein Doppeltzaehlen beim erneuten
+             Uebernehmen); Workouts bleiben additiv. Heutige Schritte werden vorbefuellt.
+         (2) GRATIS FUER FREUNDE: neuer Betreiber-Ein-Klick „Dauerhaft gratis
+             freischalten" (punkto-admin grant_free -> plan='comp', current_period_end
+             +100 Jahre, OHNE Zahlung/ohne fingierten 0-EUR-Beleg) + „Aufheben"
+             (set_status canceled). betreiber.html: Abschnitt „Gratis (Freund)" im
+             Nutzer-Detail (zeigt je nach Zustand Freischalten- oder Aufheben-Button;
+             user-Detail liefert jetzt auch das access-Flag). konto.html erkennt
+             plan='comp' und zeigt „Gratis freigeschaltet" statt der Zahl-Karten
+             (Zahl-Block + JS-Verdrahtung fuer Comp-Konten uebersprungen).
+         Server: punkto-data + punkto-admin neu deployed (verify_jwt=false).
+         SW-CACHE auf pk-app-v25 angehoben.
 
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.

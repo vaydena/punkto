@@ -1,6 +1,7 @@
 // Punkto - Betreiber-Bereich (Operator). Zugang nur mit Betreiber-Schluessel
 // (SHA-256-Hash in punkto.admin_auth id=1, constant-time). Kein Konto noetig.
 // Aktionen: stats, users, user, extend (Abo verlaengern, plan monthly|yearly),
+// grant_free (dauerhaft kostenlos freischalten, plan='comp', ohne Zahlung),
 // set_status, add_note, export, central_list (zentrale DB ansehen),
 // central_delete (Eintrag entfernen), set_key (Schluessel rotieren).
 import postgres from "npm:postgres@3";
@@ -106,7 +107,8 @@ Deno.serve(async (req: Request) => {
         sql`select id, email, display_name, sex, birth_year, height_cm, start_weight_kg, goal_weight_kg,
                    activity_level, daily_budget, weekly_extra, onboarded, email_verified, created_at, last_login_at
               from punkto.users where id = ${id} limit 1`,
-        sql`select status, plan, trial_ends_at, current_period_end, notes, created_at, updated_at
+        sql`select status, plan, trial_ends_at, current_period_end, notes, created_at, updated_at,
+                   (now() < greatest(coalesce(trial_ends_at,'epoch'::timestamptz), coalesce(current_period_end,'epoch'::timestamptz))) as access
               from punkto.subscriptions where user_id = ${id} limit 1`,
         sql`select id, amount_cents, method, months, ref, note, created_by, created_at
               from punkto.payments where user_id = ${id} order by created_at desc limit 50`,
@@ -139,6 +141,25 @@ Deno.serve(async (req: Request) => {
         returning status, current_period_end`;
       await sql`insert into punkto.payments (user_id, amount_cents, method, months, ref, note, created_by)
                 values (${id}, ${amount}, ${method}, ${months}, ${ref}, ${note}, 'operator')`;
+      return json({ ok: true, subscription: upd[0] });
+    }
+
+    if (action === "grant_free") {
+      // Dauerhafter Gratis-Zugang (z. B. fuer Freunde/Tester): plan='comp' + Periodenende in
+      // ferner Zukunft. Zugriff wird ueberall ueber (now() < current_period_end) geprueft, also
+      // wirkt das sofort. Es wird KEINE Zahlung verbucht (im Gegensatz zu extend). Bestehende
+      // interne Notizen bleiben erhalten; ein Standard-Vermerk wird nur bei Neuanlage gesetzt.
+      const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
+      const note = body.note ? String(body.note).slice(0, 300) : "Gratis (Freund)";
+      const upd = await sql`
+        insert into punkto.subscriptions (user_id, status, plan, current_period_end, notes, updated_at)
+        values (${id}, 'active', 'comp', now() + interval '100 years', ${note}, now())
+        on conflict (user_id) do update set
+          status = 'active',
+          plan = 'comp',
+          current_period_end = now() + interval '100 years',
+          updated_at = now()
+        returning status, plan, current_period_end`;
       return json({ ok: true, subscription: upd[0] });
     }
 
