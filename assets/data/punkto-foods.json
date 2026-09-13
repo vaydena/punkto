@@ -823,7 +823,7 @@
       "sugar_g": 0.6,
       "protein_g": 7.5,
       "fiber_g": 0,
-      "free": true,
+      "free": false,
       "vegan": false,
       "vegetarian": true
     },

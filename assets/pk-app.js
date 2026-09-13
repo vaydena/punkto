@@ -311,9 +311,26 @@
     }
   };
 
+  /* ---------------------------------------------------------------- BLS ----- */
+  /* Bundeslebensmittelschluessel (BLS) 4.0 — amtliche Naehrwert-Datenbank des
+     Max Rubner-Instituts (CC BY 4.0), serverseitig in punkto.bls_foods (je 100 g).
+     Reine LESE-Suche ueber die Edge-Function punkto-bls (Session-Token noetig).
+     Punkte werden NICHT vom Server geliefert, sondern im Client aus den
+     Naehrwerten berechnet (PK.pointsForAmount) — wie bei allen anderen Quellen. */
+  var bls = {
+    /* Freitext-Suche. Liefert { ok, foods:[{bls,name,kcal,sat_fat_g,sugar_g,
+       protein_g,fiber_g}], count, source, attribution }. Wirft bei Netz-/Auth-
+       Fehler (Aufrufer behandeln BLS als optionale Ergaenzung -> best effort). */
+    async search(q, limit) {
+      q = String(q || "").trim();
+      if (q.length < 2) return { ok: true, foods: [], count: 0 };
+      return call("bls", "bls_search", { q: q, limit: limit || 30 });
+    }
+  };
+
   var API = {
     cfg: CFG, getToken: getToken, setToken: setToken, clearToken: clearToken,
-    call: call, auth: auth, data: data, admin: admin, foods: foods, community: community
+    call: call, auth: auth, data: data, admin: admin, foods: foods, community: community, bls: bls
   };
   root.PKApi = API;
 })(typeof window !== "undefined" ? window : globalThis);

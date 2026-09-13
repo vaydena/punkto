@@ -1,4 +1,4 @@
-pk-v27-3452
+pk-v28-8994
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -431,3 +431,23 @@ v27-3452: Zentrale Datenbank nachtraeglich BEARBEITEN und LOESCHEN — vom Smart
 
 Marker bei jedem App-Deploy erhoehen und parallel die CACHE-Version in sw.js anheben,
 damit der Live-Stand eindeutig identifizierbar ist und der Offline-Cache nachzieht.
+v28-8994: Bundeslebensmittelschluessel (BLS) 4.0 als Naehrwertquelle eingebunden +
+         Fix „gekochte Eier = 0 Punkte“. BLS: rund 7.140 Lebensmittel (je 100 g)
+         aus dem amtlichen Datensatz des Max Rubner-Instituts (Version 4.0, seit 12/2025
+         lizenz- und kostenfrei, CC BY 4.0) in die neue Tabelle punkto.bls_foods geladen.
+         Neue Edge Function punkto-bls (verify_jwt=false, eigene Session-Pruefung ueber
+         punkto.sessions wie die uebrigen Lese-Aktionen) mit Aktion bls_search (ILIKE,
+         Metazeichen entschaerft, Prefix-Treffer zuerst). Punkte werden NICHT in der DB
+         gespeichert, sondern ausschliesslich im Client aus den Naehrwerten berechnet
+         (PK.pointsForAmount) — so bleibt nichts stale, wenn sich die Formel aendert.
+         Client (app.html, pk-app.js): die Lebensmittelsuche ergaenzt lokale/eigene/
+         zentrale Treffer best-effort um BLS-Ergebnisse (dedupliziert per Name, race-
+         gesichert auf die zuletzt getippte Anfrage, offline-sicher — ohne Session
+         bleibt die lokale Liste stehen); CC-BY-4.0-Quellenangabe in Ergebnisliste und
+         Detailansicht. Egg-Fix: „Ei (gekocht)“ war faelschlich als free=true
+         (0 Punkte bei jeder Menge) hinterlegt -> auf free=false gesetzt (84 kcal/100 g,
+         7,5 g Eiweiss etc.), ergibt jetzt korrekt Punkte. Audit aller ~372 Basis-
+         Lebensmittel: Ei war der einzige faelschlich freie tierische Eintrag; die
+         Gratis-Wertung von Obst/Gemuese/Huelsenfruechten ist bewusstes Design und
+         bleibt. Nur bls_search deployt, kein Bulk-Loader (Import-Header retired).
+         SW-CACHE auf pk-app-v28 angehoben.
