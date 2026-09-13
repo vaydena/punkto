@@ -845,7 +845,7 @@
     {
       "id": "tofu",
       "name": "Tofu natur",
-      "cat": "Eier & Eiweiß",
+      "cat": "Fleischersatz & Tofu",
       "unit": "g",
       "base_g": 100,
       "kcal": 127,
@@ -860,7 +860,7 @@
     {
       "id": "linsen",
       "name": "Linsen (gekocht)",
-      "cat": "Eier & Eiweiß",
+      "cat": "Hülsenfrüchte",
       "unit": "g",
       "base_g": 100,
       "kcal": 116,
@@ -875,7 +875,7 @@
     {
       "id": "kichererbsen",
       "name": "Kichererbsen (gekocht)",
-      "cat": "Eier & Eiweiß",
+      "cat": "Hülsenfrüchte",
       "unit": "g",
       "base_g": 100,
       "kcal": 139,
@@ -890,7 +890,7 @@
     {
       "id": "bohnen",
       "name": "Kidneybohnen (Dose)",
-      "cat": "Eier & Eiweiß",
+      "cat": "Hülsenfrüchte",
       "unit": "g",
       "base_g": 100,
       "kcal": 116,

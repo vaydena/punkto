@@ -1,4 +1,4 @@
-pk-v28-8994
+pk-v29-5ea2
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -451,3 +451,13 @@ v28-8994: Bundeslebensmittelschluessel (BLS) 4.0 als Naehrwertquelle eingebunden
          Gratis-Wertung von Obst/Gemuese/Huelsenfruechten ist bewusstes Design und
          bleibt. Nur bls_search deployt, kein Bulk-Loader (Import-Header retired).
          SW-CACHE auf pk-app-v28 angehoben.
+v29-5ea2: Daten-Audit (Task 2, Teil 2): 4 falsche Kategorien korrigiert. Linsen,
+         Kichererbsen und Kidneybohnen standen faelschlich unter „Eier & Eiweiss“
+         -> jetzt „Huelsenfruechte“; „Tofu natur“ stand ebenda -> jetzt
+         „Fleischersatz & Tofu“. Reiner cat-Feldwechsel in punkto-foods.json:
+         Punkte, free- und vegan/vegetarisch-Flags unveraendert. Damit enthaelt
+         „Eier & Eiweiss“ nur noch echte Ei-Produkte (alle free=false). Uebriger
+         Audit ohne Beanstandung: keine unplausiblen Naehrwerte (0..900 kcal/100 g,
+         sat+Eiweiss-Energie nie > kcal, keine Negativ-/Fehlwerte ueber alle 372
+         Basis-Lebensmittel), keine vegan/free-Flag-Widersprueche, keine doppelten IDs.
+         SW-CACHE auf pk-app-v29 angehoben.
