@@ -19,16 +19,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/punkto.css">
 <style>
-  /* Punkte-Rechner (öffentliche Probier-Sektion) */
-  .pcalc{display:grid;grid-template-columns:1.15fr .85fr;gap:26px;background:#fff;border-radius:18px;
-    box-shadow:0 12px 44px rgba(8,60,30,.09);padding:26px;max-width:880px;margin:0 auto}
-  .pcalc .pcalc-note{font-size:.85rem;color:var(--muted,#67746b);margin:6px 0 0}
-  .pcalc .res{background:var(--green-tint,#e6f6ec);border-radius:14px;padding:22px 18px;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;text-align:center;gap:10px}
-  .pcalc .res .coin{font-size:1.6rem;min-width:2.6em;height:2.6em}
-  .pcalc .res .rlbl{font-weight:800}
-  .pcalc .res p{font-size:.88rem;color:var(--muted,#67746b);margin:0;min-height:2.6em}
-  @media (max-width:760px){.pcalc{grid-template-columns:1fr;padding:18px}}
+  /* App-Screenshots (Hinzufügen + Punkte-Rechner) */
+  .shots{display:flex;flex-wrap:wrap;gap:4px 24px;align-items:flex-start;justify-content:center;max-width:920px;margin:0 auto}
+  .shots .shot{margin:0;flex:0 1 400px;max-width:420px;text-align:center}
+  .shots .shot img{display:block;width:100%;height:auto}
+  .shots .shot figcaption{font-size:.9rem;color:var(--muted,#67746b);font-weight:600;margin-top:-4px}
+  @media (max-width:760px){.shots{gap:0}.shots .shot{flex:1 1 100%;max-width:340px}}
 </style>
 </head>
 <body>
@@ -158,33 +154,28 @@
   </div>
 </section>
 
-<!-- ============================ PUNKTE-RECHNER (öffentlich) ============================ -->
+<!-- ============================ HINZUFÜGEN & PUNKTE-RECHNER (App-Blick) ============================ -->
 <section class="section tint" id="rechner">
   <div class="wrap">
     <div class="section-head">
-      <div class="eyebrow">Gleich ausprobieren</div>
-      <h2>Der Punkte-Rechner</h2>
-      <p>Nimm ein Lebensmittel aus deinem Schrank und tippe die Nährwerte <b>je 100&nbsp;g</b> vom Etikett ein — du siehst sofort den Punktwert.</p>
+      <div class="eyebrow">Ein Blick in die App</div>
+      <h2>Hinzufügen &amp; Punkte-Rechner</h2>
+      <p>Ein Tippen auf <b>Hinzufügen</b> — und du wählst deinen Weg: suchen, Barcode scannen, wiegen oder den eingebauten <b>Punkte-Rechner</b> nutzen. Nährwerte rein, Punktwert raus.</p>
     </div>
-    <div class="pcalc">
-      <div class="ins">
-        <div class="row">
-          <div class="field"><label for="lcKcal">Kalorien (kcal)</label><input type="text" id="lcKcal" inputmode="decimal" autocomplete="off" placeholder="z. B. 250"></div>
-          <div class="field"><label for="lcSat">ges. Fettsäuren (g)</label><input type="text" id="lcSat" inputmode="decimal" autocomplete="off" placeholder="z. B. 1,5"></div>
-        </div>
-        <div class="row">
-          <div class="field"><label for="lcSugar">Zucker (g)</label><input type="text" id="lcSugar" inputmode="decimal" autocomplete="off" placeholder="z. B. 12"></div>
-          <div class="field"><label for="lcProt">Eiweiß (g)</label><input type="text" id="lcProt" inputmode="decimal" autocomplete="off" placeholder="z. B. 8"></div>
-        </div>
-        <div class="field"><label for="lcFiber">Ballaststoffe (g)</label><input type="text" id="lcFiber" inputmode="decimal" autocomplete="off" placeholder="z. B. 3"></div>
-        <p class="pcalc-note">Werte je 100&nbsp;g laut Nährwerttabelle. In der App geht's noch schneller: Barcode scannen oder suchen — fertig.</p>
-      </div>
-      <div class="res">
-        <span class="coin zero" id="lcPts">0</span>
-        <div class="rlbl">Punkte je 100&nbsp;g</div>
-        <p id="lcHint">Tippe die Nährwerte ein — der Wert erscheint sofort.</p>
-        <a class="btn primary big" href="anmelden.html?tab=register">Kostenlos testen</a>
-      </div>
+    <div class="shots">
+      <figure class="shot">
+        <img src="assets/shot-hinzufuegen.png" width="648" height="570" loading="lazy" decoding="async"
+             alt="Screenshot des Hinzufügen-Menüs der Punkto-App mit sechs Kacheln: Essen suchen, Barcode scannen, Gewicht, Aktivität, Produkt anlegen und Punkte-Rechner.">
+        <figcaption>Ein Tippen, sechs Wege etwas einzutragen.</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="assets/shot-rechner.png" width="648" height="971" loading="lazy" decoding="async"
+             alt="Screenshot des Punkte-Rechners der Punkto-App: Nährwertfelder, Mengen-Auswahl und Zifferntastatur berechnen den Punktwert.">
+        <figcaption>Der Punkte-Rechner: Nährwerte tippen, Punkte ablesen.</figcaption>
+      </figure>
+    </div>
+    <div style="text-align:center;margin-top:18px">
+      <a class="btn primary big" href="anmelden.html?tab=register">Kostenlos testen</a>
     </div>
   </div>
 </section>
@@ -381,7 +372,6 @@
   </div>
 </footer>
 
-<script src="assets/pk-engine.js"></script>
 <script>
   (function(){
     var mb = document.getElementById('menuBtn'), nl = document.getElementById('navLinks');
@@ -399,28 +389,6 @@
         if (el){ e.preventDefault(); el.scrollIntoView({behavior:'smooth', block:'start'}); }
       });
     });
-
-    // Öffentlicher Punkte-Rechner — nutzt dieselbe Engine wie die App (PK).
-    var ids = ['lcKcal','lcSat','lcSugar','lcProt','lcFiber'];
-    var out = document.getElementById('lcPts'), hint = document.getElementById('lcHint');
-    if (out && window.PK) {
-      var num = function(id){
-        var n = parseFloat(String(document.getElementById(id).value).replace(',', '.'));
-        return isFinite(n) && n >= 0 ? n : 0;
-      };
-      var recalc = function(){
-        var p = PK.pointsFor({ kcal:num('lcKcal'), sat_fat_g:num('lcSat'), sugar_g:num('lcSugar'), protein_g:num('lcProt'), fiber_g:num('lcFiber') });
-        var filled = ids.some(function(id){ return String(document.getElementById(id).value).trim() !== ''; });
-        out.textContent = p;
-        out.className = p === 0 ? 'coin zero' : 'coin';
-        hint.textContent = !filled ? 'Tippe die Nährwerte ein — der Wert erscheint sofort.'
-          : p === 0 ? '0 Punkte — davon kannst du satt werden.'
-          : p <= 4 ? 'Alltagstauglich — passt locker in ein Tagesbudget von z. B. 29 Punkten.'
-          : p <= 8 ? 'Bewusst genießen — dein Tagesbudget hilft beim Einordnen.'
-          : 'Ein Genuss-Fall — gut, dass es das Wochenextra gibt.';
-      };
-      ids.forEach(function(id){ document.getElementById(id).addEventListener('input', recalc); });
-    }
   })();
 </script>
 </body>
