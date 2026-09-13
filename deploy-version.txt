@@ -1,4 +1,4 @@
-pk-v31-c7e4
+pk-v32-2301
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -492,3 +492,30 @@ v31-c7e4: Open-Food-Facts-Attribution (ODbL) im Client sichtbar gemacht. Barcode
          (Batch-Import) und off_stats (Zaehlung); der Export bleibt bewusst auf die vier
          bestehenden Tabellen beschraenkt (off_products wird NICHT exportiert).
          SW-CACHE auf pk-app-v31 angehoben.
+v32-2301: Neuer „Zutatenrechner“ — eine zutatenbasierte Punkteberechnung fuer Back- und
+         Kochzutaten, im Look des bestehenden „Punkte-Rechners“. Aufruf ueber eine eigene
+         Kachel; danach ein Sheet in zwei Ansichten wie beim Punkte-Rechner:
+         (1) Auswahl — Suchfeld + waagerechte Kategorie-Chips ueber 14 Gruppen (Milch &
+         Milchprodukte, Kaese, Eier, Fette & Oele, Mehl & Backen, Zucker & Suesses,
+         Obst, Gemuese, Huelsenfruechte, Nuesse & Kerne, Sattmacher/Beilagen, Eiweiss &
+         Fleisch, Wuerzen/Essig/Sauce, Wein & alkoholische Getraenke) mit vollflaechigen
+         Zutaten-Kacheln inkl. Punkte-Muenze; (2) Menge — grosse Live-Punkteanzeige,
+         Mengeneingabe mit Schnell-Chips und Ziffernblock sowie „Zum Tagebuch“-Button.
+         Punkte werden ausschliesslich im Client aus den Naehrwerten gerechnet
+         (PK.pointsForAmount, factor = Menge / base_g) — nichts wird stale, wenn sich die
+         Formel aendert. Datenbasis: 253 als Zutat markierte Lebensmittel (Feld zutat:true
+         + Gruppe zg) ueber die 14 Gruppen, verteilt aus dem bestehenden Basisbestand ohne
+         Dubletten. Fluessigkeiten rechnen wie gewuenscht in Millilitern (Milch, Sahne,
+         Saefte, Wein/Sekt, Essig, Sojasauce, Bruehe und alle fluessigen Oele = unit "ml");
+         feste Fette (Butter, Margarine, Ghee, Schmalz, Kokosoel) bleiben bewusst in Gramm.
+         Datenkorrektur dabei: Olivenoel stand als einziges fluessiges Oel auf unit "EL"
+         (base_g 10) — auf "ml" (base_g 100) vereinheitlicht wie Raps-/Sonnenblumenoel & Co.,
+         Naehrwerte auf 100er-Basis nachgezogen (884 kcal, 14 g gesaettigt); kleine Mengen
+         ergeben unveraendert dieselben Punkte (10 ml = 4 Pkt wie zuvor 1 EL). Kein Server-/
+         Function-Deploy noetig (reine Client-/Daten-Aenderung). Zusaetzlich ein app-weiter
+         Feinschliff am Kachel-Layout: .food-item ist ein <button> und schrumpfte bisher
+         auf Inhaltsbreite (statt wie die Tagebuch-Zeilen .entry die volle Breite zu fuellen);
+         mit width:100%;text-align:left in punkto.css fuellen jetzt Auswahl-Kacheln,
+         Suchergebnisse UND Zutatenrechner-Kacheln konsistent die Breite (box-sizing:border-box
+         ist global, daher regressionssicher). Da punkto.css cache-first ausgeliefert wird,
+         SW-CACHE auf pk-app-v32 angehoben (bereits in sw.js gesetzt).

@@ -385,7 +385,7 @@ body.app{background:var(--bg);padding-bottom:calc(76px + var(--sab))}
 .searchbar{position:relative;margin-bottom:14px}
 .searchbar input{padding-left:2.6em}
 .searchbar .si{position:absolute;left:.9em;top:50%;transform:translateY(-50%);color:var(--muted);width:20px;height:20px}
-.food-item{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:var(--r);padding:12px 14px;
+.food-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border-radius:var(--r);padding:12px 14px;
   box-shadow:var(--shadow-sm);margin-bottom:8px;cursor:pointer;transition:transform .08s, box-shadow .12s}
 .food-item:hover{box-shadow:var(--shadow)}
 .food-item:active{transform:scale(.99)}

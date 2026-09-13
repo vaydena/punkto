@@ -1,6 +1,6 @@
 {
-  "version": "pk-foods-2026-09-13-1",
-  "note": "Kuratierte Basis-Datenbank haeufiger Lebensmittel (DE). Naehrwerte je base_g (meist 100 g) bzw. je Stueck. free=true -> 0-Punkte-Lebensmittel. Werte gerundet, dienen der Orientierung, keine amtlichen Angaben.",
+  "version": "pk-foods-2026-09-13-3",
+  "note": "Kuratierte Basis-Datenbank haeufiger Lebensmittel (DE). Naehrwerte je base_g (meist 100 g) bzw. je Stueck. free=true -> 0-Punkte-Lebensmittel. Werte gerundet, dienen der Orientierung, keine amtlichen Angaben. Zutaten-Flags: zutat=true + zg (Koch-/Backzutaten-Gruppe) fuer den Zutatenrechner.",
   "foods": [
     {
       "id": "apfel",
@@ -15,7 +15,9 @@
       "fiber_g": 2.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "banane",
@@ -30,7 +32,9 @@
       "fiber_g": 2,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "birne",
@@ -45,7 +49,9 @@
       "fiber_g": 4.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "orange",
@@ -60,7 +66,9 @@
       "fiber_g": 3.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "erdbeeren",
@@ -75,7 +83,9 @@
       "fiber_g": 2,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "heidelbeeren",
@@ -90,7 +100,9 @@
       "fiber_g": 3.1,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "trauben",
@@ -105,7 +117,9 @@
       "fiber_g": 0.9,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "mandarine",
@@ -120,7 +134,9 @@
       "fiber_g": 1.3,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "kiwi",
@@ -135,7 +151,9 @@
       "fiber_g": 2.3,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "melone",
@@ -150,7 +168,9 @@
       "fiber_g": 0.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "ananas",
@@ -165,7 +185,9 @@
       "fiber_g": 1.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "pfirsich",
@@ -180,7 +202,9 @@
       "fiber_g": 1.8,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "tomate",
@@ -195,7 +219,9 @@
       "fiber_g": 1.1,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "gurke",
@@ -210,7 +236,9 @@
       "fiber_g": 0.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "paprika",
@@ -225,7 +253,9 @@
       "fiber_g": 2.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "moehre",
@@ -240,7 +270,9 @@
       "fiber_g": 2,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "brokkoli",
@@ -255,7 +287,9 @@
       "fiber_g": 2.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "blumenkohl",
@@ -270,7 +304,9 @@
       "fiber_g": 2,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "zucchini",
@@ -285,7 +321,9 @@
       "fiber_g": 1,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "spinat",
@@ -300,7 +338,9 @@
       "fiber_g": 2.2,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "salat",
@@ -315,7 +355,9 @@
       "fiber_g": 1.3,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "zwiebel",
@@ -330,7 +372,9 @@
       "fiber_g": 1.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "champignon",
@@ -345,7 +389,9 @@
       "fiber_g": 1,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "kartoffel",
@@ -360,7 +406,9 @@
       "fiber_g": 1.6,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "suesskartoffel",
@@ -375,7 +423,9 @@
       "fiber_g": 3,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "mais",
@@ -390,7 +440,9 @@
       "fiber_g": 2.4,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "erbsen",
@@ -405,7 +457,9 @@
       "fiber_g": 5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "brot-vollkorn",
@@ -525,7 +579,9 @@
       "fiber_g": 5,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "backen"
     },
     {
       "id": "muesli",
@@ -570,7 +626,9 @@
       "fiber_g": 0.4,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "nudeln",
@@ -585,7 +643,9 @@
       "fiber_g": 1.8,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "vollkornnudeln",
@@ -600,7 +660,9 @@
       "fiber_g": 4,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "couscous",
@@ -615,7 +677,9 @@
       "fiber_g": 1.4,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "milch",
@@ -630,7 +694,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "milch-mager",
@@ -645,7 +711,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "joghurt-natur",
@@ -660,7 +728,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "joghurt-frucht",
@@ -675,7 +745,9 @@
       "fiber_g": 0.2,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "skyr",
@@ -690,7 +762,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "quark-mager",
@@ -705,7 +779,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "huettenkaese",
@@ -720,7 +796,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "kaese-gouda",
@@ -735,7 +813,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "mozzarella",
@@ -750,7 +830,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "frischkaese",
@@ -765,7 +847,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "butter",
@@ -780,7 +864,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "fett"
     },
     {
       "id": "margarine",
@@ -795,22 +881,26 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "fett"
     },
     {
       "id": "olivenoel",
       "name": "Olivenöl",
       "cat": "Fette & Öle",
-      "unit": "EL",
-      "base_g": 10,
-      "kcal": 88,
-      "sat_fat_g": 1.4,
+      "unit": "ml",
+      "base_g": 100,
+      "kcal": 884,
+      "sat_fat_g": 14,
       "sugar_g": 0,
       "protein_g": 0,
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "fett"
     },
     {
       "id": "ei",
@@ -825,7 +915,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "ei"
     },
     {
       "id": "ruehrei",
@@ -855,7 +947,9 @@
       "fiber_g": 2,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "linsen",
@@ -870,7 +964,9 @@
       "fiber_g": 8,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "kichererbsen",
@@ -885,7 +981,9 @@
       "fiber_g": 7.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "bohnen",
@@ -900,7 +998,9 @@
       "fiber_g": 7.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "haehnchenbrust",
@@ -915,7 +1015,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "putenbrust",
@@ -930,7 +1032,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "rinderhack",
@@ -945,7 +1049,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "schweineschnitzel",
@@ -960,7 +1066,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "schnitzel-paniert",
@@ -1065,7 +1173,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "thunfisch-wasser",
@@ -1080,7 +1190,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "seelachs",
@@ -1095,7 +1207,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "fischstaebchen",
@@ -1125,7 +1239,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "wasser",
@@ -1215,7 +1331,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wein"
     },
     {
       "id": "orangensaft",
@@ -1230,7 +1348,9 @@
       "fiber_g": 0.4,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wein"
     },
     {
       "id": "bier",
@@ -1260,7 +1380,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wein"
     },
     {
       "id": "wein-weiss",
@@ -1275,7 +1397,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wein"
     },
     {
       "id": "latte",
@@ -1305,7 +1429,9 @@
       "fiber_g": 0.8,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "gummibaerchen",
@@ -1410,7 +1536,9 @@
       "fiber_g": 2.5,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "erdnussbutter",
@@ -1425,7 +1553,9 @@
       "fiber_g": 1,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "marmelade",
@@ -1440,7 +1570,9 @@
       "fiber_g": 0.2,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "nutella",
@@ -1455,7 +1587,9 @@
       "fiber_g": 0.5,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "honig",
@@ -1470,7 +1604,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "pizza",
@@ -1605,7 +1741,9 @@
       "fiber_g": 1.5,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "himbeeren",
@@ -1620,7 +1758,9 @@
       "fiber_g": 6.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "brombeeren",
@@ -1635,7 +1775,9 @@
       "fiber_g": 3.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "kirschen",
@@ -1650,7 +1792,9 @@
       "fiber_g": 1.3,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "pflaume",
@@ -1665,7 +1809,9 @@
       "fiber_g": 1.7,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "aprikose",
@@ -1680,7 +1826,9 @@
       "fiber_g": 2,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "nektarine",
@@ -1695,7 +1843,9 @@
       "fiber_g": 1.7,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "grapefruit",
@@ -1710,7 +1860,9 @@
       "fiber_g": 1.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "zitrone",
@@ -1725,7 +1877,9 @@
       "fiber_g": 2.8,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "mango",
@@ -1740,7 +1894,9 @@
       "fiber_g": 1.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "papaya",
@@ -1755,7 +1911,9 @@
       "fiber_g": 1.7,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "honigmelone",
@@ -1770,7 +1928,9 @@
       "fiber_g": 0.9,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "clementine",
@@ -1785,7 +1945,9 @@
       "fiber_g": 1.7,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "datteln",
@@ -1800,7 +1962,9 @@
       "fiber_g": 8,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "rosinen",
@@ -1815,7 +1979,9 @@
       "fiber_g": 4,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "aprikose-getrocknet",
@@ -1830,7 +1996,9 @@
       "fiber_g": 7,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "avocado",
@@ -1845,7 +2013,9 @@
       "fiber_g": 6.7,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "obst"
     },
     {
       "id": "aubergine",
@@ -1860,7 +2030,9 @@
       "fiber_g": 3,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "rosenkohl",
@@ -1875,7 +2047,9 @@
       "fiber_g": 3.8,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "weisskohl",
@@ -1890,7 +2064,9 @@
       "fiber_g": 2.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "rotkohl",
@@ -1905,7 +2081,9 @@
       "fiber_g": 2.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "wirsing",
@@ -1920,7 +2098,9 @@
       "fiber_g": 3,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "sellerie",
@@ -1935,7 +2115,9 @@
       "fiber_g": 4.2,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "lauch",
@@ -1950,7 +2132,9 @@
       "fiber_g": 2.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "fenchel",
@@ -1965,7 +2149,9 @@
       "fiber_g": 3,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "spargel",
@@ -1980,7 +2166,9 @@
       "fiber_g": 2,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "rote-bete",
@@ -1995,7 +2183,9 @@
       "fiber_g": 2.8,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "radieschen",
@@ -2010,7 +2200,9 @@
       "fiber_g": 1.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "kohlrabi",
@@ -2025,7 +2217,9 @@
       "fiber_g": 3.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "kuerbis",
@@ -2040,7 +2234,9 @@
       "fiber_g": 2.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "zuckerschoten",
@@ -2055,7 +2251,9 @@
       "fiber_g": 2.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "gruene-bohnen",
@@ -2070,7 +2268,9 @@
       "fiber_g": 3.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "rucola",
@@ -2085,7 +2285,9 @@
       "fiber_g": 1.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "feldsalat",
@@ -2100,7 +2302,9 @@
       "fiber_g": 1.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "eisbergsalat",
@@ -2115,7 +2319,9 @@
       "fiber_g": 1.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "lauchzwiebel",
@@ -2130,7 +2336,9 @@
       "fiber_g": 2.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "knoblauch",
@@ -2145,7 +2353,9 @@
       "fiber_g": 2.1,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "ingwer",
@@ -2160,7 +2370,9 @@
       "fiber_g": 2,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "sauerkraut",
@@ -2175,7 +2387,9 @@
       "fiber_g": 2.9,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "pfifferlinge",
@@ -2190,7 +2404,9 @@
       "fiber_g": 3.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "steinpilze",
@@ -2205,7 +2421,9 @@
       "fiber_g": 2.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "shiitake",
@@ -2220,7 +2438,9 @@
       "fiber_g": 2.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "petersilie",
@@ -2235,7 +2455,9 @@
       "fiber_g": 3.3,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "basilikum",
@@ -2250,7 +2472,9 @@
       "fiber_g": 1.6,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "schnittlauch",
@@ -2265,7 +2489,9 @@
       "fiber_g": 2.5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "dill",
@@ -2280,7 +2506,9 @@
       "fiber_g": 2.1,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "gemuese"
     },
     {
       "id": "kartoffel-roh",
@@ -2295,7 +2523,9 @@
       "fiber_g": 1.6,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "kartoffelpueree",
@@ -2355,7 +2585,9 @@
       "fiber_g": 2,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "polenta",
@@ -2370,7 +2602,9 @@
       "fiber_g": 1,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "bulgur",
@@ -2385,7 +2619,9 @@
       "fiber_g": 4.5,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "quinoa",
@@ -2400,7 +2636,9 @@
       "fiber_g": 2.8,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "reis-vollkorn",
@@ -2415,7 +2653,9 @@
       "fiber_g": 1.8,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "dinkelmehl",
@@ -2430,7 +2670,9 @@
       "fiber_g": 6,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "backen"
     },
     {
       "id": "weizenmehl",
@@ -2445,7 +2687,9 @@
       "fiber_g": 3,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "backen"
     },
     {
       "id": "vollkornmehl",
@@ -2460,7 +2704,9 @@
       "fiber_g": 10,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "backen"
     },
     {
       "id": "dinkelflocken",
@@ -2475,7 +2721,9 @@
       "fiber_g": 8.8,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "backen"
     },
     {
       "id": "hirse",
@@ -2490,7 +2738,9 @@
       "fiber_g": 1.3,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "chiasamen",
@@ -2505,7 +2755,9 @@
       "fiber_g": 34,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "leinsamen",
@@ -2520,7 +2772,9 @@
       "fiber_g": 27,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "roggenbrot",
@@ -2670,7 +2924,9 @@
       "fiber_g": 1.8,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "penne",
@@ -2685,7 +2941,9 @@
       "fiber_g": 1.8,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "eiernudeln",
@@ -2700,7 +2958,9 @@
       "fiber_g": 1.5,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "tortellini",
@@ -2730,7 +2990,9 @@
       "fiber_g": 1.8,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "sattmacher"
     },
     {
       "id": "risotto",
@@ -2775,7 +3037,9 @@
       "fiber_g": 6.3,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "schwarze-bohnen",
@@ -2790,7 +3054,9 @@
       "fiber_g": 8.7,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "sojabohnen",
@@ -2805,7 +3071,9 @@
       "fiber_g": 6,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "edamame",
@@ -2820,7 +3088,9 @@
       "fiber_g": 5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "rote-linsen",
@@ -2835,7 +3105,9 @@
       "fiber_g": 5,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "berglinsen",
@@ -2850,7 +3122,9 @@
       "fiber_g": 8,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "dicke-bohnen",
@@ -2865,7 +3139,9 @@
       "fiber_g": 5.4,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "hummus",
@@ -2880,7 +3156,9 @@
       "fiber_g": 6,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "huelsen"
     },
     {
       "id": "mandeln",
@@ -2895,7 +3173,9 @@
       "fiber_g": 12,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "walnuesse",
@@ -2910,7 +3190,9 @@
       "fiber_g": 6.7,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "haselnuesse",
@@ -2925,7 +3207,9 @@
       "fiber_g": 10,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "cashewkerne",
@@ -2940,7 +3224,9 @@
       "fiber_g": 3.3,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "pistazien",
@@ -2955,7 +3241,9 @@
       "fiber_g": 10,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "erdnuesse",
@@ -2970,7 +3258,9 @@
       "fiber_g": 8.5,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "sonnenblumenkerne",
@@ -2985,7 +3275,9 @@
       "fiber_g": 8.6,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "kuerbiskerne",
@@ -3000,7 +3292,9 @@
       "fiber_g": 6,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "sesam",
@@ -3015,7 +3309,9 @@
       "fiber_g": 12,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "mandelmus",
@@ -3030,7 +3326,9 @@
       "fiber_g": 10,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "milch-vollfett",
@@ -3045,7 +3343,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "buttermilch",
@@ -3060,7 +3360,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "kefir",
@@ -3075,7 +3377,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "sahne",
@@ -3090,7 +3394,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "schmand",
@@ -3105,7 +3411,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "creme-fraiche",
@@ -3120,7 +3428,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "saure-sahne",
@@ -3135,7 +3445,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "kakao-getraenk",
@@ -3165,7 +3477,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "edamer",
@@ -3180,7 +3494,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "camembert",
@@ -3195,7 +3511,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "brie",
@@ -3210,7 +3528,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "feta",
@@ -3225,7 +3545,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "parmesan",
@@ -3240,7 +3562,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "gorgonzola",
@@ -3255,7 +3579,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "bergkaese",
@@ -3270,7 +3596,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "ricotta",
@@ -3285,7 +3613,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "raclette",
@@ -3300,7 +3630,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "ziegenkaese",
@@ -3315,7 +3647,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "kaese"
     },
     {
       "id": "griechischer-joghurt",
@@ -3330,7 +3664,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "quark-40",
@@ -3345,7 +3681,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "quark-20",
@@ -3360,7 +3698,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "ayran",
@@ -3375,7 +3715,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "joghurt-natur-vollfett",
@@ -3390,7 +3732,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "hafermilch",
@@ -3405,7 +3749,9 @@
       "fiber_g": 0.8,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "sojamilch",
@@ -3420,7 +3766,9 @@
       "fiber_g": 0.6,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "mandelmilch",
@@ -3435,7 +3783,9 @@
       "fiber_g": 0.4,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "kokosmilch",
@@ -3450,7 +3800,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "reismilch",
@@ -3465,7 +3817,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "sojajoghurt",
@@ -3480,7 +3834,9 @@
       "fiber_g": 0.8,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "milch"
     },
     {
       "id": "raeuchertofu",
@@ -3495,7 +3851,9 @@
       "fiber_g": 2,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "tempeh",
@@ -3510,7 +3868,9 @@
       "fiber_g": 6,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "seitan",
@@ -3525,7 +3885,9 @@
       "fiber_g": 1,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "sojaschnetzel",
@@ -3540,7 +3902,9 @@
       "fiber_g": 18,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "veggie-schnitzel",
@@ -3615,7 +3979,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "ei"
     },
     {
       "id": "eigelb",
@@ -3630,7 +3996,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "ei"
     },
     {
       "id": "rindersteak",
@@ -3645,7 +4013,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "rinderbraten",
@@ -3660,7 +4030,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "schweinebraten",
@@ -3675,7 +4047,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "schweinefilet",
@@ -3690,7 +4064,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "haehnchenschenkel",
@@ -3705,7 +4081,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "chicken-nuggets",
@@ -3735,7 +4113,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "lammkotelett",
@@ -3750,7 +4130,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "gyros",
@@ -3795,7 +4177,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "mortadella",
@@ -3930,7 +4314,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "corned-beef",
@@ -3960,7 +4346,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "kabeljau",
@@ -3975,7 +4363,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "hering",
@@ -3990,7 +4380,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "makrele",
@@ -4005,7 +4397,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "matjes",
@@ -4020,7 +4414,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "raeucherlachs",
@@ -4035,7 +4431,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "sardine",
@@ -4050,7 +4448,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "thunfisch-oel",
@@ -4065,7 +4465,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "muscheln",
@@ -4080,7 +4482,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "tintenfisch",
@@ -4095,7 +4499,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "protein"
     },
     {
       "id": "rapsoel",
@@ -4110,7 +4516,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "fett"
     },
     {
       "id": "sonnenblumenoel",
@@ -4125,7 +4533,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "fett"
     },
     {
       "id": "kokosoel",
@@ -4140,7 +4550,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "fett"
     },
     {
       "id": "schmalz",
@@ -4155,7 +4567,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": false
+      "vegetarian": false,
+      "zutat": true,
+      "zg": "fett"
     },
     {
       "id": "pflanzenmargarine",
@@ -4170,7 +4584,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "fett"
     },
     {
       "id": "ghee",
@@ -4185,7 +4601,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "fett"
     },
     {
       "id": "zartbitter",
@@ -4200,7 +4618,9 @@
       "fiber_g": 11,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "weisse-schokolade",
@@ -4215,7 +4635,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "praline",
@@ -4305,7 +4727,9 @@
       "fiber_g": 5,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "nougat",
@@ -4320,7 +4744,9 @@
       "fiber_g": 2,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "fruchtgummi-vegan",
@@ -4695,7 +5121,9 @@
       "fiber_g": 1,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "apfelmus",
@@ -4710,7 +5138,9 @@
       "fiber_g": 1.2,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "ahornsirup",
@@ -4725,7 +5155,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "agavendicksaft",
@@ -4740,7 +5172,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "schokocreme-vegan",
@@ -4755,7 +5189,9 @@
       "fiber_g": 3,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "leberpastete",
@@ -4785,7 +5221,9 @@
       "fiber_g": 9,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "nuesse"
     },
     {
       "id": "ketchup",
@@ -4830,7 +5268,9 @@
       "fiber_g": 3,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "remoulade",
@@ -4875,7 +5315,9 @@
       "fiber_g": 0.5,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "pesto-gruen",
@@ -4890,7 +5332,9 @@
       "fiber_g": 2,
       "free": false,
       "vegan": false,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "joghurt-dressing",
@@ -4950,7 +5394,9 @@
       "fiber_g": 0,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "salz",
@@ -4965,7 +5411,9 @@
       "fiber_g": 0,
       "free": true,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "pfeffer",
@@ -4980,7 +5428,9 @@
       "fiber_g": 25,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "paprikapulver",
@@ -4995,7 +5445,9 @@
       "fiber_g": 35,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "currypulver",
@@ -5010,7 +5462,9 @@
       "fiber_g": 33,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "zimt",
@@ -5025,7 +5479,9 @@
       "fiber_g": 53,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wuerzen"
     },
     {
       "id": "zucker",
@@ -5040,7 +5496,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "vanillezucker",
@@ -5055,7 +5513,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "suess"
     },
     {
       "id": "mineralwasser",
@@ -5205,7 +5665,9 @@
       "fiber_g": 0,
       "free": false,
       "vegan": true,
-      "vegetarian": true
+      "vegetarian": true,
+      "zutat": true,
+      "zg": "wein"
     },
     {
       "id": "cappuccino",
@@ -5581,6 +6043,380 @@
       "free": false,
       "vegan": false,
       "vegetarian": true
+    },
+    {
+      "id": "z-speisestaerke",
+      "name": "Speisestärke",
+      "cat": "Backzutaten",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 343,
+      "sat_fat_g": 0,
+      "sugar_g": 0,
+      "protein_g": 0.3,
+      "fiber_g": 0.9,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-backpulver",
+      "name": "Backpulver",
+      "cat": "Backzutaten",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 90,
+      "sat_fat_g": 0,
+      "sugar_g": 0,
+      "protein_g": 0.1,
+      "fiber_g": 0.1,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-natron",
+      "name": "Natron (Speisesoda)",
+      "cat": "Backzutaten",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 0,
+      "sat_fat_g": 0,
+      "sugar_g": 0,
+      "protein_g": 0,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-trockenhefe",
+      "name": "Trockenhefe",
+      "cat": "Backzutaten",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 325,
+      "sat_fat_g": 0.1,
+      "sugar_g": 0,
+      "protein_g": 40,
+      "fiber_g": 27,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-frischhefe",
+      "name": "Frische Hefe",
+      "cat": "Backzutaten",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 105,
+      "sat_fat_g": 0.1,
+      "sugar_g": 0,
+      "protein_g": 12,
+      "fiber_g": 6.5,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-griess",
+      "name": "Weichweizengrieß",
+      "cat": "Brot & Getreide",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 350,
+      "sat_fat_g": 0.2,
+      "sugar_g": 0.9,
+      "protein_g": 11,
+      "fiber_g": 3,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-paniermehl",
+      "name": "Paniermehl (Semmelbrösel)",
+      "cat": "Brot & Getreide",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 370,
+      "sat_fat_g": 0.5,
+      "sugar_g": 3,
+      "protein_g": 12,
+      "fiber_g": 4,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-backkakao",
+      "name": "Backkakao (Kakaopulver)",
+      "cat": "Backzutaten",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 350,
+      "sat_fat_g": 8,
+      "sugar_g": 1.8,
+      "protein_g": 20,
+      "fiber_g": 30,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-mandeln-gemahlen",
+      "name": "Gemahlene Mandeln",
+      "cat": "Nüsse & Samen",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 589,
+      "sat_fat_g": 4,
+      "sugar_g": 4,
+      "protein_g": 21,
+      "fiber_g": 12,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-kokosraspeln",
+      "name": "Kokosraspeln",
+      "cat": "Nüsse & Samen",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 660,
+      "sat_fat_g": 57,
+      "sugar_g": 7,
+      "protein_g": 6,
+      "fiber_g": 15,
+      "vegan": true,
+      "zg": "backen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-puderzucker",
+      "name": "Puderzucker",
+      "cat": "Backzutaten",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 400,
+      "sat_fat_g": 0,
+      "sugar_g": 100,
+      "protein_g": 0,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "suess",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-brauner-zucker",
+      "name": "Brauner Zucker",
+      "cat": "Backzutaten",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 384,
+      "sat_fat_g": 0,
+      "sugar_g": 97,
+      "protein_g": 0,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "suess",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-balsamico",
+      "name": "Balsamico-Essig",
+      "cat": "Saucen & Dressings",
+      "unit": "ml",
+      "base_g": 100,
+      "kcal": 88,
+      "sat_fat_g": 0,
+      "sugar_g": 15,
+      "protein_g": 0.5,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "wuerzen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-apfelessig",
+      "name": "Apfelessig",
+      "cat": "Saucen & Dressings",
+      "unit": "ml",
+      "base_g": 100,
+      "kcal": 21,
+      "sat_fat_g": 0,
+      "sugar_g": 0.4,
+      "protein_g": 0,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "wuerzen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-weissweinessig",
+      "name": "Weißweinessig",
+      "cat": "Saucen & Dressings",
+      "unit": "ml",
+      "base_g": 100,
+      "kcal": 19,
+      "sat_fat_g": 0,
+      "sugar_g": 0.1,
+      "protein_g": 0,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "wuerzen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-tomatenmark",
+      "name": "Tomatenmark",
+      "cat": "Saucen & Dressings",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 82,
+      "sat_fat_g": 0.2,
+      "sugar_g": 9,
+      "protein_g": 4.2,
+      "fiber_g": 3,
+      "vegan": true,
+      "zg": "wuerzen",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-leinoel",
+      "name": "Leinöl",
+      "cat": "Fette & Öle",
+      "unit": "ml",
+      "base_g": 100,
+      "kcal": 884,
+      "sat_fat_g": 9,
+      "sugar_g": 0,
+      "protein_g": 0,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "fett",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-sesamoel",
+      "name": "Sesamöl",
+      "cat": "Fette & Öle",
+      "unit": "ml",
+      "base_g": 100,
+      "kcal": 884,
+      "sat_fat_g": 14,
+      "sugar_g": 0,
+      "protein_g": 0,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "fett",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-walnussoel",
+      "name": "Walnussöl",
+      "cat": "Fette & Öle",
+      "unit": "ml",
+      "base_g": 100,
+      "kcal": 884,
+      "sat_fat_g": 9,
+      "sugar_g": 0,
+      "protein_g": 0,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "fett",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-erdnussoel",
+      "name": "Erdnussöl",
+      "cat": "Fette & Öle",
+      "unit": "ml",
+      "base_g": 100,
+      "kcal": 884,
+      "sat_fat_g": 17,
+      "sugar_g": 0,
+      "protein_g": 0,
+      "fiber_g": 0,
+      "vegan": true,
+      "zg": "fett",
+      "zutat": true,
+      "free": false,
+      "vegetarian": true
+    },
+    {
+      "id": "z-mascarpone",
+      "name": "Mascarpone",
+      "cat": "Milchprodukte",
+      "unit": "g",
+      "base_g": 100,
+      "kcal": 430,
+      "sat_fat_g": 30,
+      "sugar_g": 3,
+      "protein_g": 4.5,
+      "fiber_g": 0,
+      "vegetarian": true,
+      "zg": "milch",
+      "zutat": true,
+      "free": false,
+      "vegan": false
+    },
+    {
+      "id": "z-kondensmilch",
+      "name": "Kondensmilch 7,5 %",
+      "cat": "Milchprodukte",
+      "unit": "ml",
+      "base_g": 100,
+      "kcal": 135,
+      "sat_fat_g": 4.8,
+      "sugar_g": 10,
+      "protein_g": 6,
+      "fiber_g": 0,
+      "vegetarian": true,
+      "zg": "milch",
+      "zutat": true,
+      "free": false,
+      "vegan": false
     }
   ]
 }

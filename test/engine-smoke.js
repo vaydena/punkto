@@ -144,5 +144,58 @@ ok("budgetPlan: Tagesbudget im Band 18..34", plan.daily_budget >= 18 && plan.dai
 ok("budgetPlan: Wochenextra im Band 21..35", plan.weekly_extra >= 21 && plan.weekly_extra <= 35, plan.weekly_extra);
 ok("budgetPlan: Zielkalorien > sicheres Minimum", plan.target_kcal >= 1200, plan.target_kcal);
 
+/* ---------------------------------------------------------------------------
+   F) ZUTATENRECHNER-INVARIANTEN (v32)
+   Der Zutatenrechner filtert die DB auf zutat===true und gruppiert nach zg.
+   Die anklickbaren Kategorie-Chips kommen aus ZC_GROUPS in app.html. Diese
+   Invarianten halten Daten (punkto-foods.json) und UI (ZC_GROUPS) synchron und
+   sichern die Nutzer-Vorgabe „Flüssigkeiten in Millilitern".
+   --------------------------------------------------------------------------- */
+const zutaten = foods.filter(f => f.zutat === true);
+ok("Zutaten vorhanden (>= 200 markiert)", zutaten.length >= 200, "n=" + zutaten.length);
+
+// ZC_GROUPS-Schlüssel direkt aus app.html ziehen (Quelle der Kategorie-Chips)
+const appHtml = fs.readFileSync(path.join(__dirname, "..", "app.html"), "utf8");
+const zcBlock = appHtml.slice(appHtml.indexOf("var ZC_GROUPS = ["),
+                            appHtml.indexOf("];", appHtml.indexOf("var ZC_GROUPS = [")));
+const groupKeys = (zcBlock.match(/key:\s*"([^"]+)"/g) || []).map(s => s.match(/"([^"]+)"/)[1]);
+ok("ZC_GROUPS aus app.html gelesen (14 Gruppen)", groupKeys.length === 14, groupKeys.length + ": " + groupKeys.join(","));
+
+// Jede Zutat hat eine nicht-leere Gruppe zg
+const noGroup = zutaten.filter(f => typeof f.zg !== "string" || !f.zg.trim());
+ok("jede Zutat hat eine Gruppe (zg gesetzt)", noGroup.length === 0,
+  noGroup.slice(0, 5).map(f => f.id).join(","));
+
+// Kein Waisenkind: jede zg-Gruppe existiert auch als Chip in ZC_GROUPS
+const gset = new Set(groupKeys);
+const orphan = zutaten.filter(f => f.zg && !gset.has(f.zg));
+ok("keine Zutat mit unbekannter Gruppe (zg ⊆ ZC_GROUPS)", orphan.length === 0,
+  orphan.slice(0, 5).map(f => f.id + "=" + f.zg).join(","));
+
+// Keine leere Registerkarte: jede ZC_GROUPS-Gruppe hat >= 1 Zutat
+const counts = {};
+zutaten.forEach(f => { counts[f.zg] = (counts[f.zg] || 0) + 1; });
+const emptyGroups = groupKeys.filter(k => !counts[k]);
+ok("keine leere Kategorie (jede ZC_GROUPS-Gruppe hat Zutaten)", emptyGroups.length === 0,
+  emptyGroups.join(","));
+
+// Nutzer-Vorgabe: flüssige Öle in Millilitern (Olivenöl war bis v32 fälschlich "EL").
+// Feste Fette (Butter, Margarine, Ghee, Schmalz, Kokosöl) bleiben bewusst "g".
+const LIQUID_OILS = ["olivenoel", "rapsoel", "sonnenblumenoel", "leinoel", "sesamoel", "walnussoel", "erdnussoel"];
+const oilNotMl = LIQUID_OILS.filter(id => byId[id] && byId[id].unit !== "ml");
+ok("alle flüssigen Öle sind in ml", oilNotMl.length === 0,
+  oilNotMl.map(id => id + "=" + byId[id].unit).join(","));
+// v32-Regression konkret: Olivenöl ml + 100er-Basis (war EL/base_g 10)
+ok("v32: Olivenöl ist ml (war EL)", !!byId["olivenoel"] && byId["olivenoel"].unit === "ml",
+  byId["olivenoel"] ? byId["olivenoel"].unit : "id fehlt");
+ok("v32: Olivenöl base_g = 100 (100er-Basis wie andere Öle)",
+  !!byId["olivenoel"] && byId["olivenoel"].base_g === 100,
+  byId["olivenoel"] ? byId["olivenoel"].base_g : "id fehlt");
+
+// Getränke-Gruppe „wein" (Wein/Sekt/Säfte) komplett in ml
+const weinNotMl = zutaten.filter(f => f.zg === "wein" && f.unit !== "ml");
+ok("Gruppe 'wein' (Koch-Flüssigkeiten) komplett in ml", weinNotMl.length === 0,
+  weinNotMl.map(f => f.id + "=" + f.unit).join(","));
+
 console.log("\n" + (fail === 0 ? "ALLE GRÜN" : fail + " FEHLGESCHLAGEN") + "  (" + pass + " ok, " + fail + " fail)");
 process.exit(fail === 0 ? 0 : 1);
