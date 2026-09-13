@@ -157,7 +157,7 @@
     async loadLocal() {
       if (_localFoods) return _localFoods;
       try {
-        var res = await fetch("assets/data/punkto-foods.json", { cache: "force-cache" });
+        var res = await fetch("assets/data/punkto-foods.json", { cache: "no-cache" });
         var j = await res.json();
         _localFoods = j.foods || [];
       } catch (e) { _localFoods = []; }

@@ -461,3 +461,17 @@ v29-5ea2: Daten-Audit (Task 2, Teil 2): 4 falsche Kategorien korrigiert. Linsen,
          sat+Eiweiss-Energie nie > kcal, keine Negativ-/Fehlwerte ueber alle 372
          Basis-Lebensmittel), keine vegan/free-Flag-Widersprueche, keine doppelten IDs.
          SW-CACHE auf pk-app-v29 angehoben.
+v30-6b1d: Frische-Fix — die Lebensmittel-DB kam auf INSTALLIERTEN PWAs verzoegert an,
+         weil assets/data/punkto-foods.json vom Service Worker als statisches Asset
+         CACHE-FIRST ausgeliefert wurde (zusaetzlich cache:"force-cache" im Client):
+         eine geaenderte DB erreichte installierte Geraete erst nach SW-CACHE-Bump und
+         SW-Update-Zyklus — auf dem Entwickler-Rechner (frischer Browser) dagegen sofort.
+         Ursache behoben: (a) sw.js behandelt assets/data/*.json jetzt NETWORK-FIRST wie
+         HTML-Dokumente (Netz zuerst, Kopie in den Cache; offline Rückfall auf die zuletzt
+         gecachte Fassung) und nimmt punkto-foods.json neu ins SHELL auf (ab Install offline
+         verfuegbar); (b) pk-app.js laedt die DB mit cache:"no-cache" (Revalidierung) statt
+         "force-cache". Folge: kuenftige DB-Aenderungen kommen ohne CACHE-Bump sofort an,
+         Offline-Betrieb bleibt intakt. Nebenbei die interne DB-Version auf
+         pk-foods-2026-09-13-1 nachgezogen (stand faelschlich noch auf 09-12, obwohl v29
+         die Kategorien am 13. geaendert hatte). Kein Server-/Function-Deploy noetig.
+         SW-CACHE auf pk-app-v30 angehoben.

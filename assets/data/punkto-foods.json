@@ -1,5 +1,5 @@
 {
-  "version": "pk-foods-2026-09-12-1",
+  "version": "pk-foods-2026-09-13-1",
   "note": "Kuratierte Basis-Datenbank haeufiger Lebensmittel (DE). Naehrwerte je base_g (meist 100 g) bzw. je Stueck. free=true -> 0-Punkte-Lebensmittel. Werte gerundet, dienen der Orientierung, keine amtlichen Angaben.",
   "foods": [
     {

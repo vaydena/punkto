@@ -8,9 +8,12 @@
    - Nur GET wird behandelt; POST (Edge Functions an Supabase) bleibt komplett unangetastet.
    - Fremde Herkunft (Supabase, Open Food Facts) wird NIE abgefangen -> geht immer ins Netz.
    - Dokumente (HTML): Netz zuerst -> live bleibt frisch; offline Rückfall auf den Cache.
-   - Statische Assets (CSS/JS/Icons/Manifest): Cache zuerst -> schnell; sonst Netz + nachlegen. */
+   - Daten-JSON (assets/data/*.json, z. B. die Lebensmittel-DB): ebenfalls Netz zuerst ->
+     DB-Aenderungen kommen ohne CACHE-Bump sofort auf installierten Apps an; offline
+     Rückfall auf die zuletzt gecachte Fassung (liegt via SHELL ab Install im Cache).
+   - Sonstige statische Assets (CSS/JS/Icons/Manifest): Cache zuerst -> schnell; sonst Netz + nachlegen. */
 
-const CACHE = "pk-app-v29";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
+const CACHE = "pk-app-v30";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
 const SHELL = [
   "./anmelden.html",
   "./app.html",
@@ -21,6 +24,7 @@ const SHELL = [
   "./assets/pk-engine.js",
   "./assets/pk-store.js",
   "./assets/pk-ocr.js",
+  "./assets/data/punkto-foods.json",
   "./icon-192.png",
   "./icon-512.png",
   "./icon-maskable-512.png",
@@ -60,8 +64,11 @@ self.addEventListener("fetch", (event) => {
 
   const accept = req.headers.get("accept") || "";
   const isDoc = req.mode === "navigate" || accept.includes("text/html");
+  // Daten-JSON (Lebensmittel-DB u. Ä.) wie Dokumente behandeln: Netz zuerst, damit
+  // Datenaenderungen ohne CACHE-Bump sofort ankommen; offline Rückfall auf den Cache.
+  const isData = /\/assets\/data\/.*\.json$/i.test(url.pathname);
 
-  if (isDoc) {
+  if (isDoc || isData) {
     // Netz zuerst; bei Erfolg Kopie in den Cache; offline -> Cache (Query ignorieren) -> Shell
     event.respondWith(
       fetch(req)
@@ -73,7 +80,7 @@ self.addEventListener("fetch", (event) => {
           return res;
         })
         .catch(() =>
-          caches.match(req, { ignoreSearch: true }).then((m) => m || caches.match("./anmelden.html"))
+          caches.match(req, { ignoreSearch: true }).then((m) => m || (isDoc ? caches.match("./anmelden.html") : undefined))
         )
     );
     return;
