@@ -197,5 +197,68 @@ const weinNotMl = zutaten.filter(f => f.zg === "wein" && f.unit !== "ml");
 ok("Gruppe 'wein' (Koch-Flüssigkeiten) komplett in ml", weinNotMl.length === 0,
   weinNotMl.map(f => f.id + "=" + f.unit).join(","));
 
+/* ---------------------------------------------------------------------------
+   G) REZEPT-MODUS-INVARIANTEN (v33)
+   Der Rezept-Modus (openRecipeCalcSheet) addiert die Punkte mehrerer DB-Zutaten
+   und teilt durch die Portionenzahl -> „Punkte pro Portion". Diese Tests spiegeln
+   exakt die Client-Rechnung: amount -> Gramm (Stück/Scheibe/Riegel/EL: amount*base_g;
+   g/ml: amount 1:1) -> PK.pointsForAmount, Summe, Rundung. Sie verankern die
+   verifizierten Werte des Referenz-Rezepts als Regressionsschutz.
+   --------------------------------------------------------------------------- */
+function recipeGrams(food, amount) {          // wie amtGrams() im Builder
+  const u = food.unit;
+  if (u === "g" || u === "ml") return amount; // ml ~ 1 g
+  return amount * (Number(food.base_g) || 1); // Stück/Scheibe/Riegel/EL
+}
+function itemPoints(food, amount) {           // wie im Builder: free -> 0
+  return food.free ? 0 : PK.pointsForAmount(food, recipeGrams(food, amount));
+}
+
+// Einheiten-Umrechnung: Stück nutzt base_g, g/ml bleiben 1:1
+const eiFood = byId["ei"];
+ok("Rezept: Stück-Menge nutzt base_g (3 Ei = 3*base_g Gramm)",
+  !!eiFood && recipeGrams(eiFood, 3) === 3 * eiFood.base_g,
+  eiFood ? recipeGrams(eiFood, 3) + " g" : "id 'ei' fehlt");
+const milchFood = byId["milch-vollfett"];
+ok("Rezept: ml zählt 1:1 als Gramm (100 ml = 100 g)",
+  !!milchFood && recipeGrams(milchFood, 100) === 100,
+  milchFood ? recipeGrams(milchFood, 100) + " g" : "id 'milch-vollfett' fehlt");
+
+// Referenz-Rezept „Rührkuchen" (headless verifiziert): [id, Menge, erwartete Punkte]
+const REF_RECIPE = [
+  ["weizenmehl", 300, 25],
+  ["zucker", 200, 39],
+  ["butter", 250, 140],
+  ["ei", 3, 9],
+  ["milch-vollfett", 100, 4],
+  ["z-backpulver", 15, 0],
+];
+const missingRef = REF_RECIPE.filter(r => !byId[r[0]]);
+ok("Rezept: alle Referenz-Zutaten existieren in der DB", missingRef.length === 0,
+  missingRef.map(r => r[0]).join(","));
+const allRefZutat = REF_RECIPE.every(r => byId[r[0]] && byId[r[0]].zutat === true);
+ok("Rezept: alle Referenz-Zutaten sind als zutat markiert (ref auflösbar)", allRefZutat);
+
+let refTotal = 0, itemsOk = true;
+REF_RECIPE.forEach(r => {
+  const f = byId[r[0]]; if (!f) { itemsOk = false; return; }
+  const p = itemPoints(f, r[1]); refTotal += p;
+  if (p !== r[2]) { itemsOk = false; ok("Rezept: " + r[0] + " " + r[1] + " -> " + r[2] + " P", false, "ist " + p); }
+});
+ok("Rezept: jede Zutat ergibt die verifizierten Punkte", itemsOk, "Summe=" + refTotal);
+ok("Rezept: Gesamtpunkte = 217 (Summe der Zutaten)", refTotal === 217, refTotal);
+
+// Pro-Portion: Client zeigt Math.round(total/serv); Server speichert round(total/serv*10)/10
+const servings = 12;
+ok("Rezept: Punkte pro Portion (Anzeige) = 18 bei 12 Portionen",
+  Math.round(refTotal / servings) === 18, Math.round(refTotal / servings));
+ok("Rezept: points_per_serving (Server-Rundung) = 18.1",
+  Math.round((refTotal / servings) * 10) / 10 === 18.1, Math.round((refTotal / servings) * 10) / 10);
+
+// Guard: 0-Punkte-Zutat (Backpulver, vernachlässigbare kcal) trägt real 0 bei
+ok("Rezept: kcal-arme Zutat trägt 0 Punkte bei (kein Aufrunden)",
+  itemPoints(byId["z-backpulver"], 15) === 0,
+  byId["z-backpulver"] ? itemPoints(byId["z-backpulver"], 15) : "id fehlt");
+
 console.log("\n" + (fail === 0 ? "ALLE GRÜN" : fail + " FEHLGESCHLAGEN") + "  (" + pass + " ok, " + fail + " fail)");
 process.exit(fail === 0 ? 0 : 1);

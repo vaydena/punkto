@@ -1,4 +1,4 @@
-pk-v32-2301
+pk-v33-9f2a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -519,3 +519,21 @@ v32-2301: Neuer „Zutatenrechner“ — eine zutatenbasierte Punkteberechnung f
          Suchergebnisse UND Zutatenrechner-Kacheln konsistent die Breite (box-sizing:border-box
          ist global, daher regressionssicher). Da punkto.css cache-first ausgeliefert wird,
          SW-CACHE auf pk-app-v32 angehoben (bereits in sw.js gesetzt).
+pk-v33-9f2a: NEU „Rezept-Modus" (openRecipeCalcSheet) — Rezepte aus mehreren Zutaten mit
+         automatischer Punkteberechnung. Ersetzt den bisherigen Freitext-/Handpunkte-Editor
+         (openRecipeSheet): Zutaten werden aus der DB gewaehlt (dieselbe Auswahl/Menge-Optik
+         wie Zutatenrechner & Punkte-Rechner: Suche + Kategorie-Chips + Karten -> Mengen-Ansicht
+         mit Keypad & Quick-Chips), die Punkte je Zutat rechnet der Client via PK.pointsForAmount
+         (amount -> Gramm: Stueck/Scheibe/Riegel/EL = amount*base_g, g/ml = 1:1), die Summe wird
+         durch die Portionen/Stueck geteilt -> „Punkte pro Portion" (plus „Gesamt X P"). Zusaetzlich
+         „+ manuell" als Rueckfall fuer Zutaten ausserhalb der DB (Freitext + Punkte, wie zuvor).
+         Erreichbar ueber Tab „Rezepte" (+ Rezept) und als neue Kachel „Rezept-Modus" im
+         Hinzufuegen-Sheet. Speichert ins bestehende Rezept-Datenmodell (Tab „Rezepte", „+ Tag").
+         DB-Zutaten merken sich amount/unit/ref und bleiben dadurch beim Bearbeiten neu
+         berechenbar (Tippen auf eine Zeile oeffnet die Mengen-Ansicht erneut). Dafuer EIN
+         additiver, rueckwaertskompatibler Function-Deploy: punkto-data (recipe_add/recipe_update)
+         speichert je Item zusaetzlich die optionalen Felder amount/unit/ref (points_total/
+         points_per_serving weiterhin serverseitig aus points berechnet; alte Rezepte unveraendert
+         gueltig, ihre Zutaten erscheinen als manuelle Zeilen). Tests: engine-smoke.js Sektion G
+         (Rezept-Mathematik, 9 Invarianten) — 50 ok, 0 fail. Da app.html/JS/CSS geaendert:
+         SW-CACHE auf pk-app-v33 angehoben.

@@ -96,6 +96,7 @@
   .quick-act.b .qi{background:#fce8ee;color:var(--berry)}
   .quick-act.v .qi{background:#ece6fb;color:#7a5cd0}
   .quick-act.z .qi{background:#fdeede;color:#c67d1e}
+  .quick-act.r .qi{background:#e6f4ea;color:var(--green-700)}
 
   /* Punkte-Rechner (Taschenrechner-Sheet). Eingaben sind echte Inputs mit
      inputmode="none": Bildschirmtastatur bleibt zu, Hardware-Tastatur tippt. */
@@ -200,6 +201,20 @@
   .recipe-item-row .rn{flex:2}
   .recipe-item-row .rp{flex:1}
   .recipe-item-row .rrm{flex:0 0 auto;background:none;border:0;color:var(--muted);cursor:pointer;padding:6px}
+  /* Rezept-Modus: DB-verknüpfte Zutatenzeile + Aktionen */
+  .rk-add{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 4px}
+  .rk-add .btn{flex:1 1 auto}
+  .rk-sum{font-size:.8rem;color:var(--green-800);opacity:.85}
+  .rc-item{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+  .rc-item .rc-tap{flex:1;display:flex;align-items:center;gap:12px;min-width:0;background:var(--card);
+    border:1.6px solid var(--line);border-radius:12px;padding:10px 12px;font:inherit;text-align:left;cursor:pointer}
+  .rc-item .rc-tap:hover{border-color:var(--green-tint-2)}
+  .rc-item .rc-tap:active{transform:scale(.99)}
+  .rc-item .rc-tap .info{flex:1;min-width:0}
+  .rc-item .rc-tap .nm{display:block;font-weight:700;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rc-item .rc-tap .meta{display:block;font-size:.8rem;color:var(--muted)}
+  .rc-item .rc-tap .coin{flex:0 0 auto}
+  .rc-item .rrm{flex:0 0 auto;background:none;border:0;color:var(--muted);cursor:pointer;padding:6px}
 
   .profile-summary{background:var(--green-tint);border-radius:var(--r);padding:14px 16px;margin-bottom:16px}
   .profile-summary .pr{display:flex;justify-content:space-between;font-size:.9rem;padding:.25em 0;color:var(--ink-2)}
@@ -1528,6 +1543,7 @@
       '<button class="quick-act c" data-q="capture"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>Produkt anlegen</button>' +
       '<button class="quick-act v" data-q="calc"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6.5h8M8 11h.01M12 11h.01M16 11h.01M8 14.5h.01M12 14.5h.01M16 14.5h.01M8 18h.01M12 18h.01M16 18h.01"/></svg></span>Punkte-Rechner</button>' +
       '<button class="quick-act z" data-q="zutat"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16a8 8 0 0 1-16 0z"/><path d="M14 11c0-2 .6-3.1 1.6-4.1S17 4.7 17 3"/></svg></span>Zutatenrechner</button>' +
+      '<button class="quick-act r" data-q="recipe"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 9h5M8 13h8M8 17h8"/></svg></span>Rezept-Modus</button>' +
       '</div>',
       function (root) {
         // „Schnell eintragen"-Chips -> direkt ins Detail-Sheet (gegen Live-Daten aufgelöst).
@@ -1548,6 +1564,7 @@
             else if (q === "capture") openCaptureSheet();
             else if (q === "calc") openCalcSheet();
             else if (q === "zutat") openIngredientCalcSheet();
+            else if (q === "recipe") openRecipeCalcSheet();
           });
         });
       });
@@ -2991,76 +3008,320 @@
       });
   }
 
-  /* ---------------------- REZEPT ---------------------- */
-  function openRecipeSheet(pre) {
+  /* ---------------------- REZEPT-MODUS ----------------------
+     Rezept aus mehreren Zutaten bauen: Zutaten aus der DB (mit g/ml/Stück-Menge,
+     Punkte automatisch via PK.pointsForAmount) ODER manuell (Name + Punkte).
+     Summe aller Zutaten / Portionen -> „Punkte pro Portion". Speichert ins
+     bestehende Rezept-Datenmodell (erscheint im Tab „Rezepte"); DB-Zutaten merken
+     sich amount/unit/ref und bleiben dadurch beim Bearbeiten neu berechenbar. */
+  function openRecipeCalcSheet(pre) {
     pre = pre || {};
-    // Bearbeiten-Modus: vorhandenes Rezept (pre._edit + pre.id), Zutaten vorbelegt.
     var isEdit = !!(pre._edit && pre.id);
+    var X_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+
+    function nn(x) { var n = parseFloat(x); return Number.isFinite(n) ? n : 0; }
+    function ings() { return (S.localFoods || []).filter(function (f) { return f.zutat; }); }
+    function foodById(id) { if (!id) return null; var a = ings(); for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
+    function byName(a, b) { return String(a.name).localeCompare(String(b.name), "de"); }
+
+    // Arbeitsmodell: manuelle Zeile (manual:true, editierbar) oder DB-Zeile (amount/unit/ref).
     var items = (isEdit && Array.isArray(pre.items) && pre.items.length)
-      ? pre.items.map(function (it) { return { name: it.name || "", points: it.points != null ? it.points : "", qty: 1 }; })
-      : [{ name: "", points: "", qty: 1 }];
+      ? pre.items.map(function (it) {
+          var linked = (it.amount != null && it.unit);
+          return {
+            name: it.name || "", points: it.points != null ? +it.points : 0,
+            kcal: it.kcal != null ? +it.kcal : 0, qty: 1,
+            amount: it.amount != null ? +it.amount : null, unit: it.unit || null,
+            ref: it.ref || null, manual: !linked
+          };
+        })
+      : [];
+
     function itemsHTML() {
+      if (!items.length) return '<div class="list-empty">Noch keine Zutat – füge unten welche hinzu.</div>';
       return items.map(function (it, i) {
-        return '<div class="recipe-item-row" data-i="' + i + '">' +
-          '<input class="rn" type="text" placeholder="Zutat" value="' + esc(it.name) + '">' +
-          '<input class="rp" type="number" inputmode="numeric" placeholder="P" min="0" value="' + esc(it.points) + '">' +
-          '<button class="rrm" type="button" aria-label="Entfernen"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>' +
+        if (it.manual) {
+          return '<div class="recipe-item-row" data-i="' + i + '">' +
+            '<input class="rn" type="text" placeholder="Zutat" value="' + esc(it.name) + '">' +
+            '<input class="rp" type="number" inputmode="numeric" placeholder="P" min="0" value="' + esc(it.points) + '">' +
+            '<button class="rrm" type="button" data-rm="' + i + '" aria-label="Entfernen">' + X_SVG + '</button>' +
+            '</div>';
+        }
+        var amtTxt = String(it.amount).replace(".", ",") + " " + (it.unit || "g");
+        var coinCls = (+it.points === 0) ? "coin zero" : "coin";
+        return '<div class="rc-item" data-i="' + i + '">' +
+          '<button type="button" class="rc-tap" data-edit="' + i + '"><span class="info">' +
+          '<span class="nm">' + esc(it.name) + '</span><span class="meta">' + esc(amtTxt) + '</span></span>' +
+          '<span class="' + coinCls + '">' + it.points + '</span></button>' +
+          '<button class="rrm" type="button" data-rm="' + i + '" aria-label="Entfernen">' + X_SVG + '</button>' +
           '</div>';
       }).join("");
     }
-    openSheet(isEdit ? "Rezept bearbeiten" : "Neues Rezept",
-      '<div class="field"><label for="rcName">Name</label><input type="text" id="rcName" maxlength="80" placeholder="z. B. Gemüsepfanne" value="' + esc(pre.name || "") + '"></div>' +
-      '<div class="field"><label for="rcServ">Portionen</label><input type="number" id="rcServ" inputmode="numeric" value="' + (+pre.servings > 0 ? +pre.servings : 2) + '" min="1" max="99"></div>' +
-      '<label>Zutaten (Punkte je Zutat)</label>' +
-      '<div class="recipe-items" id="rcItems">' + itemsHTML() + '</div>' +
-      '<button class="btn ghost small" id="rcAddItem">+ Zutat</button>' +
-      '<div class="detail-points" style="margin-top:16px"><span class="coin" id="rcPer">0</span><span>Punkte pro Portion</span></div>' +
-      '<button class="btn primary block big" id="rcSave">' + (isEdit ? "Änderungen speichern" : "Rezept speichern") + '</button>',
+
+    var catChips = '<button type="button" class="chip on" data-zg="">Alle</button>' +
+      ZC_GROUPS.map(function (g) { return '<button type="button" class="chip" data-zg="' + g.key + '">' + g.emoji + ' ' + esc(g.short) + '</button>'; }).join("");
+    var keysHTML =
+      '<button type="button" class="calc-key" data-k="7">7</button><button type="button" class="calc-key" data-k="8">8</button><button type="button" class="calc-key" data-k="9">9</button><button type="button" class="calc-key fn" data-k="back" aria-label="Letzte Ziffer löschen">⌫</button>' +
+      '<button type="button" class="calc-key" data-k="4">4</button><button type="button" class="calc-key" data-k="5">5</button><button type="button" class="calc-key" data-k="6">6</button><button type="button" class="calc-key fn" data-k="clr" aria-label="Feld leeren">C</button>' +
+      '<button type="button" class="calc-key" data-k="1">1</button><button type="button" class="calc-key" data-k="2">2</button><button type="button" class="calc-key" data-k="3">3</button><button type="button" class="calc-key" data-k=",">,</button>' +
+      '<button type="button" class="calc-key k0" data-k="0">0</button>';
+
+    openSheet(isEdit ? "Rezept bearbeiten" : "Rezept-Modus",
+      // ----- Ansicht 1: Rezept-Builder -----
+      '<div id="rkBuild">' +
+      '<div class="field"><label for="rkName">Name</label><input type="text" id="rkName" maxlength="80" placeholder="z. B. Gemüsepfanne" value="' + esc(pre.name || "") + '"></div>' +
+      '<div class="field"><label for="rkServ">Portionen / Stück</label><input type="number" id="rkServ" inputmode="numeric" value="' + (+pre.servings > 0 ? +pre.servings : 2) + '" min="1" max="99"></div>' +
+      '<label>Zutaten</label>' +
+      '<div class="recipe-items" id="rkItems">' + itemsHTML() + '</div>' +
+      '<div class="rk-add"><button class="btn ghost small" type="button" id="rkAddDb">+ Zutat aus Datenbank</button>' +
+      '<button class="btn ghost small" type="button" id="rkAddManual">+ manuell</button></div>' +
+      '<div class="detail-points" style="margin-top:16px;flex-direction:column;gap:.2em">' +
+      '<div style="display:flex;align-items:center;gap:.5em"><span class="coin" id="rkPer">0</span><span>Punkte pro Portion</span></div>' +
+      '<div class="rk-sum" id="rkSum"></div></div>' +
+      '<button class="btn primary block big" id="rkSave" style="margin-top:14px">' + (isEdit ? "Änderungen speichern" : "Rezept speichern") + '</button>' +
+      '</div>' +
+      // ----- Ansicht 2: Zutat wählen -----
+      '<div id="rkPick" hidden>' +
+      '<button type="button" class="zc-back" id="rkPickBack">‹ Zurück zum Rezept</button>' +
+      '<div class="searchbar"><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>' +
+      '<input type="search" id="rkSearch" placeholder="z. B. Mehl, Milch, Butter …" autocomplete="off"></div>' +
+      '<div class="zc-cats" id="rkCats">' + catChips + '</div>' +
+      '<div id="rkList"></div>' +
+      '</div>' +
+      // ----- Ansicht 3: Menge -----
+      '<div id="rkAmt" hidden>' +
+      '<button type="button" class="zc-back" id="rkAmtBack">‹ Zurück</button>' +
+      '<div class="calc-disp"><div class="sub" id="rkSub"></div>' +
+      '<div class="main"><span id="rkPts">0</span><span class="cu">Punkte</span></div></div>' +
+      '<div class="zc-sel" id="rkSel"></div>' +
+      '<div class="calc-vals">' +
+      '<div class="calc-tile wide on"><div class="amt-row"><label for="rkAmtInp" id="rkAmtLbl">Menge (g)</label>' +
+      '<input type="text" id="rkAmtInp" inputmode="none" autocomplete="off" spellcheck="false" value="100"></div>' +
+      '<div class="chips" id="rkChips"></div></div>' +
+      '</div>' +
+      '<div class="calc-keys" id="rkKeys">' + keysHTML + '</div>' +
+      '<button class="btn primary block big" id="rkAddItem" style="margin-top:12px">Zutat hinzufügen</button>' +
+      '</div>',
       function (root) {
-        function readItems() {
+        var activeCat = "";
+        var sel = null, unitCat = "g", fresh = true, editIndex = -1;
+        var amtEl = $("#rkAmtInp", root);
+
+        function pnum(el) { var n = parseFloat(String(el.value).replace(",", ".")); return Number.isFinite(n) && n >= 0 ? n : 0; }
+
+        // ---------- Builder ----------
+        function readManual() {
           $$(".recipe-item-row", root).forEach(function (row) {
             var i = +row.dataset.i;
-            items[i] = { name: $(".rn", row).value, points: $(".rp", row).value, qty: 1 };
+            if (items[i] && items[i].manual) { items[i].name = $(".rn", row).value; items[i].points = $(".rp", row).value; }
           });
         }
         function recalc() {
-          readItems();
+          readManual();
           var total = items.reduce(function (s, it) { return s + (+it.points || 0); }, 0);
-          var serv = +$("#rcServ", root).value || 1;
-          $("#rcPer", root).textContent = Math.round(total / serv);
+          var serv = +$("#rkServ", root).value || 1;
+          $("#rkPer", root).textContent = Math.round(total / serv);
+          $("#rkSum", root).textContent = items.length
+            ? ("Gesamt " + (Math.round(total * 10) / 10) + " P · " + serv + " Portion" + (serv === 1 ? "" : "en"))
+            : "";
         }
-        function rewire() {
+        function renderItems() {
+          $("#rkItems", root).innerHTML = itemsHTML();
           $$(".recipe-item-row .rn, .recipe-item-row .rp", root).forEach(function (el) { el.addEventListener("input", recalc); });
-          $$(".recipe-item-row .rrm", root).forEach(function (b) {
+          $$("#rkItems [data-rm]", root).forEach(function (b) {
             b.addEventListener("click", function () {
-              readItems();
-              var i = +b.closest(".recipe-item-row").dataset.i;
-              items.splice(i, 1); if (!items.length) items.push({ name: "", points: "", qty: 1 });
-              $("#rcItems", root).innerHTML = itemsHTML(); rewire(); recalc();
+              readManual(); items.splice(+b.dataset.rm, 1); renderItems(); recalc();
             });
           });
+          $$("#rkItems [data-edit]", root).forEach(function (b) {
+            b.addEventListener("click", function () {
+              readManual();
+              var i = +b.dataset.edit, it = items[i]; if (!it) return;
+              var f = foodById(it.ref);
+              if (!f) { it.manual = true; renderItems(); recalc(); toast("Zutat nicht mehr in der DB – jetzt manuell."); return; }
+              openAmountFor(f, it.amount, i);
+            });
+          });
+          recalc();
         }
-        $("#rcAddItem", root).addEventListener("click", function () {
-          readItems(); items.push({ name: "", points: "", qty: 1 });
-          $("#rcItems", root).innerHTML = itemsHTML(); rewire(); recalc();
+
+        // ---------- Zutat wählen ----------
+        function rowHTML(f, i, store) {
+          var pts = f.free ? 0 : PK.pointsForAmount(f, f.base_g);
+          var coinCls = pts === 0 ? "coin zero" : "coin";
+          var diet = f.vegan ? ' <span class="diet-tag" title="Vegan">🌱</span>'
+            : (f.vegetarian ? ' <span class="diet-tag" title="Vegetarisch">🥕</span>' : '');
+          var meta = "je " + f.base_g + " " + (f.unit || "g");
+          store[i] = f;
+          return '<button class="food-item" data-zi="' + i + '"><div class="info"><div class="nm">' + esc(f.name) +
+            '</div><div class="meta">' + esc(meta) + diet + '</div></div><span class="' + coinCls + '">' + pts + '</span></button>';
+        }
+        function renderList() {
+          var host = $("#rkList", root);
+          var q = ($("#rkSearch", root).value || "").trim().toLowerCase();
+          var src = ings().filter(function (f) {
+            if (activeCat && f.zg !== activeCat) return false;
+            if (q && String(f.name).toLowerCase().indexOf(q) < 0) return false;
+            return true;
+          });
+          if (!src.length) {
+            host.innerHTML = '<div class="list-empty">' + (ings().length ? 'Keine Zutat gefunden.' : 'Zutaten werden geladen …') + '</div>';
+            return;
+          }
+          var store = {}, html = "", i = 0;
+          if (q || activeCat) {
+            src.sort(byName);
+            for (var k = 0; k < src.length; k++) { html += rowHTML(src[k], i, store); i++; }
+          } else {
+            ZC_GROUPS.forEach(function (g) {
+              var it = src.filter(function (f) { return f.zg === g.key; }).sort(byName);
+              if (!it.length) return;
+              html += '<div class="zc-gh">' + g.emoji + ' ' + esc(g.label) + '</div>';
+              it.forEach(function (f) { html += rowHTML(f, i, store); i++; });
+            });
+          }
+          host._foods = store;
+          host.innerHTML = html;
+          $$(".food-item", host).forEach(function (b) {
+            b.addEventListener("click", function () { openAmountFor(host._foods[+b.dataset.zi], null, -1); });
+          });
+        }
+
+        // ---------- Menge ----------
+        function amtGrams() {
+          var v = pnum(amtEl);
+          if (unitCat === "piece") return v * (nn(sel.base_g) || 1);
+          return v;
+        }
+        function recalcA() {
+          if (!sel) return;
+          var g = amtGrams(); var use = g > 0 ? g : nn(sel.base_g);
+          var pts = sel.free ? 0 : PK.pointsForAmount(sel, use);
+          $("#rkPts", root).textContent = pts;
+          var kcal = Math.round(nn(sel.kcal) * use / (nn(sel.base_g) || 100));
+          var v = String(pnum(amtEl)).replace(".", ",");
+          $("#rkSub", root).textContent = unitCat === "piece"
+            ? ("≈ " + kcal + " kcal · " + v + " " + sel.unit + " (~" + Math.round(use) + " g)")
+            : ("≈ " + kcal + " kcal · " + v + " " + unitCat);
+        }
+        function openAmountFor(f, preset, idx) {
+          if (!f) return;
+          sel = f; editIndex = (idx == null ? -1 : idx);
+          unitCat = f.unit === "ml" ? "ml" : (f.unit === "g" ? "g" : "piece");
+          $("#rkBuild", root).hidden = true; $("#rkPick", root).hidden = true; $("#rkAmt", root).hidden = false;
+          $("#sheetTitle").textContent = f.name;
+          $("#rkAmtLbl", root).textContent = "Menge (" + (unitCat === "piece" ? (f.unit || "Stück") : unitCat) + ")";
+          $("#rkSel", root).innerHTML = '<div class="nm">' + esc(f.name) + '</div><div class="meta">' +
+            (f.cat ? esc(f.cat) + " · " : "") + "Basis: " + f.base_g + " " + (f.unit || "g") +
+            (f.free ? " · 0-Punkte-Lebensmittel" : "") + '</div>';
+          var defs = unitCat === "g" ? [50, 100, 200, 500] : unitCat === "ml" ? [100, 200, 250, 500] : [1, 2, 3, 6];
+          var suf = unitCat === "piece" ? (" " + (f.unit || "")) : (" " + unitCat);
+          $("#rkChips", root).innerHTML = defs.map(function (v) {
+            return '<button type="button" class="chip" data-v="' + v + '">' + v + esc(suf) + '</button>';
+          }).join("");
+          $$("#rkChips .chip", root).forEach(function (c) {
+            c.addEventListener("click", function (e) { e.stopPropagation(); amtEl.value = c.dataset.v; fresh = false; recalcA(); });
+          });
+          amtEl.value = preset != null ? String(preset).replace(".", ",") : (unitCat === "piece" ? "1" : "100");
+          fresh = true; recalcA();
+          try { amtEl.focus(); } catch (e) {}
+        }
+        function backToBuild() {
+          $("#rkAmt", root).hidden = true; $("#rkPick", root).hidden = true; $("#rkBuild", root).hidden = false;
+          $("#sheetTitle").textContent = isEdit ? "Rezept bearbeiten" : "Rezept-Modus";
+          sel = null; editIndex = -1; renderItems();
+        }
+        function backToPick() {
+          $("#rkAmt", root).hidden = true; $("#rkPick", root).hidden = false;
+          $("#sheetTitle").textContent = "Zutat wählen"; sel = null; editIndex = -1;
+        }
+
+        // ---------- Keypad ----------
+        function key(k) {
+          var v = String(amtEl.value || "");
+          if (k === "back") { v = v.slice(0, -1); }
+          else if (k === "clr") { v = ""; }
+          else if (k === ",") {
+            if (fresh) v = "0,";
+            else if (v.indexOf(",") < 0 && v.indexOf(".") < 0) v = (v || "0") + ",";
+          } else {
+            if (fresh || v === "0") v = k;
+            else if (v.replace(/\D/g, "").length < 5) v += k;
+          }
+          fresh = false; amtEl.value = v; recalcA();
+        }
+
+        // ---------- Verdrahtung ----------
+        $("#rkAddManual", root).addEventListener("click", function () {
+          readManual();
+          items.push({ name: "", points: "", kcal: 0, qty: 1, amount: null, unit: null, ref: null, manual: true });
+          renderItems();
+          var rn = $$(".recipe-item-row .rn", root); if (rn.length) try { rn[rn.length - 1].focus(); } catch (e) {}
         });
-        $("#rcServ", root).addEventListener("input", recalc);
-        rewire();
-        $("#rcSave", root).addEventListener("click", async function () {
-          var name = $("#rcName", root).value.trim();
+        $("#rkAddDb", root).addEventListener("click", function () {
+          readManual();
+          $("#rkBuild", root).hidden = true; $("#rkAmt", root).hidden = true; $("#rkPick", root).hidden = false;
+          $("#sheetTitle").textContent = "Zutat wählen";
+          renderList();
+          try { $("#rkSearch", root).focus(); } catch (e) {}
+        });
+        $("#rkPickBack", root).addEventListener("click", backToBuild);
+        $("#rkAmtBack", root).addEventListener("click", function () { if (editIndex >= 0) backToBuild(); else backToPick(); });
+        $("#rkSearch", root).addEventListener("input", renderList);
+        $$("#rkCats .chip", root).forEach(function (c) {
+          c.addEventListener("click", function () {
+            activeCat = c.dataset.zg || "";
+            $$("#rkCats .chip", root).forEach(function (x) { x.classList.toggle("on", x === c); });
+            renderList();
+          });
+        });
+        $$("#rkKeys .calc-key", root).forEach(function (b) {
+          b.addEventListener("pointerdown", function (e) { e.preventDefault(); });
+          b.addEventListener("click", function () { key(b.dataset.k); });
+        });
+        amtEl.addEventListener("input", function () {
+          var cl = amtEl.value.replace(/[^0-9.,]/g, "");
+          if (cl !== amtEl.value) amtEl.value = cl;
+          fresh = false; recalcA();
+        });
+        amtEl.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+
+        $("#rkAddItem", root).addEventListener("click", function () {
+          if (!sel) return;
+          var g = amtGrams(); if (!(g > 0)) g = nn(sel.base_g);
+          var pts = sel.free ? 0 : PK.pointsForAmount(sel, g);
+          var kcal = Math.round(nn(sel.kcal) * g / (nn(sel.base_g) || 100));
+          var disp = pnum(amtEl); if (!(disp > 0)) disp = unitCat === "piece" ? 1 : nn(sel.base_g);
+          var item = { name: sel.name, points: pts, kcal: kcal, qty: 1, amount: disp, unit: sel.unit || (unitCat === "ml" ? "ml" : "g"), ref: sel.id, manual: false };
+          if (editIndex >= 0 && items[editIndex]) items[editIndex] = item; else items.push(item);
+          backToBuild();
+        });
+
+        $("#rkServ", root).addEventListener("input", recalc);
+        $("#rkSave", root).addEventListener("click", async function () {
+          var name = $("#rkName", root).value.trim();
           if (!name) return toast("Bitte einen Namen eingeben.");
-          readItems();
-          var clean = items.filter(function (it) { return it.name.trim(); })
-            .map(function (it) { return { name: it.name.trim(), points: +it.points || 0, kcal: 0, qty: 1 }; });
-          if (!clean.length) return toast("Bitte mindestens eine Zutat eingeben.");
-          var recipe = { name: name, servings: +$("#rcServ", root).value || 1, items: clean };
+          readManual();
+          var clean = items.filter(function (it) { return String(it.name).trim(); })
+            .map(function (it) {
+              return {
+                name: String(it.name).trim(), points: +it.points || 0, kcal: +it.kcal || 0, qty: 1,
+                amount: it.amount != null ? +it.amount : null, unit: it.unit || null, ref: it.ref || null
+              };
+            });
+          if (!clean.length) return toast("Bitte mindestens eine Zutat hinzufügen.");
+          var recipe = { name: name, servings: +$("#rkServ", root).value || 1, items: clean };
           this.disabled = true;
           var r = await guardWrite(function () {
             return isEdit ? API.data.recipeUpdate(Object.assign({ id: pre.id }, recipe)) : API.data.recipeAdd(recipe);
           });
-          if (r) { closeSheet(); await refreshDay(); switchFoodSub("recipes"); toast(isEdit ? "Rezept aktualisiert." : "Rezept gespeichert."); }
+          if (r) { closeSheet(); switchTab("viewFood"); await refreshDay(); switchFoodSub("recipes"); toast(isEdit ? "Rezept aktualisiert." : "Rezept gespeichert."); }
           else this.disabled = false;
         });
+
+        // Zutaten normalerweise beim Start geladen; sonst best effort nachladen.
+        renderItems();
+        if (!ings().length) API.foods.loadLocal().then(function (l) { if (l && l.length) S.localFoods = l; if (!$("#rkPick", root).hidden) renderList(); }).catch(function () {});
       });
   }
 
@@ -3337,7 +3598,7 @@
     $$("[data-edit-recipe]", host).forEach(function (b) {
       b.addEventListener("click", function () {
         var r = host._map[+b.dataset.editRecipe]; if (!r) return;
-        openRecipeSheet({ _edit: true, id: r.id, name: r.name, servings: r.servings, items: r.items });
+        openRecipeCalcSheet({ _edit: true, id: r.id, name: r.name, servings: r.servings, items: r.items });
       });
     });
     $$("[data-del-recipe]", host).forEach(function (b) {
@@ -3640,7 +3901,7 @@
     $("#btnScanFromFood").addEventListener("click", openScanSheet);
     $("#btnCaptureProduct").addEventListener("click", function () { openCaptureSheet(); });
     $("#btnNewFood").addEventListener("click", function () { openCustomFoodSheet(); });
-    $("#btnNewRecipe").addEventListener("click", openRecipeSheet);
+    $("#btnNewRecipe").addEventListener("click", function () { openRecipeCalcSheet(); });
 
     // Sheet schließen
     $("#sheetClose").addEventListener("click", closeSheet);

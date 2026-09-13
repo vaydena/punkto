@@ -331,6 +331,10 @@ Deno.serve(async (req: Request) => {
       const items = Array.isArray(body.items) ? body.items.slice(0, 60).map((it: any) => ({
         name: String(it?.name || "").slice(0, 120), points: clamp(num(it?.points), 0, 200),
         kcal: it?.kcal != null ? clamp(num(it.kcal), 0, 99999) : null, qty: clamp(num(it?.qty, 1), 0, 9999),
+        // Optional: verknüpfte DB-Zutat (Rezept-Modus) — für spätere Neuberechnung beim Bearbeiten.
+        amount: it?.amount != null ? clamp(num(it.amount), 0, 999999) : null,
+        unit: it?.unit != null ? String(it.unit).slice(0, 12) : null,
+        ref: it?.ref != null ? String(it.ref).slice(0, 64) : null,
       })) : [];
       const total = items.reduce((a: number, it: any) => a + num(it.points), 0);
       const per = Math.round((total / servings) * 10) / 10;
@@ -349,6 +353,10 @@ Deno.serve(async (req: Request) => {
       const items = Array.isArray(body.items) ? body.items.slice(0, 60).map((it: any) => ({
         name: String(it?.name || "").slice(0, 120), points: clamp(num(it?.points), 0, 200),
         kcal: it?.kcal != null ? clamp(num(it.kcal), 0, 99999) : null, qty: clamp(num(it?.qty, 1), 0, 9999),
+        // Optional: verknüpfte DB-Zutat (Rezept-Modus) — für spätere Neuberechnung beim Bearbeiten.
+        amount: it?.amount != null ? clamp(num(it.amount), 0, 999999) : null,
+        unit: it?.unit != null ? String(it.unit).slice(0, 12) : null,
+        ref: it?.ref != null ? String(it.ref).slice(0, 64) : null,
       })) : [];
       const total = items.reduce((a: number, it: any) => a + num(it.points), 0);
       const per = Math.round((total / servings) * 10) / 10;
