@@ -4,6 +4,8 @@
 // grant_free (dauerhaft kostenlos freischalten, plan='comp', ohne Zahlung),
 // set_status, add_note, export, central_list (zentrale DB ansehen),
 // central_update (Eintrag bearbeiten), central_delete (Eintrag entfernen),
+// off_bulk_upsert (Open-Food-Facts-Naehrwerte batchweise importieren, ODbL,
+// getrennte Tabelle punkto.off_products), off_stats (Import-Zaehler),
 // set_key (Schluessel rotieren).
 import postgres from "npm:postgres@3";
 
@@ -249,6 +251,78 @@ Deno.serve(async (req: Request) => {
       const r = await sql`delete from punkto.community_products where id = ${id} returning id`;
       if (!r.length) return json({ error: "not_found" }, 404);
       return json({ ok: true, id: r[0].id });
+    }
+
+    if (action === "off_bulk_upsert") {
+      // Bulk-Upsert von Open-Food-Facts-Naehrwerten (DE/AT/CH) in punkto.off_products.
+      // Wird vom lokalen Import-Skript (04_off_upload.py) in Batches (~500) aufgerufen.
+      // GETRENNT von community_products/bls_foods gehalten (ODbL Share-alike). Naehrwerte
+      // werden OHNE Clamping gespeichert (Audit-Treue; Punkte berechnet der Client). Der
+      // Plausibilitaets-Check ist bereits lokal gelaufen -> plausible + quality_flags
+      // kommen fertig mit. Konflikt auf barcode -> Feld-Update (fuer Monats-Refresh).
+      const rowsIn = Array.isArray(body.rows) ? body.rows : null;
+      if (!rowsIn) return json({ error: "bad_rows" }, 400);
+      const batch = rowsIn.slice(0, 2000); // Sicherheitskappe (max ~34k Parameter << 65535)
+      const txt = (v: any, max: number) => {
+        if (v === null || v === undefined) return null;
+        const s = String(v).split(String.fromCharCode(0)).join("").trim();
+        return s ? s.slice(0, max) : null;
+      };
+      const numOrNull = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+      const tsOrNull = (v: any) => { if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
+      const clean: Record<string, any>[] = [];
+      let skipped = 0;
+      for (const r of batch) {
+        const barcode = String(r?.barcode ?? "").replace(/\D/g, "");
+        if (barcode.length < 8) { skipped++; continue; } // ungueltiger/zu kurzer EAN -> raus
+        clean.push({
+          barcode: barcode.slice(0, 40),
+          name: txt(r?.name, 200),
+          brand: txt(r?.brand, 120),
+          quantity: txt(r?.quantity, 60),
+          categories: txt(r?.categories, 300),
+          kcal: numOrNull(r?.kcal),
+          sat_fat_g: numOrNull(r?.sat_fat_g),
+          sugar_g: numOrNull(r?.sugar_g),
+          protein_g: numOrNull(r?.protein_g),
+          fiber_g: numOrNull(r?.fiber_g),
+          fat_g: numOrNull(r?.fat_g),
+          carbs_g: numOrNull(r?.carbs_g),
+          alcohol_g: numOrNull(r?.alcohol_g),
+          // plausible=true als Default; nur explizit falsy-Werte kippen es auf false:
+          plausible: !(r?.plausible === false || r?.plausible === "false" || r?.plausible === 0 || r?.plausible === "0"),
+          quality_flags: txt(r?.quality_flags, 500),
+          completeness: numOrNull(r?.completeness),
+          off_last_modified: tsOrNull(r?.off_last_modified),
+        });
+      }
+      if (!clean.length) return json({ ok: true, received: batch.length, upserted: 0, skipped });
+      const OFF_COLS = ["barcode", "name", "brand", "quantity", "categories", "kcal",
+        "sat_fat_g", "sugar_g", "protein_g", "fiber_g", "fat_g", "carbs_g", "alcohol_g",
+        "plausible", "quality_flags", "completeness", "off_last_modified"];
+      const up = await sql`
+        insert into punkto.off_products ${sql(clean, ...OFF_COLS)}
+        on conflict (barcode) do update set
+          name = excluded.name, brand = excluded.brand, quantity = excluded.quantity,
+          categories = excluded.categories, kcal = excluded.kcal, sat_fat_g = excluded.sat_fat_g,
+          sugar_g = excluded.sugar_g, protein_g = excluded.protein_g, fiber_g = excluded.fiber_g,
+          fat_g = excluded.fat_g, carbs_g = excluded.carbs_g, alcohol_g = excluded.alcohol_g,
+          plausible = excluded.plausible, quality_flags = excluded.quality_flags,
+          completeness = excluded.completeness, off_last_modified = excluded.off_last_modified,
+          source = 'openfoodfacts', imported_at = now()
+        returning barcode`;
+      return json({ ok: true, received: batch.length, upserted: up.length, skipped });
+    }
+
+    if (action === "off_stats") {
+      // Zaehler fuer den OFF-Import (Betreiber-Sicht / Import-Skript-Verifikation).
+      const [tot, plaus, flagged, last] = await Promise.all([
+        sql`select count(*)::int as n from punkto.off_products`,
+        sql`select count(*)::int as n from punkto.off_products where plausible`,
+        sql`select count(*)::int as n from punkto.off_products where not plausible`,
+        sql`select max(imported_at) as t from punkto.off_products`,
+      ]);
+      return json({ ok: true, total: tot[0].n, plausible: plaus[0].n, flagged: flagged[0].n, last_import: last[0].t });
     }
 
     if (action === "set_key") {

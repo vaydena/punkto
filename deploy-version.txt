@@ -1,4 +1,4 @@
-pk-v29-5ea2
+pk-v31-c7e4
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -475,3 +475,20 @@ v30-6b1d: Frische-Fix — die Lebensmittel-DB kam auf INSTALLIERTEN PWAs verzoeg
          pk-foods-2026-09-13-1 nachgezogen (stand faelschlich noch auf 09-12, obwohl v29
          die Kategorien am 13. geaendert hatte). Kein Server-/Function-Deploy noetig.
          SW-CACHE auf pk-app-v30 angehoben.
+v31-c7e4: Open-Food-Facts-Attribution (ODbL) im Client sichtbar gemacht. Barcode-Treffer
+         und weitere Produktangaben stammen aus Open Food Facts; die Lizenz verlangt eine
+         Namensnennung, die bisher nur intern dokumentiert war. Neu in app.html: (a) die
+         Scan-Trefferkarte traegt die Zeile „Enthaelt Informationen von Open Food Facts ·
+         Lizenz ODbL. Punkte nach der Punkto-Formel berechnet."; (b) das Detail-Sheet nennt
+         bei OFF-Produkten (nf.source === "openfoodfacts") die Quelle „Open Food Facts ·
+         ODbL · Punkte nach der Punkto-Formel"; (c) die Autofill-Hinweise nach dem Scan
+         verweisen auf „(Open Food Facts · ODbL)"; (d) die Einstellungen tragen einen
+         dauerhaften Block „Datenquellen & Lizenzen" mit BLS 4.0 (CC BY 4.0) UND Open Food
+         Facts (ODbL) samt Klarstellung, dass Punkto die Punktwerte eigenstaendig aus den
+         Naehrwerten rechnet und sie nicht aus diesen Quellen stammen. Kein Merge der
+         Datenbestaende (ODbL Share-alike): OFF bleibt in eigener Tabelle
+         punkto.off_products, getrennt von der kuratierten Produkt-DB und vom BLS.
+         Serverseitig ergaenzt die Function punkto-admin die Aktionen off_bulk_upsert
+         (Batch-Import) und off_stats (Zaehlung); der Export bleibt bewusst auf die vier
+         bestehenden Tabellen beschraenkt (off_products wird NICHT exportiert).
+         SW-CACHE auf pk-app-v31 angehoben.

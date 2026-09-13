@@ -331,6 +331,13 @@
      unter den Suchergebnissen. */
   .src-line{color:var(--muted);font-size:.84rem;margin:0 0 12px}
   .bls-attrib{color:var(--muted);font-size:.74rem;line-height:1.45;padding:12px 4px 4px;margin-top:6px;border-top:1px solid var(--line,rgba(0,0,0,.08))}
+  /* Open Food Facts (ODbL): dezente Lizenzzeile unter Scan-Treffer/Autofill +
+     dauerhafter Datenquellen-Block in den Einstellungen. */
+  .off-lic{color:var(--muted);font-size:.72rem;margin-top:5px;line-height:1.4}
+  .data-sources{margin-top:22px;padding-top:14px;border-top:1px solid var(--line,rgba(0,0,0,.08))}
+  .data-sources h4{margin:0 0 8px;font-size:.86rem;color:var(--ink-2)}
+  .data-sources p{margin:0 0 8px;color:var(--muted);font-size:.76rem;line-height:1.5}
+  .data-sources a{color:var(--green-800);text-decoration:underline}
   /* Erfassungs-Bogen: Zeile für die Diaet-Häkchen + das "gekauft bei"-Feld. */
   .cap-diet{display:flex;flex-wrap:wrap;gap:6px 18px;margin:2px 0 14px}
   .cap-diet label{display:inline-flex;align-items:center;gap:.5em;font-size:.92rem;font-weight:600;cursor:pointer}
@@ -1723,6 +1730,8 @@
       (nf.brand ? '<p style="color:var(--muted);margin-top:-6px">' + esc(nf.brand) + '</p>' : '') +
       // Quellen-Hinweis für BLS-Einträge (CC BY 4.0 — Attribution am Verwendungsort).
       (nf.source === "bls" ? '<p class="src-line">📚 Quelle: Bundeslebensmittelschlüssel (BLS) 4.0 · Max Rubner-Institut (2025) · CC BY 4.0</p>' : '') +
+      // Quellen-Hinweis für Open-Food-Facts-Treffer (ODbL — Attribution am Verwendungsort).
+      (nf.source === "openfoodfacts" ? '<p class="src-line">🌐 Quelle: Open Food Facts · ODbL · Punkte nach der Punkto-Formel</p>' : '') +
       // Nur positive Diaet-Badges (vegan schließt vegetarisch ein -> dann nur „Vegan").
       ((nf.vegan || nf.vegetarian) ? '<div class="diet-badges">' +
         (nf.vegan ? '<span class="diet-badge vegan">🌱 Vegan</span>' : '') +
@@ -2318,6 +2327,7 @@
           '<span class="off-per">je ' + (nf.base_g || 100) + ' ' + esc(unit) + '</span>' +
         '</div>' +
         '<div class="off-src">✓ Erkannt über Open Food Facts – bitte Werte prüfen.</div>' +
+        '<div class="off-lic">Enthält Informationen von Open Food Facts · Lizenz ODbL. Punkte nach der Punkto-Formel berechnet.</div>' +
       '</div>' +
       '<button class="btn primary block" id="offUse">Übernehmen &amp; als eigenes Produkt speichern</button>' +
       '<button class="btn ghost block" id="offDiary" style="margin-top:10px">Nur direkt ins Tagebuch</button>';
@@ -2667,7 +2677,7 @@
           ["product", "nutrition"].forEach(function (k) { if (offImgs[k] && !photos[k]) pend.push([k, offImgs[k]]); });
           if (offHint) {
             offHint.hidden = false;
-            offHint.innerHTML = '<span>✓ Automatisch aus der Produktdatenbank übernommen (Open Food Facts).' +
+            offHint.innerHTML = '<span>✓ Automatisch aus der Produktdatenbank übernommen (Open Food Facts · ODbL).' +
               (pend.length ? ' Lade Produktfotos …' : '') + ' Bitte Werte prüfen.</span>';
           }
           (async function () {
@@ -2677,7 +2687,7 @@
               if (blob) { photos[pend[i][0]] = blob; markTile(pend[i][0], blob); got++; }
             }
             if (offHint) {
-              offHint.innerHTML = '<span>✓ Automatisch aus der Produktdatenbank übernommen (Open Food Facts)' +
+              offHint.innerHTML = '<span>✓ Automatisch aus der Produktdatenbank übernommen (Open Food Facts · ODbL)' +
                 (got ? ', inkl. ' + got + ' Foto' + (got > 1 ? 's' : '') : '') + '. Bitte Werte prüfen.</span>';
             }
           })();
@@ -2849,6 +2859,12 @@
       '<a href="impressum.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg> Impressum</a>' +
       '<a href="agb.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> AGB</a>' +
       '<button data-s="logout" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg> Abmelden</button>' +
+      '</div>' +
+      '<div class="data-sources">' +
+      '<h4>Datenquellen &amp; Lizenzen</h4>' +
+      '<p>Ein Teil der Nährwerte stammt aus dem <b>Bundeslebensmittelschlüssel (BLS) 4.0</b> — Max Rubner-Institut (2025). Lizenz: <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>.</p>' +
+      '<p>Barcode-Treffer und weitere Produktangaben enthalten Informationen von <b>Open Food Facts</b> und den Mitwirkenden, bereitgestellt unter der <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">Open Database License (ODbL)</a>.</p>' +
+      '<p>Die Punktwerte berechnet Punkto eigenständig aus den Nährwerten; sie stammen nicht aus diesen Quellen.</p>' +
       '</div>' +
       '<p style="color:var(--muted);font-size:.78rem;margin-top:18px;text-align:center">Punkto berechnet eine eigene Kennzahl aus Nährwerten und ist kein Medizinprodukt und kein Ersatz für ärztliche oder ernährungsmedizinische Beratung.</p>',
       function (root) {
