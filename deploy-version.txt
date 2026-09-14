@@ -1,4 +1,4 @@
-pk-v35-5d0e
+pk-v36-8f3a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -572,3 +572,32 @@ pk-v35-5d0e: „Zutatenrechner" (v32) wieder ENTFERNT (Nutzerwunsch: „macht ke
          Server-/Function-Deploy. KEIN SW-CACHE-Bump noetig: geaendert wurden nur
          NETWORK-FIRST-Assets (app.html = isDoc, punkto-foods.json = isData in sw.js) ->
          kommen ohne Cache-Bump sofort auf installierten PWAs an; SW bleibt pk-app-v34.
+pk-v36-8f3a: Zwei neue Wege im Hinzufuegen-Sheet — „0 Punkte" (satt essen) und „Tag
+         kopieren". Umgesetzt wurde bewusst NUR die echte Luecke: „Favoriten" und
+         „Zuletzt gegessen" existieren bereits seit v23 (renderQuickAccess/quickStrip)
+         und wurden NICHT neu gebaut.
+         (1) 0-PUNKTE-LISTE (openFreeFoodsSheet): durchstoeberbare, nach Kategorie
+             gruppierte Liste ALLER „freien" Lebensmittel (PK.isFree -> free-Flag ODER
+             0 Punkte) aus der lokalen Such-DB — derzeit 83 Eintraege in 10 Gruppen
+             (Gemuese 34, Obst 24, Huelsenfruechte 9 …), Gruppen nach Haeufigkeit
+             sortiert, mit Suchfeld (Name/Kategorie). Jede Zeile ist eine normale
+             .food-item (gruene 0-Muenze, Diaet-Icon) und oeffnet das bekannte Mengen-/
+             Mahlzeit-Sheet (openFoodDetail) -> Eintrag wie gewohnt. Anders als die
+             40er-Kappung der Volltextsuche zeigt die Liste ALLE freien Lebensmittel.
+         (2) TAG KOPIEREN (openCopyDaySheet): uebernimmt alle Tagebuch-Eintraege eines
+             anderen Tages in den AKTUELL angezeigten Tag (S.day). Zwei Einstiege:
+             neue Kachel „Tag kopieren" im Hinzufuegen-Sheet UND ein Knopf „Vom Vortag
+             uebernehmen" im Leerzustand eines Tages ohne Eintraege. Quelltag per
+             Schnellchips (Gestern/Vorgestern) oder Datumsfeld (max = heute); eine
+             Vorschau listet die Eintraege nach Mahlzeit + Gesamtpunkte, der Button
+             nennt Anzahl + Summe. Beim Uebernehmen wird pro Eintrag diaryAdd mit
+             day=S.day aufgerufen (identische Payload-Form wie openFoodDetail:
+             name/meal/points/qty/unit/kcal/source/ref_code), jeweils ueber guardWrite
+             (bricht bei fehlendem Zugang/Netz ab); danach refreshDay + Toast. Derselbe
+             Tag als Quelle wird blockiert (kein Selbst-Duplikat).
+         Rein clientseitig, KEIN Server-/Function-/Datenmodell-Change. Verifikation:
+         Inline-Syntaxpruefung aller 3 Script-Bloecke (node --check, 0 Fehler),
+         App-Boot lokal (0 JS-Exceptions, alle Assets 200, Login-Gate erwartungsgemaess).
+         KEIN SW-CACHE-Bump noetig: geaendert wurde nur app.html (isDoc = NETWORK-FIRST
+         in sw.js) inkl. Inline-CSS -> kommt ohne Cache-Bump sofort auf installierten
+         PWAs an; SW bleibt pk-app-v34.

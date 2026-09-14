@@ -151,6 +151,12 @@
   .mini-list-item .del{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}
   .mini-list-item .del:hover{background:var(--danger-tint);color:var(--danger)}
 
+  /* „Tag kopieren": Hinweiszeile + Vorschau-Zeilen (Name + Punkte-Coin). */
+  .cp-note{color:var(--muted);font-size:.9rem;margin:0 2px 14px;line-height:1.45}
+  .cp-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card);
+    border-radius:12px;margin-bottom:6px;box-shadow:var(--shadow-sm)}
+  .cp-row .nm{flex:1;min-width:0;font-weight:600;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
   /* Schnellzugriff „Zuletzt + Favoriten": Zeilen im Such-Sheet (Öffnen-Button +
      Stern-Toggle), Favoriten-Button im Detail-Sheet und die horizontale
      „Schnell eintragen"-Leiste im Hinzufügen-Sheet. Sterne: Outline = kein
@@ -1396,8 +1402,11 @@
 
     if (!anyEntry) {
       var hint = document.createElement("div"); hint.className = "empty";
-      hint.innerHTML = '<div class="em">🍽️</div><div>Noch nichts gegessen heute.<br>Tippe unten auf <b>+</b>, um zu starten.</div>';
+      hint.innerHTML = '<div class="em">🍽️</div><div>Noch nichts gegessen heute.<br>Tippe unten auf <b>+</b>, um zu starten.</div>' +
+        '<button class="btn ghost" id="copyPrevDay" style="margin-top:14px">📋 Vom Vortag übernehmen</button>';
       host.appendChild(hint);
+      var cpBtn = $("#copyPrevDay", hint);
+      if (cpBtn) cpBtn.addEventListener("click", function () { openCopyDaySheet(addDays(S.day, -1)); });
     }
   }
 
@@ -1538,6 +1547,8 @@
       '<div class="quick-grid">' +
       '<button class="quick-act" data-q="search"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg></span>Essen suchen</button>' +
       '<button class="quick-act a" data-q="barcode"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg></span>Barcode scannen</button>' +
+      '<button class="quick-act" data-q="free"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a1.8 1.8 0 0 1-2.55 0l-7.6-7.6A2 2 0 0 1 2.7 11.6V4.5a1.8 1.8 0 0 1 1.8-1.8h7.1a2 2 0 0 1 1.4.6l7.6 7.6a1.8 1.8 0 0 1 0 2.5z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span>0 Punkte</button>' +
+      '<button class="quick-act z" data-q="copyday"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>Tag kopieren</button>' +
       '<button class="quick-act b" data-q="weight"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l3-4"/></svg></span>Gewicht</button>' +
       '<button class="quick-act s" data-q="activity"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></span>Aktivität</button>' +
       '<button class="quick-act c" data-q="capture"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>Produkt anlegen</button>' +
@@ -1563,6 +1574,8 @@
             else if (q === "capture") openCaptureSheet();
             else if (q === "calc") openCalcSheet();
             else if (q === "recipe") openRecipeCalcSheet();
+            else if (q === "free") openFreeFoodsSheet();
+            else if (q === "copyday") openCopyDaySheet();
           });
         });
       });
@@ -1868,6 +1881,149 @@
           if (r) { pushRecent(food); closeSheet(); await refreshDay(); toast("Hinzugefügt · " + pts + " P"); }
           else { btn.disabled = false; }
         });
+      });
+  }
+
+  /* ---------------------- 0-PUNKTE-LISTE ----------------------
+     Durchstöberbare Liste aller „freien" Lebensmittel (0 Punkte) aus der
+     lokalen Such-DB, gruppiert nach Kategorie. Jede Zeile öffnet das
+     Detail-Sheet (Menge/Mahlzeit) wie ein normaler Suchtreffer. */
+  async function openFreeFoodsSheet(preMeal) {
+    var all = (S.localFoods && S.localFoods.length) ? S.localFoods : (await API.foods.loadLocal() || []);
+    if (all && all.length) S.localFoods = all;
+    var free = all.filter(function (f) { return PK.isFree(normFood(f)); });
+    free.sort(function (a, b) { return (a.name || "").localeCompare(b.name || "", "de"); });
+
+    openSheet("0 Punkte – satt essen",
+      '<p class="cp-note">Diese Lebensmittel kosten <b>0 Punkte</b> – iss davon, so viel du magst. Tippe zum Eintragen.</p>' +
+      '<div class="searchbar"><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>' +
+      '<input type="search" id="freeSearch" placeholder="Frei suchen … z. B. Apfel, Brokkoli" autocomplete="off"></div>' +
+      '<div id="freeList"></div>',
+      function (root) {
+        var input = $("#freeSearch", root), out = $("#freeList", root);
+
+        function render(q) {
+          var list = free;
+          if (q) {
+            var lq = q.toLowerCase();
+            list = free.filter(function (f) {
+              return (f.name || "").toLowerCase().indexOf(lq) >= 0 || (f.cat || "").toLowerCase().indexOf(lq) >= 0;
+            });
+          }
+          if (!list.length) { out.innerHTML = '<div class="list-empty">Nichts gefunden.</div>'; return; }
+          // Nach Kategorie gruppieren; Gruppen nach Häufigkeit, dann alphabetisch.
+          var groups = {};
+          list.forEach(function (f) { var c = f.cat || "Sonstige"; (groups[c] = groups[c] || []).push(f); });
+          var order = Object.keys(groups).sort(function (a, b) {
+            return groups[b].length - groups[a].length || a.localeCompare(b, "de");
+          });
+          out._foods = {};
+          var idx = 0, html = "";
+          order.forEach(function (c) {
+            html += '<div class="qf-head">' + esc(c) + ' · ' + groups[c].length + '</div>';
+            groups[c].forEach(function (f) {
+              var nf = normFood(f);
+              var meta = "je " + nf.base_g + " " + (nf.unit || "g");
+              var dietMark = nf.vegan ? ' <span class="diet-tag" title="Vegan">🌱</span>'
+                : (nf.vegetarian ? ' <span class="diet-tag" title="Vegetarisch">🥕</span>' : '');
+              out._foods[idx] = f;
+              html += '<button class="food-item" data-fi="' + idx + '">' +
+                (nf.photo_url ? '<img class="food-thumb" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
+                '<div class="info"><div class="nm">' + esc(nf.name) + '</div><div class="meta">' + esc(meta) + dietMark + '</div></div>' +
+                '<span class="coin zero">0</span></button>';
+              idx++;
+            });
+          });
+          out.innerHTML = html;
+          $$(".food-item", out).forEach(function (b) {
+            b.addEventListener("click", function () { openFoodDetail(out._foods[+b.dataset.fi], preMeal); });
+          });
+        }
+
+        input.addEventListener("input", debounce(function () { render(input.value.trim()); }, 140));
+        render("");
+      });
+  }
+
+  /* ---------------------- TAG KOPIEREN ----------------------
+     Übernimmt alle Tagebuch-Einträge eines anderen Tages in den aktuell
+     angezeigten Tag (S.day). Rein clientseitig: state(quelle) laden, Vorschau
+     zeigen, dann pro Eintrag diaryAdd mit day=S.day (wie im Detail-Sheet). */
+  function openCopyDaySheet(preSrc) {
+    var target = S.day;
+    var src = preSrc || addDays(target, -1);
+    var srcEntries = [];
+
+    openSheet("Tag kopieren",
+      '<p class="cp-note">Übernimm alle Einträge eines anderen Tages in den <b>' + esc(fmtDayLabel(target)) + '</b> (' + esc(fmtLongDate(target)) + ').</p>' +
+      '<label>Von welchem Tag?</label>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+      '<button type="button" class="chip" data-src="' + addDays(target, -1) + '">Gestern</button>' +
+      '<button type="button" class="chip" data-src="' + addDays(target, -2) + '">Vorgestern</button>' +
+      '</div>' +
+      '<input type="date" id="cpDate" max="' + S.today + '" value="' + src + '" style="margin-bottom:14px">' +
+      '<div id="cpPreview"></div>' +
+      '<button class="btn primary block big" id="cpDo" disabled>Übernehmen</button>',
+      function (root) {
+        var dateEl = $("#cpDate", root), prev = $("#cpPreview", root), doBtn = $("#cpDo", root);
+
+        async function loadPreview() {
+          var iso = dateEl.value;
+          srcEntries = []; doBtn.disabled = true;
+          if (!iso) { prev.innerHTML = ""; return; }
+          if (iso === target) {
+            prev.innerHTML = '<div class="cp-note">Das ist der aktuell angezeigte Tag – bitte einen anderen wählen.</div>';
+            return;
+          }
+          prev.innerHTML = '<div class="list-empty">Lade …</div>';
+          var st;
+          try { st = await API.data.state(iso); }
+          catch (e) { prev.innerHTML = '<div class="list-empty">Konnte den Tag nicht laden.</div>'; return; }
+          var entries = (st && st.diary) || [];
+          if (!entries.length) { prev.innerHTML = '<div class="list-empty">An diesem Tag wurde nichts gegessen.</div>'; return; }
+          srcEntries = entries;
+          var total = PK.sumPoints(entries), html = "";
+          MEALS.forEach(function (m) {
+            var items = entries.filter(function (e) { return (e.meal || "snack") === m.key; });
+            if (!items.length) return;
+            html += '<div class="qf-head">' + m.em + ' ' + m.label + '</div>';
+            items.forEach(function (e) {
+              var z = (+e.points === 0) ? " zero" : "";
+              html += '<div class="cp-row"><span class="nm">' + esc(e.name) + '</span>' +
+                '<span class="coin sm' + z + '">' + (+e.points || 0) + '</span></div>';
+            });
+          });
+          prev.innerHTML = html;
+          doBtn.disabled = false;
+          doBtn.textContent = "Übernehmen · " + entries.length + " " + (entries.length === 1 ? "Eintrag" : "Einträge") + " · " + total + " P";
+        }
+
+        $$("[data-src]", root).forEach(function (c) {
+          c.addEventListener("click", function () { dateEl.value = c.dataset.src; loadPreview(); });
+        });
+        dateEl.addEventListener("change", loadPreview);
+
+        doBtn.addEventListener("click", async function () {
+          if (!srcEntries.length) return;
+          doBtn.disabled = true; doBtn.textContent = "Übernehme …";
+          var added = 0, pts = 0;
+          for (var i = 0; i < srcEntries.length; i++) {
+            var e = srcEntries[i];
+            var payload = {
+              name: e.name, meal: e.meal || "snack", points: +e.points || 0,
+              qty: e.qty, unit: e.unit, kcal: +e.kcal || 0,
+              source: e.source || "db", ref_code: e.ref_code || ""
+            };
+            if (target !== S.today) payload.day = target;
+            var r = await guardWrite(function () { return API.data.diaryAdd(payload); });
+            if (!r) break;               // guardWrite hat Zugang/Netz bereits gemeldet
+            added++; pts += (+e.points || 0);
+          }
+          if (added) { closeSheet(); await refreshDay(); toast(added + " übernommen · " + pts + " P"); }
+          else { doBtn.disabled = false; doBtn.textContent = "Übernehmen"; }
+        });
+
+        loadPreview();
       });
   }
 
