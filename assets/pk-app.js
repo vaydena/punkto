@@ -154,14 +154,26 @@
   /* ---------------------------------------------------------------- FOODS --- */
   var _localFoods = null;
   var foods = {
-    async loadLocal() {
-      if (_localFoods) return _localFoods;
+    /* Laedt die lokale Lebensmittel-DB. WICHTIG: Es wird NUR ein nicht-leeres
+       Ergebnis gemerkt – ein fehlgeschlagener/leerer Ladevorgang vergiftet den
+       Cache nicht mehr (frueher blieb ein einmaliges [] fuer die ganze Session
+       haengen -> Zutatenrechner/Rezept-Modus zeigten ewig „werden geladen").
+       opts.force umgeht den Speicher und haengt einen Cache-Buster an, um einen
+       hartnaeckigen Service-Worker-/CDN-Altbestand sicher zu ueberspringen. */
+    async loadLocal(opts) {
+      opts = opts || {};
+      if (_localFoods && _localFoods.length && !opts.force) return _localFoods;
+      var url = "assets/data/punkto-foods.json" + (opts.force ? "?v=" + Date.now() : "");
       try {
-        var res = await fetch("assets/data/punkto-foods.json", { cache: "no-cache" });
+        var res = await fetch(url, { cache: opts.force ? "reload" : "no-cache" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
         var j = await res.json();
-        _localFoods = j.foods || [];
-      } catch (e) { _localFoods = []; }
-      return _localFoods;
+        var list = Array.isArray(j && j.foods) ? j.foods : [];
+        if (list.length) _localFoods = list;   // nur ein echtes Ergebnis behalten
+        return list;
+      } catch (e) {
+        return _localFoods || [];   // Cache NICHT mit [] vergiften -> Retry bleibt moeglich
+      }
     },
     async search(q) {
       var list = await foods.loadLocal();

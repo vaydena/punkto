@@ -1,4 +1,4 @@
-pk-v33-9f2a
+pk-v34-3c7e
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -537,3 +537,19 @@ pk-v33-9f2a: NEU „Rezept-Modus" (openRecipeCalcSheet) — Rezepte aus mehreren
          gueltig, ihre Zutaten erscheinen als manuelle Zeilen). Tests: engine-smoke.js Sektion G
          (Rezept-Mathematik, 9 Invarianten) — 50 ok, 0 fail. Da app.html/JS/CSS geaendert:
          SW-CACHE auf pk-app-v33 angehoben.
+pk-v34-3c7e: BUGFIX „Zutatenrechner/Rezept-Modus laden ewig" (Nutzerreport). Ursache war
+         ein Client-Cache-Bug in API.foods.loadLocal() (pk-app.js): ein einmaliges leeres/
+         fehlgeschlagenes Laden merkte sich `_localFoods = []` und gab dieses leere Array fuer
+         den REST DER SESSION truthy zurueck (`if (_localFoods) return`), sodass der In-Sheet-
+         Nachladeversuch nie mehr griff und die Liste dauerhaft „Zutaten werden geladen …"
+         zeigte (renderList zeigt diesen Text genau dann, wenn keine zutat:true-Zutat vorhanden
+         ist). Fix: loadLocal cached NUR ein nicht-leeres Ergebnis, vergiftet den Cache bei
+         Fehlschlag nicht mehr (Retry bleibt moeglich), validiert Array.isArray(j.foods) und
+         akzeptiert opts.force = Speicher umgehen + Cache-Buster (?v=Date.now(), cache:"reload"),
+         um einen hartnaeckigen SW-/CDN-Altbestand sicher zu ueberspringen (SW-Fallback matcht
+         offline weiterhin via ignoreSearch). Beide Sheets (openIngredientCalcSheet/
+         openRecipeCalcSheet) laden bei leerer Liste jetzt mit {force:true} nach und zeigen bei
+         echtem Fehlschlag eine klare Meldung („Zutaten konnten nicht geladen werden … erneut
+         oeffnen") statt endlos „werden geladen". Server-Daten (punkto-foods.json: 253 zutat:true,
+         14 Gruppen) und SW waren korrekt — reiner Client-Fix. Da app.html + pk-app.js geaendert
+         (pk-app.js wird cache-first ausgeliefert!): SW-CACHE auf pk-app-v34 angehoben.

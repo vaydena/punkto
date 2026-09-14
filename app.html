@@ -1776,6 +1776,7 @@
           return '<button class="food-item" data-zi="' + i + '"><div class="info"><div class="nm">' + esc(f.name) +
             '</div><div class="meta">' + esc(meta) + diet + '</div></div><span class="' + coinCls + '">' + pts + '</span></button>';
         }
+        var zLoadErr = false;   // true, wenn das (Nach-)Laden der Zutaten scheiterte
         function renderList() {
           var host = $("#zcList", root);
           var q = ($("#zcSearch", root).value || "").trim().toLowerCase();
@@ -1785,7 +1786,10 @@
             return true;
           });
           if (!src.length) {
-            host.innerHTML = '<div class="list-empty">' + (ings().length ? 'Keine Zutat gefunden.' : 'Zutaten werden geladen …') + '</div>';
+            var msg = ings().length ? 'Keine Zutat gefunden.'
+              : (zLoadErr ? 'Zutaten konnten nicht geladen werden. Bitte Internet prüfen und den Rechner erneut öffnen.'
+                          : 'Zutaten werden geladen …');
+            host.innerHTML = '<div class="list-empty">' + msg + '</div>';
             return;
           }
           var store = {}, html = "", i = 0;
@@ -1905,9 +1909,16 @@
           });
         });
 
-        // Zutaten sind normalerweise beim Start geladen; sonst best effort nachladen.
+        // Zutaten sind normalerweise beim Start geladen; sonst hart nachladen
+        // (force = Cache-Buster gegen hartnaeckigen SW-/CDN-Altbestand).
         if (ings().length) renderList();
-        else { renderList(); API.foods.loadLocal().then(function (l) { if (l && l.length) S.localFoods = l; renderList(); }).catch(function () {}); }
+        else {
+          renderList();   // zeigt zunaechst „Zutaten werden geladen …"
+          API.foods.loadLocal({ force: true }).then(function (l) {
+            if (l && l.length) { S.localFoods = l; zLoadErr = false; } else { zLoadErr = true; }
+            renderList();
+          }).catch(function () { zLoadErr = true; renderList(); });
+        }
       });
   }
 
@@ -3156,6 +3167,7 @@
           return '<button class="food-item" data-zi="' + i + '"><div class="info"><div class="nm">' + esc(f.name) +
             '</div><div class="meta">' + esc(meta) + diet + '</div></div><span class="' + coinCls + '">' + pts + '</span></button>';
         }
+        var rLoadErr = false;   // true, wenn das (Nach-)Laden der Zutaten scheiterte
         function renderList() {
           var host = $("#rkList", root);
           var q = ($("#rkSearch", root).value || "").trim().toLowerCase();
@@ -3165,7 +3177,10 @@
             return true;
           });
           if (!src.length) {
-            host.innerHTML = '<div class="list-empty">' + (ings().length ? 'Keine Zutat gefunden.' : 'Zutaten werden geladen …') + '</div>';
+            var msg = ings().length ? 'Keine Zutat gefunden.'
+              : (rLoadErr ? 'Zutaten konnten nicht geladen werden. Bitte Internet prüfen und den Rezept-Modus erneut öffnen.'
+                          : 'Zutaten werden geladen …');
+            host.innerHTML = '<div class="list-empty">' + msg + '</div>';
             return;
           }
           var store = {}, html = "", i = 0;
@@ -3319,9 +3334,15 @@
           else this.disabled = false;
         });
 
-        // Zutaten normalerweise beim Start geladen; sonst best effort nachladen.
+        // Zutaten normalerweise beim Start geladen; sonst hart nachladen
+        // (force = Cache-Buster gegen hartnaeckigen SW-/CDN-Altbestand).
         renderItems();
-        if (!ings().length) API.foods.loadLocal().then(function (l) { if (l && l.length) S.localFoods = l; if (!$("#rkPick", root).hidden) renderList(); }).catch(function () {});
+        if (!ings().length) {
+          API.foods.loadLocal({ force: true }).then(function (l) {
+            if (l && l.length) { S.localFoods = l; rLoadErr = false; } else { rLoadErr = true; }
+            if (!$("#rkPick", root).hidden) renderList();
+          }).catch(function () { rLoadErr = true; if (!$("#rkPick", root).hidden) renderList(); });
+        }
       });
   }
 
