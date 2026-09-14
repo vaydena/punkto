@@ -1,4 +1,4 @@
-pk-v34-3c7e
+pk-v35-5d0e
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -553,3 +553,22 @@ pk-v34-3c7e: BUGFIX „Zutatenrechner/Rezept-Modus laden ewig" (Nutzerreport). U
          oeffnen") statt endlos „werden geladen". Server-Daten (punkto-foods.json: 253 zutat:true,
          14 Gruppen) und SW waren korrekt — reiner Client-Fix. Da app.html + pk-app.js geaendert
          (pk-app.js wird cache-first ausgeliefert!): SW-CACHE auf pk-app-v34 angehoben.
+pk-v35-5d0e: „Zutatenrechner" (v32) wieder ENTFERNT (Nutzerwunsch: „macht keinen Sinn, der
+         Rezept-Modus reicht vollkommen aus"). Der eigenstaendige, zutatenbasierte Rechner
+         (eine Zutat -> Menge -> Punkte -> „Zum Tagebuch") war redundant, seit v33 der
+         Rezept-Modus (mehrere Zutaten -> Portionen -> Rezept) dieselbe Auswahl-/Mengen-Optik
+         und dieselbe Datenbasis nutzt. Entfernt in app.html: (a) die Kachel „Zutatenrechner"
+         (data-q="zutat") aus dem Hinzufuegen-Sheet, (b) der Handler-Zweig
+         `else if (q === "zutat") openIngredientCalcSheet();`, (c) die komplette Funktion
+         openIngredientCalcSheet() (~11 KB). BEWUSST BEHALTEN, weil der Rezept-Modus sie
+         mitbenutzt: die 14 Kategorie-Chips ZC_GROUPS und die Zutat-Kennzeichnung auf den
+         Lebensmitteln (Feld zutat:true + Gruppe zg in punkto-foods.json, 253 Zutaten/14
+         Gruppen unveraendert). Der Kommentar ueber ZC_GROUPS wurde auf „Quelle der Chips im
+         Rezept-Modus" umgeschrieben; punkto-foods.json-„note" und engine-smoke.js Sektion F
+         (Invarianten unveraendert, lesen weiterhin ZC_GROUPS + zutat/zg) redaktionell
+         nachgezogen. Verifikation: Skript (0 haengende openIngredientCalcSheet-Referenzen,
+         ZC_GROUPS/openRecipeCalcSheet/SUCHE intakt), Inline-Syntaxpruefung (0 Fehler),
+         engine-smoke.js (50 ok, 0 fail — inkl. Rezept-Mathematik + ZC_GROUPS/Daten). KEIN
+         Server-/Function-Deploy. KEIN SW-CACHE-Bump noetig: geaendert wurden nur
+         NETWORK-FIRST-Assets (app.html = isDoc, punkto-foods.json = isData in sw.js) ->
+         kommen ohne Cache-Bump sofort auf installierten PWAs an; SW bleibt pk-app-v34.

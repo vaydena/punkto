@@ -145,11 +145,13 @@ ok("budgetPlan: Wochenextra im Band 21..35", plan.weekly_extra >= 21 && plan.wee
 ok("budgetPlan: Zielkalorien > sicheres Minimum", plan.target_kcal >= 1200, plan.target_kcal);
 
 /* ---------------------------------------------------------------------------
-   F) ZUTATENRECHNER-INVARIANTEN (v32)
-   Der Zutatenrechner filtert die DB auf zutat===true und gruppiert nach zg.
-   Die anklickbaren Kategorie-Chips kommen aus ZC_GROUPS in app.html. Diese
-   Invarianten halten Daten (punkto-foods.json) und UI (ZC_GROUPS) synchron und
-   sichern die Nutzer-Vorgabe „Flüssigkeiten in Millilitern".
+   F) ZUTATEN-INVARIANTEN (v32; ab v35 fuer den Rezept-Modus)
+   Der Rezept-Modus (openRecipeCalcSheet) filtert die DB auf zutat===true und
+   gruppiert nach zg; die anklickbaren Kategorie-Chips kommen aus ZC_GROUPS in
+   app.html. (Der fruehere eigenstaendige Zutatenrechner wurde in v35 entfernt,
+   der Rezept-Modus nutzt dieselben Daten weiter.) Diese Invarianten halten Daten
+   (punkto-foods.json) und UI (ZC_GROUPS) synchron und sichern die Nutzer-Vorgabe
+   „Flüssigkeiten in Millilitern".
    --------------------------------------------------------------------------- */
 const zutaten = foods.filter(f => f.zutat === true);
 ok("Zutaten vorhanden (>= 200 markiert)", zutaten.length >= 200, "n=" + zutaten.length);
