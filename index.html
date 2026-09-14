@@ -25,6 +25,30 @@
   .shots .shot img{display:block;width:100%;height:auto}
   .shots .shot figcaption{font-size:.9rem;color:var(--muted,#67746b);font-weight:600;margin-top:-4px}
   @media (max-width:760px){.shots{gap:0}.shots .shot{flex:1 1 100%;max-width:340px}}
+
+  /* „Hinzufügen"-Sheet-Mockup (neun Wege) — bleibt immer aktuell, offline & im App-Look */
+  .addmock{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px 14px 18px;box-shadow:0 30px 60px -34px rgba(9,60,33,.28)}
+  .addmock .grab{width:44px;height:5px;border-radius:999px;background:var(--line-2);margin:2px auto 14px}
+  .addmock .amhead{display:flex;align-items:center;justify-content:space-between;margin:0 4px 14px}
+  .addmock .amhead b{font-size:1.14rem;font-weight:800;color:var(--ink)}
+  .addmock .amhead .x{width:24px;height:24px;color:var(--muted);flex:none}
+  .addmock .amgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .addmock .am{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 4px}
+  .addmock .am .qi{width:44px;height:44px;border-radius:12px;background:var(--green-tint);color:var(--green-700);display:flex;align-items:center;justify-content:center}
+  .addmock .am .qi svg{width:24px;height:24px}
+  .addmock .am .lbl{font-size:.8rem;font-weight:700;color:var(--ink-2);line-height:1.2;text-align:center}
+  .addmock .am.a .qi{background:var(--amber-tint);color:var(--amber-600)}
+  .addmock .am.s .qi{background:#e3f2fb;color:var(--sky)}
+  .addmock .am.b .qi{background:#fce8ee;color:var(--berry)}
+  .addmock .am.v .qi{background:#ece6fb;color:#7a5cd0}
+  .addmock .am.z .qi{background:#fdeede;color:#c67d1e}
+  .addmock .am.r .qi{background:#e6f4ea;color:var(--green-700)}
+  .addmock .am.is-new{border-color:var(--green-tint-2)}
+  .addmock .am .nb{position:absolute;top:-7px;right:6px;font-size:.58rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--green);border-radius:999px;padding:2px 7px;line-height:1;box-shadow:0 2px 6px -1px rgba(15,169,88,.5)}
+
+  /* „neu"-Badge auf neu hinzugekommenen Feature-Karten */
+  .feature{position:relative}
+  .feature .fnew{position:absolute;top:16px;right:16px;font-size:.6rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--green-800);background:var(--green-tint);border:1px solid var(--green-tint-2);border-radius:999px;padding:3px 9px;line-height:1}
 </style>
 </head>
 <body>
@@ -160,13 +184,29 @@
     <div class="section-head">
       <div class="eyebrow">Ein Blick in die App</div>
       <h2>Hinzufügen &amp; Punkte-Rechner</h2>
-      <p>Ein Tippen auf <b>Hinzufügen</b> — und du wählst deinen Weg: suchen, Barcode scannen, wiegen oder den eingebauten <b>Punkte-Rechner</b> nutzen. Nährwerte rein, Punktwert raus.</p>
+      <p>Ein Tippen auf <b>Hinzufügen</b> — und du wählst aus <b>neun Wegen</b>: suchen, Barcode scannen, mit <b>0&nbsp;Punkten</b> satt essen, einen <b>Tag kopieren</b>, wiegen, Aktivität eintragen, ein Produkt <b>per Foto anlegen</b>, den <b>Punkte-Rechner</b> oder den <b>Rezept-Modus</b> nutzen.</p>
     </div>
     <div class="shots">
       <figure class="shot">
-        <img src="assets/shot-hinzufuegen.png" width="648" height="570" loading="lazy" decoding="async"
-             alt="Screenshot des Hinzufügen-Menüs der Punkto-App mit sechs Kacheln: Essen suchen, Barcode scannen, Gewicht, Aktivität, Produkt anlegen und Punkte-Rechner.">
-        <figcaption>Ein Tippen, sechs Wege etwas einzutragen.</figcaption>
+        <div class="addmock" role="img" aria-label="Das Hinzufügen-Menü der Punkto-App mit neun Kacheln: Essen suchen, Barcode scannen, 0 Punkte, Tag kopieren, Gewicht, Aktivität, Produkt anlegen, Punkte-Rechner und Rezept-Modus.">
+          <div class="grab"></div>
+          <div class="amhead">
+            <b>Hinzufügen</b>
+            <svg class="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </div>
+          <div class="amgrid">
+            <div class="am"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg></span><span class="lbl">Essen suchen</span></div>
+            <div class="am a"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg></span><span class="lbl">Barcode scannen</span></div>
+            <div class="am is-new"><span class="nb">neu</span><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a1.8 1.8 0 0 1-2.55 0l-7.6-7.6A2 2 0 0 1 2.7 11.6V4.5a1.8 1.8 0 0 1 1.8-1.8h7.1a2 2 0 0 1 1.4.6l7.6 7.6a1.8 1.8 0 0 1 0 2.5z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span><span class="lbl">0 Punkte</span></div>
+            <div class="am z is-new"><span class="nb">neu</span><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span><span class="lbl">Tag kopieren</span></div>
+            <div class="am b"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l3-4"/></svg></span><span class="lbl">Gewicht</span></div>
+            <div class="am s"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></span><span class="lbl">Aktivität</span></div>
+            <div class="am c"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><span class="lbl">Produkt anlegen</span></div>
+            <div class="am v"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6.5h8M8 11h.01M12 11h.01M16 11h.01M8 14.5h.01M12 14.5h.01M16 14.5h.01M8 18h.01M12 18h.01M16 18h.01"/></svg></span><span class="lbl">Punkte-Rechner</span></div>
+            <div class="am r is-new"><span class="nb">neu</span><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 9h5M8 13h8M8 17h8"/></svg></span><span class="lbl">Rezept-Modus</span></div>
+          </div>
+        </div>
+        <figcaption>Ein Tippen, <b>neun Wege</b> etwas einzutragen — drei davon neu.</figcaption>
       </figure>
       <figure class="shot">
         <img src="assets/shot-rechner.png" width="648" height="971" loading="lazy" decoding="async"
@@ -186,7 +226,7 @@
     <div class="section-head">
       <div class="eyebrow">Alles drin</div>
       <h2>Deine App für den Alltag</h2>
-      <p>Von der Barcode-Suche bis zum Gewichts-Trend — Punkto begleitet dich den ganzen Tag.</p>
+      <p>Von der Foto-Erfassung bis zum Gewichts-Trend — mit über 300.000 Produkten in der Datenbank begleitet dich Punkto den ganzen Tag.</p>
     </div>
     <div class="grid g3">
       <div class="feature">
@@ -196,13 +236,31 @@
       </div>
       <div class="feature amber">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M11 5v14M15 5v14M19 5v14" stroke-width="1.4"/></svg></div>
-        <h3>Barcode-Scanner</h3>
-        <p>Produkt scannen, Punkte bekommen. Punkto liest Nährwerte aus der offenen Lebensmittel-Datenbank Open Food Facts und rechnet sie um.</p>
+        <h3>Barcode-Scanner mit Autofill</h3>
+        <p>Produkt scannen — Punkto erkennt es über Open Food Facts und füllt Name, Marke und alle Nährwerte automatisch aus. Ein Tipp, fertige Punkte.</p>
+      </div>
+      <div class="feature sky">
+        <div class="fnew">neu</div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M20 5v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5"/><path d="M20 12c0 1.7-3.6 3-8 3s-8-1.3-8-3"/></svg></div>
+        <h3>Über 300.000 Produkte</h3>
+        <p>Riesige Datenbank aus Open Food Facts und dem amtlichen Bundeslebensmittelschlüssel (BLS) — dazu geprüfte Einträge aus unserer eigenen Datenbank.</p>
       </div>
       <div class="feature">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10" stroke-linecap="round"/></svg></div>
-        <h3>Eigene Lebensmittel &amp; Rezepte</h3>
-        <p>Lieblingsgerichte einmal anlegen, immer wieder nutzen. Rezepte rechnet Punkto automatisch auf Portionen herunter.</p>
+        <div class="fnew">neu</div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+        <h3>Produkt per 3 Fotos anlegen</h3>
+        <p>Kein Eintrag gefunden? Fotografiere Produkt, Nährwerttabelle und Barcode — die Texterkennung liest die Werte aus und legt dein Produkt an. Auch offline.</p>
+      </div>
+      <div class="feature amber">
+        <div class="fnew">neu</div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 9h5M8 13h8M8 17h8"/></svg></div>
+        <h3>Rezept-Modus</h3>
+        <p>Mehrere Zutaten addieren, durch Portionen teilen — du bekommst die <b>Punkte pro Portion</b>. Einmal anlegen, immer wieder mit einem Tipp buchen.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg></div>
+        <h3>Eigene Lebensmittel &amp; Favoriten</h3>
+        <p>Lieblingsgerichte einmal anlegen. <b>Zuletzt gegessen</b> und ★ <b>Favoriten</b> holst du mit einem einzigen Tipp zurück ins Tagebuch.</p>
       </div>
       <div class="feature sky">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 20V10M12 20V4M18 20v-7" stroke-linecap="round"/></svg></div>
@@ -212,7 +270,7 @@
       <div class="feature">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 3 4 14h7l-1 7 9-11h-7l1-7Z" stroke-linejoin="round"/></svg></div>
         <h3>Aktivität &amp; Schritte</h3>
-        <p>Bewegung bringt kleine Bonuspunkte. Trag Schritte oder ein Workout ein — dein Budget wächst mit.</p>
+        <p>Übernimm die Schritte aus deiner Health-App oder trag ein Workout ein — Bewegung bringt kleine Bonuspunkte, dein Budget wächst mit.</p>
       </div>
       <div class="feature berry">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2.6"/><path d="M10.5 18.5h3" stroke-linecap="round"/></svg></div>
@@ -267,8 +325,8 @@
       <div class="body">
         <ul>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 13 4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> Tagesbudget, Wochenextra &amp; Punkte-Engine</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 13 4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> Barcode-Scanner &amp; große Lebensmittel-Datenbank</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 13 4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> Eigene Lebensmittel, Rezepte &amp; Aktivität</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 13 4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> Barcode-Scanner &amp; über 300.000 Produkte</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 13 4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> Eigene Produkte per Foto, Rezept-Modus &amp; Aktivität</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 13 4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> Gewichts-Trend mit geglätteter Kurve</li>
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 13 4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg> Als App aufs Handy — offline nutzbar</li>
         </ul>

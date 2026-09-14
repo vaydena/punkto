@@ -1,4 +1,4 @@
-pk-v37-ca77
+pk-v38-f3b1
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -643,3 +643,31 @@ pk-v37-ca77: Feinschliff der beiden v36-Wege — je zwei Verbesserungen an „0 
          Change. KEIN SW-CACHE-Bump noetig: geaendert wurde nur app.html (isDoc = NETWORK-
          FIRST in sw.js) inkl. Inline-CSS -> kommt ohne Cache-Bump sofort auf installierten
          PWAs an; SW bleibt pk-app-v34.
+pk-v38-f3b1: Landingpage an den v37-Funktionsstand angeglichen (Marketing + Grafik, KEINE
+         App-/Server-Aenderung). Die oeffentliche Seite bewarb nur „sechs Wege“ und zeigte ein
+         veraltetes 6-Kachel-PNG (assets/shot-hinzufuegen.png), waehrend das Hinzufuegen-Sheet
+         der App seit v36/v37 NEUN Wege hat. Angepasst ausschliesslich index.html:
+         (1) HINZUFUEGEN-GRAFIK ERSETZT: shot-hinzufuegen.png raus, stattdessen ein lebendes
+             CSS/SVG-Mockup (.addmock) mit neun Kacheln im echten App-Look — gleiche Icons und
+             Farbklassen a/s/b/v/z/r wie in app.html; die Kamera-Kachel bleibt bewusst gruen
+             (es gibt keine .c-Regel, in App und Mockup identisch). Kachel-Reihenfolge wie im
+             Sheet: Essen suchen, Barcode, 0 Punkte, Tag kopieren, Gewicht, Aktivitaet, Produkt
+             anlegen, Punkte-Rechner, Rezept-Modus. Drei „neu“-Flags (0 Punkte, Tag kopieren,
+             Rezept-Modus). Bleibt offline-/themetreu und faellt nie hinter den echten Stand
+             zurueck. Das PNG ist nicht mehr referenziert (Datei nur nicht geloescht).
+         (2) FUNKTIONEN-GRID 6 -> 9 Karten (#features): drei neue Karten mit eigenem Inline-SVG
+             (u. a. neues Datenbank-Zylinder-Icon) und dezenter „neu“-Pille — „Ueber 300.000
+             Produkte“ (Open Food Facts + amtlicher BLS 4.0 + gepruefte eigene Datenbank),
+             „Produkt per 3 Fotos anlegen“ (OCR/Texterkennung, offline) und „Rezept-Modus“
+             (Punkte pro Portion).
+         (3) TEXTE nachgezogen: Rechner-Absatz nennt „neun Wege“, #features-Intro und die
+             Preis-Bullets (#preis) auf „ueber 300.000 Produkte“ + „Foto/Rezept-Modus/Aktivitaet“.
+         BEWUSST NICHT beworben (aus der App entfernt): Zutatenrechner (v35), manueller Punkte-
+         Override (v20), Community/Crowdsourcing-Teilen (v24) — die zentrale DB steht neutral als
+         „gepruefte eigene Datenbank“, nie als Mitmach-Feed.
+         Verifikation: Headless-Chrome/CDP-Screenshots Desktop (1280) und Mobil (390) — das
+         9-Kachel-Mockup (3-Spalten-Raster haelt auf Mobil) und das 3x3-Funktionen-Grid rendern
+         sauber, Inter geladen, keine horizontalen Ueberlaeufe, alle drei „neu“-Flags korrekt.
+         KEIN Server-/Function-/Datenmodell-Change. KEIN SW-CACHE-Bump noetig: geaendert wurde
+         nur index.html (isDoc = NETWORK-FIRST in sw.js) -> kommt ohne Cache-Bump sofort auf
+         installierten PWAs an; SW bleibt pk-app-v34.
