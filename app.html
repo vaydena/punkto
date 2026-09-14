@@ -156,6 +156,20 @@
   .cp-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card);
     border-radius:12px;margin-bottom:6px;box-shadow:var(--shadow-sm)}
   .cp-row .nm{flex:1;min-width:0;font-weight:600;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* „Tag kopieren" – Mehrfachauswahl: Auswahl-Leiste (Zähler + Alle/Keine) und
+     anklickbare Vorschau-Zeilen mit Häkchen (abgewählt = gedimmt). */
+  .cp-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 2px 10px;font-size:.85rem;color:var(--muted)}
+  .cp-bar b{color:var(--ink);font-weight:800}
+  .cp-bar button{background:none;border:0;color:var(--green-700);font:inherit;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:8px}
+  .cp-bar button:hover{background:var(--green-tint)}
+  .cp-pick{cursor:pointer;user-select:none;transition:opacity .12s}
+  .cp-pick input{flex:0 0 auto;width:20px;height:20px;accent-color:var(--green-700);margin:0;cursor:pointer}
+  .cp-pick.off{opacity:.45}
+  /* Portions-Warnung im Detail-Sheet: nur bei „formelfreien" Lebensmitteln, die
+     erst in großer Menge Punkte bekommen (per .show umgeschaltet – nie via [hidden]). */
+  .free-warn{display:none;background:var(--amber-tint);color:#8a5c05;border-radius:12px;
+    padding:.7em .9em;font-size:.86rem;line-height:1.4;margin:0 0 12px}
+  .free-warn.show{display:block}
 
   /* Schnellzugriff „Zuletzt + Favoriten": Zeilen im Such-Sheet (Öffnen-Button +
      Stern-Toggle), Favoriten-Button im Detail-Sheet und die horizontale
@@ -1825,9 +1839,15 @@
         [50, 100, 150, 200].map(function (g) { return '<button class="chip" data-preset="' + g + '">' + g + ' g</button>'; }).join("") +
         '</div>') +
       '<div class="detail-points" id="dPtsBox"><span class="coin" id="dPts">0</span><span id="dPtsLbl">Punkte für diese Menge</span></div>' +
+      '<div class="free-warn" id="dFreeWarn">⚠️ Größere Mengen kosten hier Punkte – in üblicher Portion bleibt es bei 0.</div>' +
       '<button class="btn primary block big" id="dAdd">Zum Tagebuch</button>',
       function (root) {
         var amtEl = $("#dAmount", root), ptsEl = $("#dPts", root);
+        var warnEl = $("#dFreeWarn", root);
+        // „Formelfrei": nicht pauschal free:true, aber bei Basismenge 0 Punkte
+        // (z. B. Eiklar, Gewürze). Solche Lebensmittel kosten erst in großer Menge
+        // Punkte -> Warnung nur dann. Portions-Rezepte sind ausgenommen.
+        var formulaFree = !portionMode && !nf.free && PK.isFree(nf);
 
         var favBtn = $("#dFav", root);
         if (favBtn) favBtn.addEventListener("click", function () {
@@ -1845,6 +1865,7 @@
           var pts = suggestFor(parseFloat(amtEl.value) || 0);
           ptsEl.textContent = pts;
           ptsEl.className = pts === 0 ? "coin zero" : "coin";
+          if (warnEl) warnEl.classList.toggle("show", formulaFree && pts > 0);
           return pts;
         }
         amtEl.addEventListener("input", recalc);
@@ -1902,6 +1923,22 @@
       function (root) {
         var input = $("#freeSearch", root), out = $("#freeList", root);
 
+        // „Zuletzt gegessen": gerätelokale Recents, auf freie Lebensmittel gefiltert
+        // (max. 8). Nur bei leerer Suche als angeheftete Gruppe oben eingeblendet.
+        var recentFree = getRecent().filter(function (s) { return PK.isFree(normFood(s)); }).slice(0, 8);
+
+        // Eine Zeile bauen (Thumb + Name + „je …" + Diät-Tag + 0-Münze). `attr` trennt
+        // Recents (data-ri -> out._recents) von der Kategorieliste (data-fi -> out._foods).
+        function rowHTML(nf, attr, i) {
+          var meta = "je " + nf.base_g + " " + (nf.unit || "g");
+          var dietMark = nf.vegan ? ' <span class="diet-tag" title="Vegan">🌱</span>'
+            : (nf.vegetarian ? ' <span class="diet-tag" title="Vegetarisch">🥕</span>' : '');
+          return '<button class="food-item" data-' + attr + '="' + i + '">' +
+            (nf.photo_url ? '<img class="food-thumb" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
+            '<div class="info"><div class="nm">' + esc(nf.name) + '</div><div class="meta">' + esc(meta) + dietMark + '</div></div>' +
+            '<span class="coin zero">0</span></button>';
+        }
+
         function render(q) {
           var list = free;
           if (q) {
@@ -1910,33 +1947,35 @@
               return (f.name || "").toLowerCase().indexOf(lq) >= 0 || (f.cat || "").toLowerCase().indexOf(lq) >= 0;
             });
           }
-          if (!list.length) { out.innerHTML = '<div class="list-empty">Nichts gefunden.</div>'; return; }
+          out._foods = {}; out._recents = recentFree;
+          var html = "";
+          // Angeheftete Recents nur ohne aktive Suche.
+          if (!q && recentFree.length) {
+            html += '<div class="qf-head">Zuletzt gegessen</div>';
+            recentFree.forEach(function (s, ri) { html += rowHTML(normFood(s), "ri", ri); });
+          }
+          if (!list.length && !html) { out.innerHTML = '<div class="list-empty">Nichts gefunden.</div>'; return; }
           // Nach Kategorie gruppieren; Gruppen nach Häufigkeit, dann alphabetisch.
           var groups = {};
           list.forEach(function (f) { var c = f.cat || "Sonstige"; (groups[c] = groups[c] || []).push(f); });
           var order = Object.keys(groups).sort(function (a, b) {
             return groups[b].length - groups[a].length || a.localeCompare(b, "de");
           });
-          out._foods = {};
-          var idx = 0, html = "";
+          var idx = 0;
           order.forEach(function (c) {
             html += '<div class="qf-head">' + esc(c) + ' · ' + groups[c].length + '</div>';
             groups[c].forEach(function (f) {
-              var nf = normFood(f);
-              var meta = "je " + nf.base_g + " " + (nf.unit || "g");
-              var dietMark = nf.vegan ? ' <span class="diet-tag" title="Vegan">🌱</span>'
-                : (nf.vegetarian ? ' <span class="diet-tag" title="Vegetarisch">🥕</span>' : '');
               out._foods[idx] = f;
-              html += '<button class="food-item" data-fi="' + idx + '">' +
-                (nf.photo_url ? '<img class="food-thumb" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
-                '<div class="info"><div class="nm">' + esc(nf.name) + '</div><div class="meta">' + esc(meta) + dietMark + '</div></div>' +
-                '<span class="coin zero">0</span></button>';
+              html += rowHTML(normFood(f), "fi", idx);
               idx++;
             });
           });
           out.innerHTML = html;
           $$(".food-item", out).forEach(function (b) {
-            b.addEventListener("click", function () { openFoodDetail(out._foods[+b.dataset.fi], preMeal); });
+            b.addEventListener("click", function () {
+              if (b.dataset.ri != null) openFoodDetail(resolveLiveFood(out._recents[+b.dataset.ri]), preMeal);
+              else openFoodDetail(out._foods[+b.dataset.fi], preMeal);
+            });
           });
         }
 
@@ -1960,6 +1999,7 @@
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
       '<button type="button" class="chip" data-src="' + addDays(target, -1) + '">Gestern</button>' +
       '<button type="button" class="chip" data-src="' + addDays(target, -2) + '">Vorgestern</button>' +
+      '<button type="button" class="chip" data-src="' + addDays(target, -7) + '">Vor 1 Woche</button>' +
       '</div>' +
       '<input type="date" id="cpDate" max="' + S.today + '" value="' + src + '" style="margin-bottom:14px">' +
       '<div id="cpPreview"></div>' +
@@ -1982,20 +2022,45 @@
           var entries = (st && st.diary) || [];
           if (!entries.length) { prev.innerHTML = '<div class="list-empty">An diesem Tag wurde nichts gegessen.</div>'; return; }
           srcEntries = entries;
-          var total = PK.sumPoints(entries), html = "";
+          // Auswahl-Leiste + Vorschau: jede Zeile ist ein Häkchen-Label (data-ei ->
+          // Position in srcEntries), standardmäßig angehakt. So lassen sich einzelne
+          // Einträge abwählen, statt immer den ganzen Tag zu übernehmen.
+          var html = '<div class="cp-bar"><span id="cpCount"></span><button type="button" id="cpToggle">Keine</button></div>';
           MEALS.forEach(function (m) {
             var items = entries.filter(function (e) { return (e.meal || "snack") === m.key; });
             if (!items.length) return;
             html += '<div class="qf-head">' + m.em + ' ' + m.label + '</div>';
             items.forEach(function (e) {
               var z = (+e.points === 0) ? " zero" : "";
-              html += '<div class="cp-row"><span class="nm">' + esc(e.name) + '</span>' +
-                '<span class="coin sm' + z + '">' + (+e.points || 0) + '</span></div>';
+              html += '<label class="cp-row cp-pick" data-ei="' + entries.indexOf(e) + '">' +
+                '<input type="checkbox" checked>' +
+                '<span class="nm">' + esc(e.name) + '</span>' +
+                '<span class="coin sm' + z + '">' + (+e.points || 0) + '</span></label>';
             });
           });
           prev.innerHTML = html;
-          doBtn.disabled = false;
-          doBtn.textContent = "Übernehmen · " + entries.length + " " + (entries.length === 1 ? "Eintrag" : "Einträge") + " · " + total + " P";
+
+          var boxes = $$(".cp-pick input", prev), countEl = $("#cpCount", prev), tglBtn = $("#cpToggle", prev);
+          function updateBar() {
+            var sel = 0, pts = 0;
+            boxes.forEach(function (b) {
+              var lab = b.closest(".cp-pick");
+              if (b.checked) { sel++; pts += (+srcEntries[+lab.dataset.ei].points || 0); lab.classList.remove("off"); }
+              else lab.classList.add("off");
+            });
+            countEl.innerHTML = '<b>' + sel + '</b> von ' + srcEntries.length + ' ausgewählt';
+            tglBtn.textContent = (sel === srcEntries.length) ? "Keine" : "Alle";
+            doBtn.disabled = sel === 0;
+            doBtn.textContent = sel === 0 ? "Nichts ausgewählt"
+              : "Übernehmen · " + sel + " " + (sel === 1 ? "Eintrag" : "Einträge") + " · " + pts + " P";
+          }
+          boxes.forEach(function (b) { b.addEventListener("change", updateBar); });
+          tglBtn.addEventListener("click", function () {
+            var allOn = boxes.every(function (b) { return b.checked; });
+            boxes.forEach(function (b) { b.checked = !allOn; });
+            updateBar();
+          });
+          updateBar();
         }
 
         $$("[data-src]", root).forEach(function (c) {
@@ -2004,11 +2069,14 @@
         dateEl.addEventListener("change", loadPreview);
 
         doBtn.addEventListener("click", async function () {
-          if (!srcEntries.length) return;
+          // Nur angehakte Einträge übernehmen (data-ei -> srcEntries).
+          var picked = $$(".cp-pick input", prev).filter(function (b) { return b.checked; })
+            .map(function (b) { return srcEntries[+b.closest(".cp-pick").dataset.ei]; });
+          if (!picked.length) return;
           doBtn.disabled = true; doBtn.textContent = "Übernehme …";
           var added = 0, pts = 0;
-          for (var i = 0; i < srcEntries.length; i++) {
-            var e = srcEntries[i];
+          for (var i = 0; i < picked.length; i++) {
+            var e = picked[i];
             var payload = {
               name: e.name, meal: e.meal || "snack", points: +e.points || 0,
               qty: e.qty, unit: e.unit, kcal: +e.kcal || 0,
@@ -2020,7 +2088,7 @@
             added++; pts += (+e.points || 0);
           }
           if (added) { closeSheet(); await refreshDay(); toast(added + " übernommen · " + pts + " P"); }
-          else { doBtn.disabled = false; doBtn.textContent = "Übernehmen"; }
+          else { doBtn.disabled = false; doBtn.textContent = "Übernehmen · " + picked.length + " " + (picked.length === 1 ? "Eintrag" : "Einträge"); }
         });
 
         loadPreview();

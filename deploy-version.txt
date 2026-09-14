@@ -1,4 +1,4 @@
-pk-v36-8f3a
+pk-v37-ca77
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
@@ -600,4 +600,46 @@ pk-v36-8f3a: Zwei neue Wege im Hinzufuegen-Sheet — „0 Punkte" (satt essen) u
          App-Boot lokal (0 JS-Exceptions, alle Assets 200, Login-Gate erwartungsgemaess).
          KEIN SW-CACHE-Bump noetig: geaendert wurde nur app.html (isDoc = NETWORK-FIRST
          in sw.js) inkl. Inline-CSS -> kommt ohne Cache-Bump sofort auf installierten
+         PWAs an; SW bleibt pk-app-v34.
+pk-v37-ca77: Feinschliff der beiden v36-Wege — je zwei Verbesserungen an „0 Punkte"
+         und „Tag kopieren", weiterhin rein clientseitig.
+         (1a) „0 PUNKTE" — PORTIONS-WARNUNG (ehrlich gescoped): Von den 89 freien
+              Lebensmitteln sind 82 wirklich unbegrenzt (free:true -> 0 Punkte bei JEDER
+              Menge). 7 sind nur „formelfrei" (free:false, aber PK.pointsFor==0 je Basis-
+              portion). Genau fuer diese 7 zeigt das Detail-Sheet (openFoodDetail) jetzt
+              den Hinweis „⚠️ Groessere Mengen kosten hier Punkte – in ueblicher Portion
+              bleibt es bei 0." Der Guard ist formulaFree = !portionMode && !nf.free &&
+              PK.isFree(nf) UND pts>0, d. h. der Hinweis erscheint NUR im Moment, in dem
+              die gewaehlte Menge tatsaechlich >=1 Punkt ergibt — nie faelschlich bei den
+              82 echten free:true (dort bleibt pts immer 0). Verifiziert per Node-Harness
+              gegen echte pk-engine.js + punkto-foods.json: Warn-Set == exakt {Eiklar,
+              Pfeffer (gemahlen), Paprikapulver, Zimt, Natron (Speisesoda), Trockenhefe,
+              Frische Hefe}; erreichbar (>=1 P bei realer Menge) sind Eiklar (ab 114 g),
+              Pfeffer (ab 129 g), Frische Hefe (ab 205 g), die uebrigen 4 haben raw<=0 und
+              feuern korrekt nie. Umschaltung ueber .free-warn.show (Klasse, NICHT [hidden]
+              — vermeidet die dokumentierte display-Override-Falle).
+         (1b) „0 PUNKTE" — „ZULETZT GEGESSEN": ueber der kategoriegruppierten Liste steht
+              jetzt (nur ohne aktive Suche) eine angeheftete Gruppe der zuletzt gegessenen
+              FREIEN Lebensmittel: getRecent() (geraetelokale localStorage-Recents aus v23)
+              gefiltert auf PK.isFree, max. 8 Zeilen. rowHTML(nf, attr, i) rendert Recents
+              (data-ri) und Kategoriezeilen (data-fi) einheitlich; Klick auf eine Recent-
+              Zeile geht ueber resolveLiveFood(out._recents[i]) -> openFoodDetail (frische
+              lokale/zentrale Fassung), Kategoriezeilen wie bisher ueber out._foods[i].
+         (2a) „TAG KOPIEREN" — QUELLCHIP „VOR 1 WOCHE": zusaetzlich zu Gestern/Vorgestern
+              gibt es einen Chip data-src=addDays(target,-7), um schnell den gleichen
+              Wochentag der Vorwoche als Quelle zu waehlen (Datumsfeld bleibt, max=heute).
+         (2b) „TAG KOPIEREN" — MEHRFACHAUSWAHL statt ganzer Tag: die Vorschau listet die
+              Quell-Eintraege jetzt als anklickbare .cp-pick-Zeilen mit Haekchen (alle
+              vorausgewaehlt; abgewaehlt = gedimmt via .off). Eine .cp-bar zeigt „<n> von
+              <gesamt> ausgewaehlt" + einen Alle/Keine-Umschalter (#cpToggle); der Button
+              nennt live Anzahl + Summe der AUSGEWAEHLTEN Punkte und ist bei 0 Auswahl
+              deaktiviert („Nichts ausgewaehlt"). Uebernommen werden beim Klick nur die
+              angehakten Eintraege (data-ei -> srcEntries), sonst unveraenderte Payload-
+              Form (name/meal/points/qty/unit/kcal/source/ref_code) je diaryAdd(day=S.day)
+              ueber guardWrite; danach refreshDay + Toast.
+         Verifikation: Node-Harness Warn-Scope (3/3 Checks gruen), Inline-Syntaxpruefung
+         aller 3 Script-Bloecke via vm.Script (0 Fehler), App-Boot lokal (Login-Gate
+         greift erwartungsgemaess, keine JS-Exceptions). KEIN Server-/Function-/Datenmodell-
+         Change. KEIN SW-CACHE-Bump noetig: geaendert wurde nur app.html (isDoc = NETWORK-
+         FIRST in sw.js) inkl. Inline-CSS -> kommt ohne Cache-Bump sofort auf installierten
          PWAs an; SW bleibt pk-app-v34.
