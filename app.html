@@ -981,24 +981,59 @@
       if (S.offline || !navigator.onLine) return;          // braucht Netz -> sonst später
       var uid = S.user && S.user.id;
       if (!uid) return;
-      var flag = "pk_diary_migrated_" + uid;
+      // v2-Flag: erzwingt genau EINEN erneuten Lauf auf ALLEN Geräten. Der v1-Versuch
+      // lief über API.data.exportAll() aus pk-app.js — und pk-app.js wird vom Service
+      // Worker CACHE-FIRST ausgeliefert. Nach einem unvollständigen SW-Update konnte die
+      // (network-first stets frische) app.html gegen ein noch veraltetes v39-pk-app.js
+      // OHNE exportAll laufen -> API.data.exportAll war undefined -> TypeError -> im
+      // äußeren catch verschluckt -> stiller No-op. Der neue Lauf holt export_all INLINE
+      // (siehe unten) und ist damit von pk-app.js unabhängig. MERGE ist idempotent, ein
+      // Extra-Lauf auf bereits geheilten Geräten schadet nicht.
+      var flag = "pk_diary_migrated_v2_" + uid;
       try { if (localStorage.getItem(flag) === "1") return; } catch (e) { /* Storage gesperrt -> einmal versuchen */ }
-      var full = await API.data.exportAll();               // { entries, weights, activities }
-      var imported = 0;
-      if (full) {
-        var res = await PKDiary.importAll({
-          entries: full.entries || [], weights: full.weights || [], activities: full.activities || []
-        }, { replace: false });                            // MERGE — nichts löschen/überschreiben (außer Gewicht je Tag)
-        var c = (res && res.counts) || {};
-        imported = (c.entries || 0) + (c.weights || 0) + (c.activities || 0);
-      }
+      var tok = "";
+      try { tok = localStorage.getItem("hf_saved_token") || ""; } catch (e) { /* ohne Token kein Abruf */ }
+      if (!tok) return;
+      // export_all INLINE holen (bewusst NICHT API.data.exportAll): app.html ist im SW
+      // network-first -> beim Online-Start immer frisch, unabhängig vom cache-first
+      // pk-app.js. Konstanten sind stabile öffentliche Werte (Projekt-URL + anon key).
+      var full = null;
+      try {
+        var r = await fetch("https://xeuexovdipdiiuzjpzkj.supabase.co/functions/v1/punkto-data", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": "sb_publishable_3dLuQ2PfEsjavJyl0fmkaA_DXB8ZS6f",
+            "Authorization": "Bearer " + tok
+          },
+          body: JSON.stringify({ action: "export_all" })
+        });
+        if (!r.ok) return;                                 // 401/5xx -> Flag bleibt ungesetzt -> nächster Online-Start versucht es erneut
+        full = await r.json();
+      } catch (e) { return; }                              // Netzabbruch -> später erneut
+      if (!full || full.error || !Array.isArray(full.entries)) return;
+      var res = await PKDiary.importAll({
+        entries: full.entries || [], weights: full.weights || [], activities: full.activities || []
+      }, { replace: false });                              // MERGE — nichts löschen/überschreiben (außer Gewicht je Tag)
+      var c = (res && res.counts) || {};
+      var imported = (c.entries || 0) + (c.weights || 0) + (c.activities || 0);
       try { localStorage.setItem(flag, "1"); } catch (e) { /* egal — beim nächsten Start erneut, Merge ist idempotent */ }
-      // Kamen wirklich Alt-Daten herein und die App läuft schon: aktuellen Tag/Woche
-      // frisch aus dem nun ergänzten lokalen Bestand lesen und die Ansicht auffrischen
-      // (Teile der wiederhergestellten Historie können in der laufenden Woche liegen).
+      // Kamen wirklich Alt-Daten herein und die App läuft schon: zum JÜNGSTEN Tag mit
+      // Daten springen und die Ansicht auffrischen. Die neuesten Einträge können vor
+      // „heute" liegen — ein leerer heutiger Tag würde sonst weiter „alles weg"
+      // suggerieren, obwohl die Historie längst wieder lokal liegt.
       if (imported > 0 && S.user && S.user.onboarded) {
-        try { await loadState(S.day); renderAll(); } catch (e) { /* Anzeige-Refresh ist best-effort */ }
-        toast("Deine früheren Einträge wurden wiederhergestellt.");
+        var lastDay = "";
+        var all = (full.entries || []).concat(full.weights || [], full.activities || []);
+        for (var i = 0; i < all.length; i++) {
+          var dd = all[i] && all[i].day;
+          if (typeof dd === "string" && dd > lastDay) lastDay = dd;
+        }
+        try {
+          if (lastDay && lastDay < S.today) { await gotoDay(lastDay); }
+          else { await loadState(S.day); renderAll(); }
+        } catch (e) { /* Anzeige-Refresh ist best-effort */ }
+        toast("Deine früheren Einträge sind wieder da – angezeigt: " + fmtLongDate(lastDay || S.day) + ".");
       }
     } catch (e) { /* Wiederherstellung ist best-effort — den Boot nie stören */ }
   }

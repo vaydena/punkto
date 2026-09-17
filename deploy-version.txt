@@ -1,4 +1,4 @@
-pk-v40-7b3c
+pk-v41-9c2d
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v39-794a: OFFLINE-Umstellung (5 Phasen). (1) Tagebuch/Gewicht/Aktivität rein gerätelokal
           (IndexedDB, PKDiary) — Mahlzeiten IMMER offline speicherbar. (2) Manueller
@@ -711,3 +711,27 @@ v40-7b3c: SELBSTHEILUNG „verlorene" Tagebuchdaten nach der Offline-Umstellung 
          verify_jwt=false!), assets/pk-app.js (data.exportAll), app.html
          (migrateServerDiaryOnce + Boot-Aufruf). SW-CACHE auf pk-app-v36 angehoben
          (app.html-Inline + pk-app.js im Shell-Precache -> Purge noetig).
+v41-9c2d: SYNC-CHECK nach „Daten nach Schliessen/Oeffnen immer noch weg" (v40 heilte
+         NICHT). BEFUND: Server unveraendert intakt (export_all mit echtem Token: alle
+         Tagebuch-Eintraege + Gewichte vorhanden) — der Fehler lag rein im CLIENT-Update.
+         URSACHE: app.html ist im Service Worker NETWORK-FIRST (online stets frisch),
+         pk-app.js dagegen CACHE-FIRST. Nach einem unvollstaendigen SW-Update lief die
+         frische app.html gegen ein noch veraltetes v39-pk-app.js OHNE data.exportAll
+         -> API.data.exportAll war undefined -> TypeError -> vom aeusseren try/catch in
+         migrateServerDiaryOnce() verschluckt -> stiller No-op, das Tagebuch blieb leer.
+         FIX (macht die Wiederherstellung von pk-app.js unabhaengig):
+         (1) app.html: migrateServerDiaryOnce() holt export_all jetzt INLINE per fetch
+             (Projekt-URL + anon key, bewusst NICHT ueber das cache-first pk-app.js) ->
+             laeuft auch gegen ein veraltetes pk-app.js. MERGE bleibt idempotent.
+         (2) Neues Flag pk_diary_migrated_v2_<uid> erzwingt genau EINEN erneuten Lauf auf
+             ALLEN Geraeten (auch den bereits „gesetzten" v1-Konten); Flag wird weiterhin
+             NUR nach echtem Erfolg gesetzt (401/5xx/Netzabbruch -> naechster Online-Start
+             versucht es erneut).
+         (3) UX: Kamen Alt-Daten herein, springt die Ansicht zum JUENGSTEN Tag-mit-Daten
+             (die Historie liegt vor „heute" — ein leerer heutiger Tag wuerde sonst weiter
+             „alles weg" suggerieren) und toastet „Deine frueheren Eintraege sind wieder
+             da". Fail-open, blockiert den Start nie.
+         KEIN Server-/Function-/Datenmodell-Change (punkto-data bleibt v14, export_all
+         unveraendert). Geaendert: app.html (migrateServerDiaryOnce inline + v2-Flag +
+         Sprung zum letzten Tag). SW-CACHE auf pk-app-v37 angehoben (app.html-Inline +
+         pk-app.js im Shell-Precache -> Purge noetig, damit auch pk-app.js frisch wird).
