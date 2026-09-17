@@ -1,5 +1,16 @@
-pk-v38-f3b1
+pk-v39-794a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v39-794a: OFFLINE-Umstellung (5 Phasen). (1) Tagebuch/Gewicht/Aktivität rein gerätelokal
+          (IndexedDB, PKDiary) — Mahlzeiten IMMER offline speicherbar. (2) Manueller
+          Export/Import (pk-backup.js, versioniertes JSON inkl. Fotos). (3) Abo-Token
+          (Ed25519): punkto-data signiert „gültig-bis"; App prüft OFFLINE per Web-Crypto
+          (pk-token.js, nur öffentl. Schlüssel), 7-Tage-Kulanz -> danach nur-lesen,
+          Uhr-Rückdreh-Schutz; Schreib-Gate in guardWrite. (4) Aktivitätssignal:
+          opportunistisches „zuletzt aktiv am <Datum>" (nur online, kein Zähler,
+          punkto.users.last_active_on). (5) BLS-Katalog OFFLINE gebündelt
+          (assets/punkto-bls.json, 7.090 Einträge, dedupliziert gegen die kuratierte
+          Basis, unvollständige verworfen; pk-bls.js sucht rein lokal; CC BY 4.0).
+          SW-CACHE pk-app-v35 (pk-token.js, pk-bls.js, punkto-bls.json ins SHELL).
 v3: Eigene Produkte per 3-Foto-Erfassung (OCR-Autofill, gerätelokal/IndexedDB), Offline-Modus.
 v3-4c1a: .wasm mit korrektem MIME (application/wasm) für schnelleren OCR-Start (nur .htaccess).
 v4-9c3d: Fix „ewiger Ladeschirm" — fetch-Timeout (AbortController) in pk-app.js, SW Auto-Update-Reload

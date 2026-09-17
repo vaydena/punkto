@@ -7,6 +7,9 @@ OPERATOR-KEY.local.txt
 # Deploy-Diagnose (lokaler curl-FTPS-Lauf)
 deploy-local.log
 
+# Claude-Code Arbeitsdateien (Dev-Preview launch.json u. Ä.) — nie ins Repo/Deploy
+.claude/
+
 # Betriebssystem / Editor
 .DS_Store
 Thumbs.db

@@ -13,7 +13,7 @@
      Rückfall auf die zuletzt gecachte Fassung (liegt via SHELL ab Install im Cache).
    - Sonstige statische Assets (CSS/JS/Icons/Manifest): Cache zuerst -> schnell; sonst Netz + nachlegen. */
 
-const CACHE = "pk-app-v34";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
+const CACHE = "pk-app-v35";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
 const SHELL = [
   "./anmelden.html",
   "./app.html",
@@ -23,8 +23,13 @@ const SHELL = [
   "./assets/pk-app.js",
   "./assets/pk-engine.js",
   "./assets/pk-store.js",
+  "./assets/pk-diary.js",
+  "./assets/pk-backup.js",
+  "./assets/pk-token.js",
+  "./assets/pk-bls.js",
   "./assets/pk-ocr.js",
   "./assets/data/punkto-foods.json",
+  "./assets/punkto-bls.json",
   "./icon-192.png",
   "./icon-512.png",
   "./icon-maskable-512.png",

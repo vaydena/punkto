@@ -115,6 +115,58 @@ function pubUser(u: any) {
 function subView(u: any) {
   return { status: u.sub_status, plan: u.sub_plan, trial_ends_at: u.trial_ends_at, current_period_end: u.current_period_end, ends_at: u.ends_at, access: u.access };
 }
+
+// --- Abo-Token (Ed25519, offline pruefbar) -----------------------------------
+// Die App traegt NUR den oeffentlichen Schluessel (assets/pk-token.js) und prueft
+// den Token offline per crypto.subtle.verify. Der PRIVATE Schluessel liegt
+// AUSSCHLIESSLICH als Edge-Function-Secret PK_TOKEN_SK (base64 PKCS#8) vor -
+// nie im Repo, nie auf Hostinger. Fehlt das Secret, liefert mintToken() null;
+// die App bleibt dann uneingeschraenkt nutzbar (Uebergang, kein Lockout).
+// Token = base64url(JSON payload) + "." + base64url(Ed25519-Signatur).
+// payload = { v, uid, exp(=gueltig-bis, Unix-Sekunden), iat, status, plan }.
+function b64urlBytes(bytes: Uint8Array): string {
+  let bin = ""; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64urlStr(s: string): string { return b64urlBytes(new TextEncoder().encode(s)); }
+
+let _tokKey: CryptoKey | null | undefined; // undefined = noch nicht versucht, null = nicht verfuegbar
+async function tokenKey(): Promise<CryptoKey | null> {
+  if (_tokKey !== undefined) return _tokKey;
+  try {
+    const b64 = Deno.env.get("PK_TOKEN_SK");
+    if (!b64) { _tokKey = null; return null; }
+    const raw = Uint8Array.from(atob(b64.trim()), (c) => c.charCodeAt(0));
+    _tokKey = await crypto.subtle.importKey("pkcs8", raw, { name: "Ed25519" }, false, ["sign"]);
+  } catch (_e) { _tokKey = null; }
+  return _tokKey;
+}
+async function mintToken(u: any): Promise<string | null> {
+  try {
+    const key = await tokenKey();
+    if (!key) return null;
+    const endsMs = u.ends_at ? new Date(u.ends_at).getTime() : 0;
+    const exp = Number.isFinite(endsMs) ? Math.floor(endsMs / 1000) : 0;
+    const iat = Math.floor(Date.now() / 1000);
+    const payload = { v: 1, uid: String(u.id), exp, iat, status: u.sub_status || null, plan: u.sub_plan || null };
+    const payloadB64 = b64urlStr(JSON.stringify(payload));
+    const sig = await crypto.subtle.sign({ name: "Ed25519" }, key, new TextEncoder().encode(payloadB64));
+    return payloadB64 + "." + b64urlBytes(new Uint8Array(sig));
+  } catch (_e) { return null; }
+}
+// --- Aktivitaetssignal (opportunistisch, datensparsam) -----------------------
+// Haelt NUR ein Datum "zuletzt aktiv" je Nutzer - KEIN Zaehler, KEINE Ereignis-
+// historie. Aktualisiert wird ausschliesslich bei ohnehin stattfindenden Online-
+// Aufrufen (state-Boot / token-Refresh), hoechstens einmal je Kalendertag, und
+// NIE erzwungen. Faellt still aus (try/catch), damit ein fehlendes Feld oder ein
+// DB-Zucken NIE einen Datenabruf kippt und NIE das lokale Speichern blockiert.
+async function touchActive(u: any) {
+  try {
+    await sql`update punkto.users set last_active_on = current_date
+                where id = ${u.id}
+                  and (last_active_on is null or last_active_on < current_date)`;
+  } catch (_e) { /* egal - reines Signal, nie kritisch */ }
+}
 function weekRange(dayStr: string) {
   const d = new Date(dayStr + "T00:00:00Z");
   const dow = (d.getUTCDay() + 6) % 7; // Mo = 0
@@ -163,15 +215,25 @@ Deno.serve(async (req: Request) => {
         sql`select id, name, servings, items, points_total, points_per_serving
               from punkto.recipes where user_id = ${u.id} order by created_at desc limit 200`,
       ]);
+      await touchActive(u); // opportunistisch: App ist gerade online (Boot/Tageswechsel)
       return json({
         ok: true, day, week_start: start,
         user: pubUser(u), subscription: subView(u),
+        token: await mintToken(u),
         diary, activity: act,
         weight_today: wToday[0]?.weight_kg ?? null,
         weights: weights.reverse(),
         week, week_bonus: weekBonus,
         custom_foods: foods, recipes,
       });
+    }
+
+    if (action === "token") {
+      // Schlanker Refresh des Abo-Tokens (ohne vollen state-Abruf). Nie gesperrt:
+      // ist der Zugang abgelaufen, traegt der frische Token einfach ein exp in der
+      // Vergangenheit -> die App erkennt "abgelaufen" korrekt (Read-only/Paywall).
+      await touchActive(u); // opportunistisch: Token-Refresh passiert nur online
+      return json({ ok: true, token: await mintToken(u), subscription: subView(u) });
     }
 
     if (action === "billing") {

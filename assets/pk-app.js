@@ -103,15 +103,23 @@
   var data = {
     state(day) { return call("data", "state", day ? { day: day } : {}); },
     billing() { return call("data", "billing", {}); },
-    diaryAdd(entry) { return call("data", "diary_add", entry); },
-    diaryUpdate(entry) { return call("data", "diary_update", entry); },
-    diaryDel(id) { return call("data", "diary_del", { id: id }); },
-    weightSet(kg, day) { return call("data", "weight_set", { weight_kg: kg, day: day }); },
-    weightDel(day) { return call("data", "weight_del", { day: day }); },
-    activityAdd(a) { return call("data", "activity_add", a); },
+    // Nur den frisch signierten Abo-Token (Ed25519) holen — leichtgewichtige
+    // Auffrischung, wenn wieder online (kein voller State-Roundtrip noetig).
+    token() { return call("data", "token", {}); },
+    // --- Tagebuch / Gewicht / Aktivitaet: GERAETELOKAL (IndexedDB via PKDiary) ---
+    //     Damit kann der Kunde seine Mahlzeiten JEDERZEIT speichern, auch voellig
+    //     offline. Rueckgabe-Shapes sind identisch zum Server (siehe pk-diary.js);
+    //     PKDiary wird zur Aufrufzeit aufgeloest (Ladereihenfolge unkritisch).
+    diaryAdd(entry) { return root.PKDiary.entryAdd(entry); },
+    diaryUpdate(entry) { return root.PKDiary.entryUpdate(entry); },
+    diaryDel(id) { return root.PKDiary.entryDel(id); },
+    weightSet(kg, day) { return root.PKDiary.weightSet(kg, day); },
+    weightDel(day) { return root.PKDiary.weightDel(day); },
+    activityAdd(a) { return root.PKDiary.activityAdd(a); },
     // Schritte als EINEN Tageswert setzen (ersetzt heutige Schritte; idempotent, kein Doppeltzaehlen).
-    activitySetSteps(steps, bonus_points, day) { return call("data", "activity_set_steps", { steps: steps, bonus_points: bonus_points, day: day || undefined }); },
-    activityDel(id) { return call("data", "activity_del", { id: id }); },
+    activitySetSteps(steps, bonus_points, day) { return root.PKDiary.activitySetSteps(steps, bonus_points, day); },
+    activityDel(id) { return root.PKDiary.activityDel(id); },
+    // --- Eigene Produkte & Rezepte bleiben serverseitig (bewusste Phase-1-Grenze) ---
     foodAdd(food) { return call("data", "food_add", food); },
     foodUpdate(food) { return call("data", "food_update", food); },
     foodDel(id) { return call("data", "food_del", { id: id }); },

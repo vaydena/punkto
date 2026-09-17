@@ -453,7 +453,8 @@
       row("Tagesbudget", (u.daily_budget != null ? esc(u.daily_budget) + " P." : "—") + (u.weekly_extra != null ? " · Extra " + esc(u.weekly_extra) : "")) +
       row("Einträge", esc(d.diary_count || 0) + " Tagebuch · " + esc(d.weight_count || 0) + " Gewicht") +
       row("Registriert", fmtDateTime(u.created_at)) +
-      row("Zuletzt aktiv", fmtDateTime(u.last_login_at)) +
+      row("Letzter Login", fmtDateTime(u.last_login_at)) +
+      row("Zuletzt aktiv", u.last_active_on ? fmtDate(u.last_active_on) : "—") +
       "</dl>";
 
     var subBox =

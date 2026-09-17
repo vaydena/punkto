@@ -87,7 +87,7 @@ Deno.serve(async (req: Request) => {
       const like = "%" + q.replace(/[%_]/g, "") + "%";
       const rows = q
         ? await sql`
-            select u.id, u.email, u.display_name, u.created_at, u.last_login_at,
+            select u.id, u.email, u.display_name, u.created_at, u.last_login_at, u.last_active_on,
                    sb.status, sb.trial_ends_at, sb.current_period_end,
                    greatest(coalesce(sb.trial_ends_at,'epoch'::timestamptz), coalesce(sb.current_period_end,'epoch'::timestamptz)) as ends_at,
                    (now() < greatest(coalesce(sb.trial_ends_at,'epoch'::timestamptz), coalesce(sb.current_period_end,'epoch'::timestamptz))) as access
@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
              where lower(u.email) like ${like} or lower(coalesce(u.display_name,'')) like ${like}
              order by u.created_at desc limit ${limit} offset ${offset}`
         : await sql`
-            select u.id, u.email, u.display_name, u.created_at, u.last_login_at,
+            select u.id, u.email, u.display_name, u.created_at, u.last_login_at, u.last_active_on,
                    sb.status, sb.trial_ends_at, sb.current_period_end,
                    greatest(coalesce(sb.trial_ends_at,'epoch'::timestamptz), coalesce(sb.current_period_end,'epoch'::timestamptz)) as ends_at,
                    (now() < greatest(coalesce(sb.trial_ends_at,'epoch'::timestamptz), coalesce(sb.current_period_end,'epoch'::timestamptz))) as access
@@ -108,7 +108,7 @@ Deno.serve(async (req: Request) => {
       const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
       const [uu, sb, pay, diaryN, wN] = await Promise.all([
         sql`select id, email, display_name, sex, birth_year, height_cm, start_weight_kg, goal_weight_kg,
-                   activity_level, daily_budget, weekly_extra, onboarded, email_verified, created_at, last_login_at
+                   activity_level, daily_budget, weekly_extra, onboarded, email_verified, created_at, last_login_at, last_active_on
               from punkto.users where id = ${id} limit 1`,
         sql`select status, plan, trial_ends_at, current_period_end, notes, created_at, updated_at,
                    (now() < greatest(coalesce(trial_ends_at,'epoch'::timestamptz), coalesce(current_period_end,'epoch'::timestamptz))) as access

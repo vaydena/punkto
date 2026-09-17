@@ -733,6 +733,10 @@
 <script src="assets/pk-engine.js"></script>
 <script src="assets/pk-app.js"></script>
 <script src="assets/pk-store.js"></script>
+<script src="assets/pk-diary.js"></script>
+<script src="assets/pk-backup.js"></script>
+<script src="assets/pk-token.js"></script>
+<script src="assets/pk-bls.js"></script>
 <script src="assets/pk-ocr.js"></script>
 <script>
 /* ============================================================================
@@ -755,7 +759,9 @@
     communityFoods: [],        // freigegebene Gemeinschaftsprodukte (gecacht, offline)
     offline: false,            // true = aus Cache geladen (kein Netz beim Start)
     camStream: null,
-    pedometer: null            // laufender Vordergrund-Schrittzähler (Aktivität-Sheet)
+    pedometer: null,           // laufender Vordergrund-Schrittzähler (Aktivität-Sheet)
+    token: null,               // signierter Abo-Token (Ed25519), offline geprüft
+    tokenGate: null            // { state:"active|grace|expired|none", validUntil, graceUntil }
   };
 
   /* ---- Helfer ---- */
@@ -816,7 +822,41 @@
     if (e.status === 401) return "Sitzung abgelaufen. Bitte neu anmelden.";
     return "Etwas ist schiefgelaufen. Bitte erneut versuchen.";
   }
+
+  /* ======================================================================
+     ABO-TOKEN (Ed25519) — OFFLINE-ZUGRIFFSGATE
+     Der Server (punkto-data) signiert einen „gültig-bis"-Token; die App trägt
+     nur den ÖFFENTLICHEN Schlüssel (pk-token.js) und prüft rein lokal. So bleibt
+     der Zugang auch offline korrekt begrenzt: aktiv -> Kulanz (7 Tage, weiter
+     schreibbar) -> danach nur-lesen. Fehlt/kaputt der Token, bleibt die App
+     bewusst ungated (fail-open) — ein fehlendes Secret sperrt niemanden aus.
+     ====================================================================== */
+  var IATFLOOR_KEY = "pk_token_iatfloor_v1";   // höchstes je gesehenes iat (Uhr-Rückdreh-Schutz)
+  function readIatFloor() {
+    try { return Number(localStorage.getItem(IATFLOOR_KEY)) || 0; } catch (e) { return 0; }
+  }
+  function writeIatFloor(sec) {
+    try { localStorage.setItem(IATFLOOR_KEY, String(Math.floor(Number(sec) || 0))); } catch (e) { /* egal */ }
+  }
+  /* Token prüfen (Signatur, offline) und daraus S.token + S.tokenGate setzen.
+     Schlägt IMMER folgenlos fehl: unprüfbar -> Gate-Zustand „none" (ungated). */
+  async function applyToken(token) {
+    S.token = token || null;
+    var payload = null;
+    try { if (token && window.PKToken) payload = await PKToken.verify(token); } catch (e) { payload = null; }
+    if (payload && Number(payload.iat) > readIatFloor()) writeIatFloor(payload.iat);
+    var nowSec = Math.floor(Date.now() / 1000);
+    var eff = window.PKToken ? PKToken.effectiveNow(nowSec, readIatFloor()) : nowSec;
+    S.tokenGate = window.PKToken ? PKToken.gate(payload, eff) : { state: "none", validUntil: 0, graceUntil: 0 };
+    return S.tokenGate;
+  }
+  /* Ist lokales Schreiben gesperrt? Nur nach Ablauf INKL. Kulanz-Fenster. */
+  function accessBlocked() { return !!(S.tokenGate && S.tokenGate.state === "expired"); }
+
   async function guardWrite(fn) {
+    // Lokales Zugriffsgate: nach Ablauf + Kulanz ist die App nur-lesen. Greift
+    // auch vollständig offline, da alle Tagebuch-Schreibvorgänge hier durchlaufen.
+    if (accessBlocked()) { renderAccessBanner(); openPaywall(); return null; }
     try { return await fn(); }
     catch (e) {
       if (isNoAccess(e)) { if (e.data && e.data.subscription) S.sub = e.data.subscription; renderAccessBanner(); openPaywall(); return null; }
@@ -845,53 +885,100 @@
   /* ======================================================================
      LADEN
      ====================================================================== */
-  async function loadState(day) {
-    var d = await API.data.state(day || undefined);
-    S.data = d;
-    S.user = d.user;
-    S.sub = d.subscription;
-    S.day = d.day;
-    if (!day) { S.today = d.day; S.offline = false; cacheState(d); }  // erste Antwort definiert „heute"
-    return d;
+  /* Orchestrator: mischt kontobezogene Felder (Abo, eigene Produkte, Rezepte —
+     kommen vom Server) mit den Tagesfeldern (Tagebuch/Gewicht/Aktivität — kommen
+     IMMER gerätelokal aus PKDiary). Dadurch:
+       - lässt sich tageweise rein lokal blättern (instant, offline),
+       - klappt das Speichern von Mahlzeiten jederzeit ohne Netz,
+       - werden Kontobits nur bei Bedarf (Boot/Onboarding/Produkt- & Rezept-
+         Änderungen) frisch geholt; offline greift der zuletzt gesicherte Stand.
+     opts.account=true erzwingt das Nachladen der Kontobits vom Server. */
+  async function loadState(day, opts) {
+    if (!S.today) S.today = PKDiary.today();
+    var forceAccount = !!(opts && opts.account);
+    var localDay = day || S.today;
+    var haveAccount = !!(S.data && S.user);
+    var acct;
+    if (forceAccount || !haveAccount) {
+      try {
+        var d = await API.data.state();
+        acct = pickAccount(d); S.offline = false;
+      } catch (e) {
+        if (e.code === "network") {
+          var c = readCache();
+          if (!(c && c.user)) throw e;              // allererster Start ohne Netz UND ohne Cache
+          acct = pickAccountFromCache(c); S.offline = true;
+        } else throw e;
+      }
+    } else {
+      acct = pickAccount(S.data);                    // vorhandene Kontobits weiter nutzen, kein Netz
+    }
+    var local = await PKDiary.dayState(localDay);     // Tag-Bits stets lokal
+    S.data = composeState(acct, local);
+    S.user = acct.user; S.sub = acct.subscription; S.day = localDay;
+    await applyToken(acct.token);                      // Abo-Token offline prüfen -> S.tokenGate
+    if (day == null) S.today = localDay;              // „heute" aktuell halten
+    if (forceAccount) cacheState(S.data);             // frische Kontobits sichern
+    return S.data;
   }
 
-  /* Letzten „heute"-Stand geraetelokal sichern, damit die App offline booten
-     kann (Scanner + Punkte funktionieren dann ohne Netz; Schreiben bleibt online). */
+  /* Kontobits aus einer Server-Antwort bzw. aus dem Cache herauslösen. */
+  function pickAccount(s) {
+    return {
+      user: s && s.user, subscription: s && s.subscription, token: s && s.token,
+      custom_foods: (s && s.custom_foods) || [], recipes: (s && s.recipes) || []
+    };
+  }
+  function pickAccountFromCache(c) {
+    var d = c.data || {};
+    return {
+      user: c.user, subscription: c.subscription,
+      token: c.token != null ? c.token : d.token,   // Abo-Token aus dem letzten Online-Stand
+      custom_foods: d.custom_foods || [], recipes: d.recipes || []
+    };
+  }
+  /* Kontobits + lokale Tagesfelder zu einem State zusammensetzen (server-identische Form). */
+  function composeState(acct, local) {
+    return {
+      ok: true,
+      user: acct.user, subscription: acct.subscription, token: acct.token,
+      custom_foods: acct.custom_foods, recipes: acct.recipes,
+      day: local.day, week_start: local.week_start,
+      diary: local.diary, activity: local.activity,
+      weight_today: local.weight_today, weights: local.weights,
+      week: local.week, week_bonus: local.week_bonus
+    };
+  }
+
+  /* Letzten „heute"-Stand (nur Kontobits) gerätelokal sichern, damit die App auch
+     offline booten kann. Das Tagebuch selbst liegt ohnehin lokal (PKDiary) und
+     wird beim Laden stets frisch von dort gelesen. */
   var CACHE_KEY = "pk_state_cache_v1";
   function cacheState(d) {
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({
-        at: Date.now(), day: d.day, user: d.user, subscription: d.subscription, data: d
+        at: Date.now(), day: d.day, user: d.user, subscription: d.subscription, token: d.token, data: d
       }));
     } catch (e) { /* Speicher voll/gesperrt -> egal */ }
   }
   function readCache() {
     try { var s = localStorage.getItem(CACHE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
   }
-  function hydrateFromCache(c) {
-    S.data = c.data; S.user = c.user; S.sub = c.subscription;
-    S.day = c.day; S.today = c.day; S.offline = true;
-  }
 
   async function boot() {
     // Lokale Datenbanken (Such-DB + eigene Offline-Produkte) parallel vorladen.
     API.foods.loadLocal().then(function (l) { S.localFoods = l || []; });
+    if (window.PKBls) PKBls.load();   // BLS-Katalog offline vorladen (einmal, gecacht)
     refreshLocalProducts();
     initCommunity();  // Gemeinschaftsprodukte (Cache sofort, frisch im Hintergrund)
 
     try {
-      await loadState();
+      await loadState(undefined, { account: true });
     } catch (e) {
       if (e.status === 401) { API.clearToken(); location.replace("anmelden.html"); return; }
-      // Kein Netz? -> aus dem letzten gesicherten Stand offline weiterarbeiten.
-      var c = (e.code === "network") ? readCache() : null;
-      if (c && c.user && c.user.onboarded) {
-        hydrateFromCache(c);
-        $("#loading").hidden = true;
-        showApp();
-        toast("Offline — dein letzter Stand. Eintragen geht wieder online.");
-        return;
-      }
+      // loadState fängt „offline mit Cache" bereits selbst ab (Tagebuch bleibt
+      // lokal nutzbar). Hierher kommen nur: allererster Start ohne Netz (kein
+      // Cache) oder ein echter Serverfehler -> Hinweis + Neu-laden anbieten.
       $("#loading").innerHTML = '<div style="text-align:center;max-width:320px">' +
         '<p style="color:var(--danger)">' + esc(humanErr(e)) + '</p>' +
         (e.code === "network"
@@ -902,8 +989,26 @@
 
     $("#loading").hidden = true;
     if (!S.user.onboarded) { startOnboarding(); }
-    else { showApp(); }
+    else { showApp(); if (S.offline) toast("Offline — deine Einträge werden lokal gespeichert."); }
   }
+
+  /* Wieder online: nur den frisch signierten Abo-Token nachladen (leicht, kein
+     voller State-Roundtrip) und das Zugriffsgate neu bewerten. Nie blockierend,
+     Fehler (offline/kein Zugang) bleiben folgenlos. */
+  async function refreshTokenOnline() {
+    if (!navigator.onLine) return;
+    try {
+      var r = await API.data.token();
+      if (r && r.token) {
+        await applyToken(r.token);
+        if (r.subscription) S.sub = r.subscription;
+        S.offline = false;
+        if (S.data) { S.data.token = r.token; if (r.subscription) S.data.subscription = r.subscription; cacheState(S.data); }
+        if (S.user) renderAccessBanner();
+      }
+    } catch (e) { /* offline / Sitzung abgelaufen -> nichts tun */ }
+  }
+  window.addEventListener("online", refreshTokenOnline);
 
   /* Eigene Offline-Produkte aus IndexedDB in den Zustand laden (für Suche/Liste). */
   async function refreshLocalProducts() {
@@ -982,16 +1087,33 @@
       vegan: false, vegetarian: false, bought_at: ""
     };
   }
-  /* Best-effort: den BLS (Server) abfragen und die Treffer — dedupliziert gegen
-     die bereits gezeigten Namen — an die Ergebnisliste anhängen. Reine Ergänzung:
-     schlägt der Aufruf fehl (offline/Timeout/keine Sitzung), bleibt die lokale
-     Liste unverändert stehen. Renn-Schutz via host._blsQ: nur die Antwort zur
+  /* BLS-Treffer beziehen — OFFLINE ZUERST aus dem gebündelten Katalog (PKBls).
+     Nur wenn das Bündel (noch) nicht geladen ist, dient der Server als Rückfall
+     (sofern online). So funktioniert die BLS-Suche auch völlig ohne Netz. */
+  function blsFetch(q) {
+    if (window.PKBls) {
+      return PKBls.search(q, 30).then(function (rows) {
+        if ((rows && rows.length) || PKBls.ready()) {
+          return { foods: rows || [], attribution: PKBls.attribution() };
+        }
+        // Bündel nicht verfügbar (Ladefehler) UND kein Treffer -> Server-Rückfall.
+        if (API.bls && API.bls.search) return API.bls.search(q).catch(function () { return { foods: [] }; });
+        return { foods: [] };
+      });
+    }
+    if (API.bls && API.bls.search) return API.bls.search(q);
+    return Promise.resolve({ foods: [] });
+  }
+
+  /* Best-effort: BLS-Treffer — dedupliziert gegen die bereits gezeigten Namen —
+     an die Ergebnisliste anhängen. Reine Ergänzung: schlägt es fehl, bleibt die
+     lokale Liste unverändert. Renn-Schutz via host._blsQ: nur die Antwort zur
      zuletzt getippten Anfrage darf noch neu rendern. */
   function appendBlsResults(q, host, baseFoods, preMeal) {
     q = String(q || "").trim();
-    if (!host || q.length < 2 || !(API.bls && API.bls.search)) return;
+    if (!host || q.length < 2) return;
     host._blsQ = q;
-    API.bls.search(q).then(function (d) {
+    blsFetch(q).then(function (d) {
       if (host._blsQ !== q) return;                       // veraltet -> verwerfen
       var rows = (d && d.foods) || [];
       if (!rows.length) return;
@@ -1297,7 +1419,7 @@
       if (r && r.user) S.user = r.user;
       // Startgewicht auch als ersten Messpunkt eintragen (schön für den Verlauf).
       try { await API.data.weightSet(patch.start_weight_kg); } catch (e) { /* egal */ }
-      await loadState();
+      await loadState(undefined, { account: true });   // frischen Kontostand (onboarded:true) holen
       showApp();
       toast("Willkommen an Bord! 🌱");
     } catch (e) {
@@ -1327,6 +1449,19 @@
 
   function renderAccessBanner() {
     var host = $("#accessBannerHost"); host.innerHTML = "";
+    // Das offline geprüfte Abo-Token hat Vorrang, sobald es einen Zustand liefert
+    // (state "none" = kein/kaputter Token -> fällt bewusst auf die Sub-Logik zurück).
+    var gs = S.tokenGate && S.tokenGate.state;
+    if (gs === "expired") {
+      host.innerHTML = '<div class="access-banner err">⏳ Dein Zugang ist abgelaufen — Eintragen ist pausiert, Lesen bleibt möglich.' +
+        '<a class="btn danger small" href="konto.html">Verlängern</a></div>';
+      return;
+    }
+    if (gs === "grace") {
+      host.innerHTML = '<div class="access-banner warn">⏳ Dein Zugang ist abgelaufen — du kannst noch ein paar Tage weiter eintragen.' +
+        '<a class="btn amber small" href="konto.html">Jetzt verlängern</a></div>';
+      return;
+    }
     if (!S.sub) return;
     if (!S.sub.access) {
       host.innerHTML = '<div class="access-banner err">⏳ Dein Zugang ist abgelaufen.' +
@@ -2017,7 +2152,7 @@
           }
           prev.innerHTML = '<div class="list-empty">Lade …</div>';
           var st;
-          try { st = await API.data.state(iso); }
+          try { st = await PKDiary.dayState(iso); }   // Quelltag rein lokal lesen -> „Tag kopieren" offline
           catch (e) { prev.innerHTML = '<div class="list-empty">Konnte den Tag nicht laden.</div>'; return; }
           var entries = (st && st.diary) || [];
           if (!entries.length) { prev.innerHTML = '<div class="list-empty">An diesem Tag wurde nichts gegessen.</div>'; return; }
@@ -2497,7 +2632,7 @@
           var r = await guardWrite(function () {
             return isEdit ? API.data.foodUpdate(Object.assign({ id: pre.id }, food)) : API.data.foodAdd(food);
           });
-          if (r) { closeSheet(); await refreshDay(); switchFoodSub("own"); toast(isEdit ? "Lebensmittel aktualisiert." : "Lebensmittel gespeichert."); }
+          if (r) { closeSheet(); await refreshDay(true); switchFoodSub("own"); toast(isEdit ? "Lebensmittel aktualisiert." : "Lebensmittel gespeichert."); }
           else this.disabled = false;
         });
       });
@@ -3355,7 +3490,7 @@
           var r = await guardWrite(function () {
             return isEdit ? API.data.recipeUpdate(Object.assign({ id: pre.id }, recipe)) : API.data.recipeAdd(recipe);
           });
-          if (r) { closeSheet(); switchTab("viewFood"); await refreshDay(); switchFoodSub("recipes"); toast(isEdit ? "Rezept aktualisiert." : "Rezept gespeichert."); }
+          if (r) { closeSheet(); switchTab("viewFood"); await refreshDay(true); switchFoodSub("recipes"); toast(isEdit ? "Rezept aktualisiert." : "Rezept gespeichert."); }
           else this.disabled = false;
         });
 
@@ -3393,6 +3528,15 @@
       '<a href="agb.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> AGB</a>' +
       '<button data-s="logout" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg> Abmelden</button>' +
       '</div>' +
+      '<div class="backup-block">' +
+      '<h4>Sicherung &amp; Umzug</h4>' +
+      '<p style="color:var(--muted);font-size:.82rem;margin:.2rem 0 .6rem">Dein Tagebuch, Gewicht und deine eigenen Produkte liegen nur auf diesem Gerät. Speichere sie regelmäßig als Datei — und spiele diese Datei auf einem neuen Gerät wieder ein. Funktioniert auch offline.</p>' +
+      '<div class="settings-links">' +
+      '<button data-s="export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Sicherung als Datei speichern</button>' +
+      '<button data-s="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg> Sicherung aus Datei einspielen</button>' +
+      '</div>' +
+      '<input type="file" id="importFile" accept="application/json,.json" hidden>' +
+      '</div>' +
       '<div class="data-sources">' +
       '<h4>Datenquellen &amp; Lizenzen</h4>' +
       '<p>Ein Teil der Nährwerte stammt aus dem <b>Bundeslebensmittelschlüssel (BLS) 4.0</b> — Max Rubner-Institut (2025). Lizenz: <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>.</p>' +
@@ -3408,9 +3552,61 @@
             else if (s === "password") openPasswordSheet();
             else if (s === "profile") openProfileSheet();
             else if (s === "goals") openGoalsSheet();
+            else if (s === "export") exportBackup();
+            else if (s === "import") { var fi = $("#importFile", root); if (fi) fi.click(); }
           });
         });
+        var fileIn = $("#importFile", root);
+        if (fileIn) fileIn.addEventListener("change", function () {
+          var f = this.files && this.files[0];
+          if (f) importBackupFile(f);
+          this.value = "";
+        });
       });
+  }
+
+  /* ---- Sicherung: Export (Download einer versionierten JSON-Datei) ---- */
+  async function exportBackup() {
+    try {
+      var data = await PKBackup.build();
+      var json = JSON.stringify(data);
+      var blob = new Blob([json], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var d = new Date();
+      var stamp = d.getFullYear() + "-" +
+        String(d.getMonth() + 1).padStart(2, "0") + "-" +
+        String(d.getDate()).padStart(2, "0");
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "punkto-sicherung-" + stamp + ".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      var c = { entries: (data.diary.entries || []).length, products: (data.products || []).length };
+      toast("Sicherung gespeichert (" + c.entries + " Einträge, " + c.products + " Produkte).");
+    } catch (e) {
+      toast("Sicherung fehlgeschlagen.");
+    }
+  }
+
+  /* ---- Sicherung: Import (Datei einlesen, zusammenführen) ---- */
+  async function importBackupFile(file) {
+    try {
+      var text = await file.text();
+      var obj = JSON.parse(text);
+      var res = await PKBackup.apply(obj, { replace: false });
+      closeSheet();
+      await refreshDay();
+      try { await refreshLocalProducts(); renderProductMine(); } catch (e) {}
+      var c = res.counts;
+      toast("Eingespielt: " + c.entries + " Einträge, " + c.weights + " Gewichte, " + c.products + " Produkte.");
+    } catch (e) {
+      var msg = e && e.message;
+      if (msg === "bad_format") toast("Das ist keine gültige Punkto-Sicherung.");
+      else if (msg === "newer_version") toast("Diese Sicherung stammt aus einer neueren App-Version.");
+      else toast("Datei konnte nicht eingelesen werden.");
+    }
   }
 
   function openProfileSheet() {
@@ -3615,7 +3811,7 @@
       b.addEventListener("click", async function () {
         if (!confirm("Dieses Lebensmittel löschen?")) return;
         var r = await guardWrite(function () { return API.data.foodDel(b.dataset.delFood); });
-        if (r) { await refreshDay(); renderOwnFoods(); toast("Gelöscht."); }
+        if (r) { await refreshDay(true); renderOwnFoods(); toast("Gelöscht."); }
       });
     });
   }
@@ -3651,7 +3847,7 @@
       b.addEventListener("click", async function () {
         if (!confirm("Dieses Rezept löschen?")) return;
         var r = await guardWrite(function () { return API.data.recipeDel(b.dataset.delRecipe); });
-        if (r) { await refreshDay(); renderRecipes(); toast("Gelöscht."); }
+        if (r) { await refreshDay(true); renderRecipes(); toast("Gelöscht."); }
       });
     });
   }
@@ -3659,9 +3855,14 @@
   /* ======================================================================
      TAG WECHSELN / AKTUALISIEREN
      ====================================================================== */
-  async function refreshDay() {
-    try { await loadState(S.day === S.today ? undefined : S.day); renderAll(); }
-    catch (e) { toast(humanErr(e)); }
+  /* Nach einem Tagebuch-/Gewicht-/Aktivitäts-Schreibvorgang genügt ein rein
+     lokales Neuladen des Tages (kein Netz). Nach Produkt-/Rezept-Änderungen
+     (die serverseitig bleiben) mit forceAccount=true die Kontobits nachziehen. */
+  async function refreshDay(forceAccount) {
+    try {
+      await loadState(S.day === S.today ? undefined : S.day, forceAccount ? { account: true } : undefined);
+      renderAll();
+    } catch (e) { toast(humanErr(e)); }
   }
   async function gotoDay(iso) {
     try {
