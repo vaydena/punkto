@@ -965,6 +965,44 @@
     try { var s = localStorage.getItem(CACHE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
   }
 
+  /* Einmalige Server->Lokal-Wiederherstellung des Tagebuchs (SELF-HEALING).
+     Hintergrund: Mit der Offline-Umstellung (v39) wanderten Tagebuch/Gewicht/
+     Aktivität vom Server in die lokale IndexedDB (PKDiary) — OHNE die bereits
+     serverseitig gespeicherten Alt-Einträge zu übernehmen; auf betroffenen Konten
+     wirkte damit „alles weg". Diese Funktion holt die vollständige Server-Historie
+     EINMAL pro Konto nach (data.export_all, read-only) und spielt sie lokal ein
+     (MERGE: die Server-UUIDs kollidieren nicht mit lokalen Neu-Einträgen, nichts
+     wird gelöscht). Danach ist der Server nur noch Legacy-Quelle; neue Einträge
+     bleiben rein lokal. Guard: ein localStorage-Flag je Konto -> läuft genau einmal.
+     Fail-open: jeder Fehler bleibt folgenlos; das Flag wird NUR nach Erfolg gesetzt,
+     ein Fehlversuch (z. B. kurz offline) wiederholt sich beim nächsten Online-Start. */
+  async function migrateServerDiaryOnce() {
+    try {
+      if (S.offline || !navigator.onLine) return;          // braucht Netz -> sonst später
+      var uid = S.user && S.user.id;
+      if (!uid) return;
+      var flag = "pk_diary_migrated_" + uid;
+      try { if (localStorage.getItem(flag) === "1") return; } catch (e) { /* Storage gesperrt -> einmal versuchen */ }
+      var full = await API.data.exportAll();               // { entries, weights, activities }
+      var imported = 0;
+      if (full) {
+        var res = await PKDiary.importAll({
+          entries: full.entries || [], weights: full.weights || [], activities: full.activities || []
+        }, { replace: false });                            // MERGE — nichts löschen/überschreiben (außer Gewicht je Tag)
+        var c = (res && res.counts) || {};
+        imported = (c.entries || 0) + (c.weights || 0) + (c.activities || 0);
+      }
+      try { localStorage.setItem(flag, "1"); } catch (e) { /* egal — beim nächsten Start erneut, Merge ist idempotent */ }
+      // Kamen wirklich Alt-Daten herein und die App läuft schon: aktuellen Tag/Woche
+      // frisch aus dem nun ergänzten lokalen Bestand lesen und die Ansicht auffrischen
+      // (Teile der wiederhergestellten Historie können in der laufenden Woche liegen).
+      if (imported > 0 && S.user && S.user.onboarded) {
+        try { await loadState(S.day); renderAll(); } catch (e) { /* Anzeige-Refresh ist best-effort */ }
+        toast("Deine früheren Einträge wurden wiederhergestellt.");
+      }
+    } catch (e) { /* Wiederherstellung ist best-effort — den Boot nie stören */ }
+  }
+
   async function boot() {
     // Lokale Datenbanken (Such-DB + eigene Offline-Produkte) parallel vorladen.
     API.foods.loadLocal().then(function (l) { S.localFoods = l || []; });
@@ -990,6 +1028,10 @@
     $("#loading").hidden = true;
     if (!S.user.onboarded) { startOnboarding(); }
     else { showApp(); if (S.offline) toast("Offline — deine Einträge werden lokal gespeichert."); }
+    // Einmalige, selbstheilende Wiederherstellung der Server-Alt-Einträge ins lokale
+    // Tagebuch (nach der Offline-Umstellung v39). Läuft im Hintergrund, blockiert den
+    // Start nicht und frischt die Ansicht auf, sobald Daten hereingekommen sind.
+    migrateServerDiaryOnce();
   }
 
   /* Wieder online: nur den frisch signierten Abo-Token nachladen (leicht, kein

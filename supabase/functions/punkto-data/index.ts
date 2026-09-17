@@ -556,6 +556,29 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, products: rows, count: rows.length });
     }
 
+    if (action === "export_all") {
+      // Vollstaendige Tagebuch-Historie EINES Kontos (ALLE Tage) fuer die einmalige
+      // Server->Lokal-Wiederherstellung nach der Offline-Umstellung (v39): der Client
+      // spielt sie in seine lokale IndexedDB (PKDiary) ein — siehe app.html
+      // migrateServerDiaryOnce(). Bewusst READ-ONLY und NICHT in WRITE -> auch bei
+      // abgelaufenem/pausiertem Abo abrufbar, damit niemand von seinen EIGENEN
+      // Alt-Daten ausgesperrt wird. Feld-Shapes exakt wie PKDiary.importAll erwartet
+      // (day::text als YYYY-MM-DD, sonst spaltengleich zu diary_add/weight_set/activity_add).
+      const [entries, weights, activities] = await Promise.all([
+        sql`select id, day::text as day, meal, name, points, qty, unit, kcal, source, ref_code, created_at
+              from punkto.diary_entries where user_id = ${u.id} order by day, created_at`,
+        sql`select day::text as day, weight_kg
+              from punkto.weight_logs where user_id = ${u.id} order by day`,
+        sql`select id, day::text as day, kind, steps, minutes, bonus_points, note, created_at
+              from punkto.activity_logs where user_id = ${u.id} order by day, created_at`,
+      ]);
+      return json({
+        ok: true,
+        counts: { entries: entries.length, weights: weights.length, activities: activities.length },
+        entries, weights, activities,
+      });
+    }
+
     return json({ error: "unknown_action" }, 400);
   } catch (e) {
     try { console.error("punkto-data", action, String((e as Error)?.message || e)); } catch (_e) { /* ignore */ }

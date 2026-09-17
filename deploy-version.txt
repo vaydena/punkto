@@ -1,4 +1,4 @@
-pk-v39-794a
+pk-v40-7b3c
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v39-794a: OFFLINE-Umstellung (5 Phasen). (1) Tagebuch/Gewicht/Aktivität rein gerätelokal
           (IndexedDB, PKDiary) — Mahlzeiten IMMER offline speicherbar. (2) Manueller
@@ -682,3 +682,32 @@ pk-v38-f3b1: Landingpage an den v37-Funktionsstand angeglichen (Marketing + Graf
          KEIN Server-/Function-/Datenmodell-Change. KEIN SW-CACHE-Bump noetig: geaendert wurde
          nur index.html (isDoc = NETWORK-FIRST in sw.js) -> kommt ohne Cache-Bump sofort auf
          installierten PWAs an; SW bleibt pk-app-v34.
+v40-7b3c: SELBSTHEILUNG „verlorene" Tagebuchdaten nach der Offline-Umstellung (v39).
+         URSACHE: v39 verlagerte Tagebuch/Gewicht/Aktivitaet vom Server in die lokale
+         IndexedDB (PKDiary) — OHNE Migration der bereits serverseitig gespeicherten
+         Alt-Eintraege. Auf betroffenen Konten war die lokale DB leer, waehrend die
+         echten Daten unversehrt in punkto.diary_entries/weight_logs/activity_logs
+         lagen -> die App zeigte „alles weg", obwohl NICHTS geloescht war (verifiziert:
+         alle drei Tabellen intakt).
+         FIX (einmalige, idempotente Server->Lokal-Wiederherstellung):
+         (1) punkto-data: neue READ-ONLY-Aktion export_all liefert die VOLLSTAENDIGE
+             Historie eines Kontos (alle Tage) im exakten PKDiary.importAll-Shape
+             (day::text). Bewusst NICHT WRITE-gated -> auch bei abgelaufenem/pausiertem
+             Abo abrufbar (niemand wird von den EIGENEN Alt-Daten ausgesperrt).
+         (2) pk-app.js: data.exportAll() ruft die Aktion auf.
+         (3) app.html: migrateServerDiaryOnce() laeuft EINMAL pro Konto beim Boot
+             (Guard localStorage pk_diary_migrated_<uid>), holt export_all und
+             spielt es per PKDiary.importAll(..., {replace:false}) lokal ein (MERGE —
+             Server-UUIDs kollidieren nicht mit lokalen Neu-Eintraegen, nichts wird
+             geloescht). Fail-open: jeder Fehler bleibt folgenlos, das Flag wird NUR
+             nach Erfolg gesetzt (kurz offline -> Wiederholung beim naechsten Online-
+             Start). Kamen Daten herein, wird Tag/Woche neu gelesen, die Ansicht
+             aufgefrischt und „Deine frueheren Eintraege wurden wiederhergestellt."
+             getoastet. Laeuft im Hintergrund, blockiert den Start nicht.
+         WIRKUNG: Jedes betroffene Geraet stellt sich beim naechsten ONLINE-Start des
+         Tagebuchs selbst wieder her. Der Server bleibt Legacy-Quelle; neue Eintraege
+         bleiben rein lokal (Offline-Design von v39 unveraendert).
+         Geaendert: supabase/functions/punkto-data (export_all; neu deployt,
+         verify_jwt=false!), assets/pk-app.js (data.exportAll), app.html
+         (migrateServerDiaryOnce + Boot-Aufruf). SW-CACHE auf pk-app-v36 angehoben
+         (app.html-Inline + pk-app.js im Shell-Precache -> Purge noetig).

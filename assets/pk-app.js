@@ -106,6 +106,10 @@
     // Nur den frisch signierten Abo-Token (Ed25519) holen — leichtgewichtige
     // Auffrischung, wenn wieder online (kein voller State-Roundtrip noetig).
     token() { return call("data", "token", {}); },
+    // Vollstaendige SERVER-Tagebuchhistorie (alle Tage) — ausschliesslich fuer die
+    // EINMALIGE Wiederherstellung nach der Offline-Umstellung (siehe app.html
+    // migrateServerDiaryOnce). Read-only; liefert { entries, weights, activities }.
+    exportAll() { return call("data", "export_all", {}); },
     // --- Tagebuch / Gewicht / Aktivitaet: GERAETELOKAL (IndexedDB via PKDiary) ---
     //     Damit kann der Kunde seine Mahlzeiten JEDERZEIT speichern, auch voellig
     //     offline. Rueckgabe-Shapes sind identisch zum Server (siehe pk-diary.js);
