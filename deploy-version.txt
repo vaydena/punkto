@@ -1,4 +1,4 @@
-pk-v42-0262
+pk-v43-1f7a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v39-794a: OFFLINE-Umstellung (5 Phasen). (1) Tagebuch/Gewicht/Aktivität rein gerätelokal
           (IndexedDB, PKDiary) — Mahlzeiten IMMER offline speicherbar. (2) Manueller
@@ -785,3 +785,20 @@ v42-0262: SERVER-DUAL-WRITE + SYNC (Durabilitaet + Multi-Geraet). Behebt das sei
          (Outbox-Store + activity-Shape), app.html (syncKick + Listener). SW-CACHE auf
          pk-app-v38 angehoben (app.html-Inline + pk-app.js + pk-diary.js im Shell-Precache
          -> Purge noetig).
+v43-1f7a: LANDINGPAGE-TEXT — Server-Speicherung sichtbar gemacht. Bisher warb die
+         Startseite nur mit "offline / geraetelokal"; seit v42 liegen die Daten aber
+         zusaetzlich sicher auf dem Server (IndexedDB bleibt Quelle der Wahrheit + Server-
+         Backup + Multi-Geraete-Sync). Der Landingpage-Text spiegelt das jetzt ehrlich wider.
+         Geaendert (nur index.html, reine Textaenderung, KEIN Code/kein Verhalten):
+         (1) Feature-Karte "Als App · offline" -> "Als App · offline & synchron": Ergaenzung,
+             dass Eintraege zusaetzlich sicher auf dem Server gespeichert werden -> gleicher
+             Stand auf jedem Geraet.
+         (2) Karte "Deine Daten bleiben deine": praezisiert, dass die Eintraege auf dem Geraet
+             bleiben UND zusaetzlich sicher auf dem Server gespeichert werden (geht ein Handy
+             verloren, sind die Daten trotzdem da); Loesch-Recht bleibt erwaehnt.
+         (3) Neue FAQ "Sind meine Daten sicher, wenn ich das Handy wechsle oder verliere?" —
+             erklaert Geraet+Server-Speicherung in Deutschland und die Wiederherstellung beim
+             Anmelden auf einem neuen Geraet.
+         KEIN SW-BUMP: index.html wird vom Service Worker network-first ausgeliefert (Shell-
+         Precache bleibt pk-app-v38) -> die Textaenderung ist beim naechsten Online-Aufruf
+         sofort live, ohne Cache-Purge. Nur dieser Marker wurde erhoeht.
