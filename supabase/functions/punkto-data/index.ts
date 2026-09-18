@@ -17,6 +17,13 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const num = (v: any, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+// Gibt einen gueltigen ISO-Zeitstempel zurueck oder null (fuer optionale client-
+// seitige created_at / den Sync-Cursor „since"). Niemals werfen -> null bei Muell.
+const tsOrNull = (v: any): string | null => {
+  if (v == null || v === "") return null;
+  const t = Date.parse(String(v));
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+};
 
 // --- Zahlung (manuell): feste Betreiber-Bankdaten + Preis --------------------
 const PRICE_CENTS = 299;        // 2,99 EUR / Monat
@@ -180,6 +187,7 @@ const WRITE = new Set([
   "diary_add", "diary_update", "diary_del", "weight_set", "weight_del",
   "activity_add", "activity_set_steps", "activity_del",
   "food_add", "food_update", "food_del", "recipe_add", "recipe_update", "recipe_del",
+  "sync_push", // Dual-Write-Batch: schreibt Tagebuch/Gewicht/Aktivitaet -> Zugang noetig
 ]);
 
 Deno.serve(async (req: Request) => {
@@ -201,15 +209,15 @@ Deno.serve(async (req: Request) => {
       const { start, end } = weekRange(day);
       const [diary, act, wToday, weights, week, weekBonus, foods, recipes] = await Promise.all([
         sql`select id, meal, name, points, qty, unit, kcal, source, ref_code, created_at
-              from punkto.diary_entries where user_id = ${u.id} and day = ${day} order by created_at`,
+              from punkto.diary_entries where user_id = ${u.id} and day = ${day} and deleted_at is null order by created_at`,
         sql`select id, kind, steps, minutes, bonus_points, note, created_at
-              from punkto.activity_logs where user_id = ${u.id} and day = ${day} order by created_at`,
-        sql`select weight_kg from punkto.weight_logs where user_id = ${u.id} and day = ${day} limit 1`,
-        sql`select day, weight_kg from punkto.weight_logs where user_id = ${u.id} order by day desc limit 200`,
+              from punkto.activity_logs where user_id = ${u.id} and day = ${day} and deleted_at is null order by created_at`,
+        sql`select weight_kg from punkto.weight_logs where user_id = ${u.id} and day = ${day} and deleted_at is null limit 1`,
+        sql`select day, weight_kg from punkto.weight_logs where user_id = ${u.id} and deleted_at is null order by day desc limit 200`,
         sql`select day::text as day, sum(points)::float as points from punkto.diary_entries
-              where user_id = ${u.id} and day between ${start} and ${end} group by day`,
+              where user_id = ${u.id} and day between ${start} and ${end} and deleted_at is null group by day`,
         sql`select day::text as day, sum(bonus_points)::float as bonus from punkto.activity_logs
-              where user_id = ${u.id} and day between ${start} and ${end} group by day`,
+              where user_id = ${u.id} and day between ${start} and ${end} and deleted_at is null group by day`,
         sql`select id, name, brand, per, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, points, barcode
               from punkto.custom_foods where user_id = ${u.id} order by created_at desc limit 500`,
         sql`select id, name, servings, items, points_total, points_per_serving
@@ -273,10 +281,20 @@ Deno.serve(async (req: Request) => {
       const name = String(body.name || "").trim().slice(0, 120);
       if (!name) return json({ error: "bad_name" }, 400);
       const meal = ["breakfast", "lunch", "dinner", "snack", "other"].includes(String(body.meal)) ? String(body.meal) : "other";
-      const r = await sql`insert into punkto.diary_entries (user_id, day, meal, name, points, qty, unit, kcal, source, ref_code)
-        values (${u.id}, ${day}, ${meal}, ${name}, ${clamp(num(body.points), 0, 200)}, ${clamp(num(body.qty, 1), 0, 9999)},
+      // Idempotent: der Client vergibt die UUID (crypto.randomUUID) und sendet sie mit;
+      // erneutes Senden desselben Eintrags aktualisiert ihn statt zu duplizieren. Fehlt
+      // die id (Alt-Client), wird eine erzeugt. created_at optional (Backfill alter Zeilen).
+      const cid = UUID_RE.test(String(body.id)) ? String(body.id) : crypto.randomUUID();
+      const created = tsOrNull(body.created_at);
+      const r = await sql`insert into punkto.diary_entries (id, user_id, day, meal, name, points, qty, unit, kcal, source, ref_code, created_at, updated_at, deleted_at)
+        values (${cid}, ${u.id}, ${day}, ${meal}, ${name}, ${clamp(num(body.points), 0, 200)}, ${clamp(num(body.qty, 1), 0, 9999)},
                 ${body.unit ? String(body.unit).slice(0, 20) : null}, ${body.kcal != null ? clamp(num(body.kcal), 0, 99999) : null},
-                ${body.source ? String(body.source).slice(0, 20) : "manual"}, ${body.ref_code ? String(body.ref_code).slice(0, 40) : null})
+                ${body.source ? String(body.source).slice(0, 20) : "manual"}, ${body.ref_code ? String(body.ref_code).slice(0, 40) : null},
+                coalesce(${created}::timestamptz, now()), now(), null)
+        on conflict (id) do update set day = excluded.day, meal = excluded.meal, name = excluded.name,
+                points = excluded.points, qty = excluded.qty, unit = excluded.unit, kcal = excluded.kcal,
+                source = excluded.source, ref_code = excluded.ref_code, updated_at = now(), deleted_at = null
+              where diary_entries.user_id = ${u.id}
         returning id, meal, name, points, qty, unit, kcal, source, ref_code, created_at`;
       return json({ ok: true, entry: r[0] });
     }
@@ -291,36 +309,57 @@ Deno.serve(async (req: Request) => {
               points = ${clamp(num(body.points), 0, 200)},
               qty = ${clamp(num(body.qty, 1), 0, 9999)},
               unit = ${body.unit ? String(body.unit).slice(0, 20) : null},
-              kcal = ${body.kcal != null ? clamp(num(body.kcal), 0, 99999) : null}
+              kcal = ${body.kcal != null ? clamp(num(body.kcal), 0, 99999) : null},
+              updated_at = now()
             where id = ${id} and user_id = ${u.id}
           returning id, meal, name, points, qty, unit, kcal, source, ref_code, created_at`;
       if (!r[0]) return json({ error: "not_found" }, 404);
       return json({ ok: true, entry: r[0] });
     }
     if (action === "diary_del") {
+      // SOFT-Delete (Grabstein): deleted_at markiert die Zeile als geloescht, damit
+      // andere Geraete das Loeschen per Delta nachziehen koennen. and deleted_at is null
+      // haelt den Grabstein-Zeitstempel stabil (kein erneutes updated_at bei Doppel-Del).
       const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
-      await sql`delete from punkto.diary_entries where id = ${id} and user_id = ${u.id}`;
+      await sql`update punkto.diary_entries set deleted_at = now(), updated_at = now()
+                  where id = ${id} and user_id = ${u.id} and deleted_at is null`;
       return json({ ok: true });
     }
 
     if (action === "weight_set") {
+      // Ein Gewicht je Tag (UNIQUE user_id, day). Beim Setzen updated_at frisch und
+      // deleted_at = null -> ein zuvor geloeschter (getombsteinter) Tageswert lebt wieder
+      // auf, wenn er neu eingetragen wird; andere Geraete ziehen das per Delta nach.
       const w = clamp(num(body.weight_kg), 30, 400);
       if (!w) return json({ error: "bad_weight" }, 400);
-      const r = await sql`insert into punkto.weight_logs (user_id, day, weight_kg) values (${u.id}, ${day}, ${w})
-        on conflict (user_id, day) do update set weight_kg = excluded.weight_kg returning day::text as day, weight_kg`;
+      const r = await sql`insert into punkto.weight_logs (user_id, day, weight_kg, updated_at, deleted_at)
+          values (${u.id}, ${day}, ${w}, now(), null)
+        on conflict (user_id, day) do update set weight_kg = excluded.weight_kg, updated_at = now(), deleted_at = null
+        returning day::text as day, weight_kg`;
       return json({ ok: true, weight: r[0] });
     }
     if (action === "weight_del") {
-      await sql`delete from punkto.weight_logs where user_id = ${u.id} and day = ${day}`;
+      // SOFT-Delete (Grabstein) statt Zeile entfernen -> Loeschen synct auf andere Geraete.
+      // and deleted_at is null haelt den Grabstein-Zeitstempel bei Doppel-Del stabil.
+      await sql`update punkto.weight_logs set deleted_at = now(), updated_at = now()
+                  where user_id = ${u.id} and day = ${day} and deleted_at is null`;
       return json({ ok: true });
     }
 
     if (action === "activity_add") {
+      // Idempotent wie diary_add: der Client vergibt die UUID und created_at, erneutes
+      // Senden aktualisiert statt zu duplizieren. Fehlt die id (Alt-Client), wird eine erzeugt.
       const kind = ["steps", "workout"].includes(String(body.kind)) ? String(body.kind) : "steps";
-      const r = await sql`insert into punkto.activity_logs (user_id, day, kind, steps, minutes, bonus_points, note)
-        values (${u.id}, ${day}, ${kind}, ${body.steps != null ? clamp(num(body.steps), 0, 200000) : null},
+      const cid = UUID_RE.test(String(body.id)) ? String(body.id) : crypto.randomUUID();
+      const created = tsOrNull(body.created_at);
+      const r = await sql`insert into punkto.activity_logs (id, user_id, day, kind, steps, minutes, bonus_points, note, created_at, updated_at, deleted_at)
+        values (${cid}, ${u.id}, ${day}, ${kind}, ${body.steps != null ? clamp(num(body.steps), 0, 200000) : null},
                 ${body.minutes != null ? clamp(num(body.minutes), 0, 1440) : null}, ${clamp(num(body.bonus_points), 0, 50)},
-                ${body.note ? String(body.note).slice(0, 120) : null})
+                ${body.note ? String(body.note).slice(0, 120) : null}, coalesce(${created}::timestamptz, now()), now(), null)
+        on conflict (id) do update set day = excluded.day, kind = excluded.kind, steps = excluded.steps,
+                minutes = excluded.minutes, bonus_points = excluded.bonus_points, note = excluded.note,
+                updated_at = now(), deleted_at = null
+              where activity_logs.user_id = ${u.id}
         returning id, kind, steps, minutes, bonus_points, note, created_at`;
       return json({ ok: true, entry: r[0] });
     }
@@ -329,19 +368,32 @@ Deno.serve(async (req: Request) => {
       // (auch bei ausgeschaltetem Display); der uebernommene Wert ist die kumulierte
       // Tagessumme. Deshalb ERSETZEN wir die Schritt-Zeile(n) des Tages, statt anzuhaengen
       // -> idempotent, kein Doppeltzaehlen beim wiederholten Uebernehmen. Workouts bleiben.
+      // SOFT-Delete (Grabstein) statt Hard-Delete, damit andere Geraete die alte Schritt-
+      // zeile per Delta entfernen und keine veraltete behalten. Die neue Zeile traegt die
+      // Client-UUID (idempotent); die zu setzende id wird vom Tombstone ausgenommen.
       const steps = clamp(num(body.steps), 0, 200000);
       const bonus = clamp(num(body.bonus_points), 0, 50);
-      await sql`delete from punkto.activity_logs where user_id = ${u.id} and day = ${day} and kind = 'steps'`;
+      const cid = UUID_RE.test(String(body.id)) ? String(body.id) : (steps > 0 ? crypto.randomUUID() : null);
+      const created = tsOrNull(body.created_at);
+      await sql`update punkto.activity_logs set deleted_at = now(), updated_at = now()
+                  where user_id = ${u.id} and day = ${day} and kind = 'steps' and deleted_at is null
+                    and (${cid}::uuid is null or id <> ${cid})`;
       if (steps <= 0) return json({ ok: true, entry: null });
-      const r = await sql`insert into punkto.activity_logs (user_id, day, kind, steps, minutes, bonus_points, note)
-        values (${u.id}, ${day}, 'steps', ${steps}, null, ${bonus},
-                ${body.note ? String(body.note).slice(0, 120) : null})
+      const r = await sql`insert into punkto.activity_logs (id, user_id, day, kind, steps, minutes, bonus_points, note, created_at, updated_at, deleted_at)
+        values (${cid}, ${u.id}, ${day}, 'steps', ${steps}, null, ${bonus},
+                ${body.note ? String(body.note).slice(0, 120) : null}, coalesce(${created}::timestamptz, now()), now(), null)
+        on conflict (id) do update set day = excluded.day, kind = 'steps', steps = excluded.steps,
+                minutes = null, bonus_points = excluded.bonus_points, note = excluded.note,
+                updated_at = now(), deleted_at = null
+              where activity_logs.user_id = ${u.id}
         returning id, kind, steps, minutes, bonus_points, note, created_at`;
       return json({ ok: true, entry: r[0] });
     }
     if (action === "activity_del") {
+      // SOFT-Delete (Grabstein) -> Loeschen synct auf andere Geraete.
       const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
-      await sql`delete from punkto.activity_logs where id = ${id} and user_id = ${u.id}`;
+      await sql`update punkto.activity_logs set deleted_at = now(), updated_at = now()
+                  where id = ${id} and user_id = ${u.id} and deleted_at is null`;
       return json({ ok: true });
     }
 
@@ -566,16 +618,172 @@ Deno.serve(async (req: Request) => {
       // (day::text als YYYY-MM-DD, sonst spaltengleich zu diary_add/weight_set/activity_add).
       const [entries, weights, activities] = await Promise.all([
         sql`select id, day::text as day, meal, name, points, qty, unit, kcal, source, ref_code, created_at
-              from punkto.diary_entries where user_id = ${u.id} order by day, created_at`,
+              from punkto.diary_entries where user_id = ${u.id} and deleted_at is null order by day, created_at`,
         sql`select day::text as day, weight_kg
-              from punkto.weight_logs where user_id = ${u.id} order by day`,
+              from punkto.weight_logs where user_id = ${u.id} and deleted_at is null order by day`,
         sql`select id, day::text as day, kind, steps, minutes, bonus_points, note, created_at
-              from punkto.activity_logs where user_id = ${u.id} order by day, created_at`,
+              from punkto.activity_logs where user_id = ${u.id} and deleted_at is null order by day, created_at`,
       ]);
       return json({
         ok: true,
         counts: { entries: entries.length, weights: weights.length, activities: activities.length },
         entries, weights, activities,
+      });
+    }
+
+    if (action === "sync_push") {
+      // Dual-Write-Batch: spiegelt lokale Schreibvorgaenge (Outbox) idempotent auf den
+      // Server. Alles in EINER Transaktion -> entweder ganzer Batch oder nichts (der
+      // Client loescht die Outbox-Eintraege erst nach {ok:true}). Jede Operation ist
+      // user-scoped und per Client-UUID / (user,day) idempotent (erneutes Senden = gleicher
+      // Endstand). Unbekannte/ungueltige Ops werden still uebersprungen (nie werfen ->
+      // ein Muell-Eintrag darf den ganzen Batch nicht zuruecksetzen). Cap 500 je Aufruf.
+      const ops = Array.isArray(body.ops) ? body.ops.slice(0, 500) : [];
+      if (!ops.length) return json({ ok: true, now: new Date().toISOString(), applied: 0 });
+      let applied = 0;
+      await sql.begin(async (tx) => {
+        for (const raw of ops) {
+          const op = String(raw?.op || "");
+          const p = (raw && typeof raw.payload === "object" && raw.payload) ? raw.payload : {};
+          if (op === "entry_up") {
+            const id = String(p.id || ""); if (!UUID_RE.test(id)) continue;
+            const eDay = DATE_RE.test(String(p.day)) ? String(p.day) : today;
+            const name = String(p.name || "").trim().slice(0, 120); if (!name) continue;
+            const meal = ["breakfast", "lunch", "dinner", "snack", "other"].includes(String(p.meal)) ? String(p.meal) : "other";
+            const created = tsOrNull(p.created_at);
+            await tx`insert into punkto.diary_entries (id, user_id, day, meal, name, points, qty, unit, kcal, source, ref_code, created_at, updated_at, deleted_at)
+              values (${id}, ${u.id}, ${eDay}, ${meal}, ${name}, ${clamp(num(p.points), 0, 200)}, ${clamp(num(p.qty, 1), 0, 9999)},
+                      ${p.unit ? String(p.unit).slice(0, 20) : null}, ${p.kcal != null ? clamp(num(p.kcal), 0, 99999) : null},
+                      ${p.source ? String(p.source).slice(0, 20) : "manual"}, ${p.ref_code ? String(p.ref_code).slice(0, 40) : null},
+                      coalesce(${created}::timestamptz, now()), now(), null)
+              on conflict (id) do update set day = excluded.day, meal = excluded.meal, name = excluded.name,
+                      points = excluded.points, qty = excluded.qty, unit = excluded.unit, kcal = excluded.kcal,
+                      source = excluded.source, ref_code = excluded.ref_code, updated_at = now(), deleted_at = null
+                    where diary_entries.user_id = ${u.id}`;
+            applied++;
+          } else if (op === "entry_del") {
+            const id = String(p.id || ""); if (!UUID_RE.test(id)) continue;
+            await tx`update punkto.diary_entries set deleted_at = now(), updated_at = now()
+                       where id = ${id} and user_id = ${u.id} and deleted_at is null`;
+            applied++;
+          } else if (op === "act_up") {
+            const id = String(p.id || ""); if (!UUID_RE.test(id)) continue;
+            const aDay = DATE_RE.test(String(p.day)) ? String(p.day) : today;
+            const kind = ["steps", "workout"].includes(String(p.kind)) ? String(p.kind) : "steps";
+            const created = tsOrNull(p.created_at);
+            await tx`insert into punkto.activity_logs (id, user_id, day, kind, steps, minutes, bonus_points, note, created_at, updated_at, deleted_at)
+              values (${id}, ${u.id}, ${aDay}, ${kind}, ${p.steps != null ? clamp(num(p.steps), 0, 200000) : null},
+                      ${p.minutes != null ? clamp(num(p.minutes), 0, 1440) : null}, ${clamp(num(p.bonus_points), 0, 50)},
+                      ${p.note ? String(p.note).slice(0, 120) : null}, coalesce(${created}::timestamptz, now()), now(), null)
+              on conflict (id) do update set day = excluded.day, kind = excluded.kind, steps = excluded.steps,
+                      minutes = excluded.minutes, bonus_points = excluded.bonus_points, note = excluded.note,
+                      updated_at = now(), deleted_at = null
+                    where activity_logs.user_id = ${u.id}`;
+            applied++;
+          } else if (op === "act_del") {
+            const id = String(p.id || ""); if (!UUID_RE.test(id)) continue;
+            await tx`update punkto.activity_logs set deleted_at = now(), updated_at = now()
+                       where id = ${id} and user_id = ${u.id} and deleted_at is null`;
+            applied++;
+          } else if (op === "act_steps") {
+            // Schritte = EIN Tageswert: alle lebenden steps-Zeilen des Tages tombsteinen
+            // (ausser der zu setzenden id), dann die eine Zeile per Client-UUID upserten.
+            const aDay = DATE_RE.test(String(p.day)) ? String(p.day) : today;
+            const steps = clamp(num(p.steps), 0, 200000);
+            const bonus = clamp(num(p.bonus_points), 0, 50);
+            const cid = UUID_RE.test(String(p.id)) ? String(p.id) : (steps > 0 ? crypto.randomUUID() : null);
+            const created = tsOrNull(p.created_at);
+            await tx`update punkto.activity_logs set deleted_at = now(), updated_at = now()
+                       where user_id = ${u.id} and day = ${aDay} and kind = 'steps' and deleted_at is null
+                         and (${cid}::uuid is null or id <> ${cid})`;
+            if (steps > 0 && cid) {
+              await tx`insert into punkto.activity_logs (id, user_id, day, kind, steps, minutes, bonus_points, note, created_at, updated_at, deleted_at)
+                values (${cid}, ${u.id}, ${aDay}, 'steps', ${steps}, null, ${bonus},
+                        ${p.note ? String(p.note).slice(0, 120) : null}, coalesce(${created}::timestamptz, now()), now(), null)
+                on conflict (id) do update set day = excluded.day, kind = 'steps', steps = excluded.steps,
+                        minutes = null, bonus_points = excluded.bonus_points, note = excluded.note,
+                        updated_at = now(), deleted_at = null
+                      where activity_logs.user_id = ${u.id}`;
+            }
+            applied++;
+          } else if (op === "weight_up") {
+            const wDay = DATE_RE.test(String(p.day)) ? String(p.day) : today;
+            const w = clamp(num(p.weight_kg), 30, 400); if (!w) continue;
+            await tx`insert into punkto.weight_logs (user_id, day, weight_kg, updated_at, deleted_at)
+                values (${u.id}, ${wDay}, ${w}, now(), null)
+              on conflict (user_id, day) do update set weight_kg = excluded.weight_kg, updated_at = now(), deleted_at = null`;
+            applied++;
+          } else if (op === "weight_del") {
+            const wDay = DATE_RE.test(String(p.day)) ? String(p.day) : today;
+            await tx`update punkto.weight_logs set deleted_at = now(), updated_at = now()
+                       where user_id = ${u.id} and day = ${wDay} and deleted_at is null`;
+            applied++;
+          }
+          // andere op-Werte: still ueberspringen (Vorwaertskompatibilitaet)
+        }
+      });
+      await touchActive(u); // opportunistisch: Push passiert nur online
+      return json({ ok: true, now: new Date().toISOString(), applied });
+    }
+
+    if (action === "sync_pull") {
+      // Read-only Delta fuer den Mehrgeraete-Abgleich. Liefert ALLE seit „since"
+      // geaenderten Zeilen je Tabelle — auch Grabsteine (deleted=true) — plus einen
+      // Cursor „now" fuer den naechsten Aufruf. NICHT in WRITE -> auch ohne aktiven
+      // Zugang abrufbar (niemand wird von EIGENEN Daten ausgesperrt). since=null => voll
+      // (Erstbefuellung). updated_at wird als kanonischer UTC-ISO-Text geliefert
+      // (fixe Breite, lexikografisch sortierbar, direkt als naechstes „since" nutzbar).
+      const since = tsOrNull(body.since);
+      const LIM = 10000;
+      const [rawE, rawW, rawA, nowRow] = await Promise.all([
+        sql`select id, day::text as day, meal, name, points, qty, unit, kcal, source, ref_code, created_at,
+                   to_char(updated_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as updated_at,
+                   (deleted_at is not null) as deleted
+              from punkto.diary_entries
+             where user_id = ${u.id} and (${since}::timestamptz is null or updated_at > ${since}::timestamptz)
+             order by updated_at asc limit ${LIM}`,
+        sql`select day::text as day, weight_kg,
+                   to_char(updated_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as updated_at,
+                   (deleted_at is not null) as deleted
+              from punkto.weight_logs
+             where user_id = ${u.id} and (${since}::timestamptz is null or updated_at > ${since}::timestamptz)
+             order by updated_at asc limit ${LIM}`,
+        sql`select id, day::text as day, kind, steps, minutes, bonus_points, note, created_at,
+                   to_char(updated_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as updated_at,
+                   (deleted_at is not null) as deleted
+              from punkto.activity_logs
+             where user_id = ${u.id} and (${since}::timestamptz is null or updated_at > ${since}::timestamptz)
+             order by updated_at asc limit ${LIM}`,
+        sql`select to_char(now() at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now`,
+      ]);
+      const serverNow = nowRow[0].now;
+      // Tie-sichere Cursor-Bestimmung: fuellt eine Tabelle die Seite (== LIM), koennten
+      // Zeilen mit exakt gleichem updated_at ueber die Seitengrenze fallen. Wir schneiden
+      // die letzte updated_at-Gruppe ab (kommt auf der naechsten Seite) und setzen den
+      // Cursor NIE ueber eine nicht ausgelieferte Zeile. (Praktisch nie erreicht — der
+      // Push-Cap von 500 << LIM verhindert Zeitstempel-Cluster, die eine Seite fuellen.)
+      const trimTrunc = (rows: any[]): { rows: any[]; covered: string | null } => {
+        if (rows.length < LIM) return { rows, covered: null };
+        const boundary = String(rows[rows.length - 1].updated_at);
+        let cut = rows.length;
+        while (cut > 0 && String(rows[cut - 1].updated_at) === boundary) cut--;
+        if (cut === 0) return { rows, covered: boundary }; // ganze Seite ein Zeitstempel -> Fortschritt erzwingen
+        const trimmed = rows.slice(0, cut);
+        return { rows: trimmed, covered: String(trimmed[trimmed.length - 1].updated_at) };
+      };
+      const e = trimTrunc(rawE), w = trimTrunc(rawW), a = trimTrunc(rawA);
+      const covereds = [e.covered, w.covered, a.covered].filter((x): x is string => x !== null);
+      const done = covereds.length === 0;
+      // Cursor: nichts abgeschnitten -> Server-now; sonst der frueheste abgedeckte
+      // Zeitstempel (garantiert <= jede noch nicht ausgelieferte Zeile). done=false ->
+      // der Client wiederholt pull, bis alle Seiten geholt sind.
+      const cursor = done ? serverNow : covereds.reduce((m, x) => (x < m ? x : m));
+      return json({
+        ok: true,
+        now: cursor,
+        done,
+        counts: { entries: e.rows.length, weights: w.rows.length, activities: a.rows.length },
+        entries: e.rows, weights: w.rows, activities: a.rows,
       });
     }
 

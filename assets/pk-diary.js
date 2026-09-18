@@ -1,8 +1,13 @@
 /* ============================================================================
    Punkto — Lokales Tagebuch (IndexedDB, geraetelokal, OFFLINE-FIRST).
-   Haelt Tagebuch-Eintraege, Gewicht und Aktivitaeten AUSSCHLIESSLICH auf dem
-   Geraet. Damit kann der Kunde seine Mahlzeiten jederzeit speichern — auch
-   voellig ohne Netz. Keine Server-Synchronisation (bewusste Entscheidung).
+   Haelt Tagebuch-Eintraege, Gewicht und Aktivitaeten primaer auf dem Geraet.
+   Damit kann der Kunde seine Mahlzeiten jederzeit speichern — auch voellig
+   ohne Netz. Zusaetzlich fuehrt dieser Store eine OUTBOX (Warteschlange): jede
+   lokale Schreiboperation wird als Vorgang vermerkt, den die App (pk-app.js
+   data.sync) opportunistisch zum Server spiegelt (Dual-Write) und von dort
+   per Delta wieder einliest — fuer Server-Backup + Mehrgeraete-Abgleich. Der
+   lokale Schreibweg bleibt dabei IMMER die Quelle der Wahrheit und funktioniert
+   auch dann, wenn die Synchronisation gerade nicht moeglich ist (fail-open).
 
    Die Methoden liefern EXAKT dieselben Shapes wie die Edge-Function punkto-data
    (action "state"/"diary_add"/…), damit Render- und Schreib-Ebene der App
@@ -27,10 +32,11 @@
   "use strict";
 
   var DB_NAME = "punkto-diary";
-  var DB_VER = 1;
+  var DB_VER = 2;              // v2: OUTBOX-Store fuer Server-Synchronisation ergaenzt
   var ENTRIES = "entries";     // Tagebuch (keyPath id, Index "day")
   var WEIGHTS = "weights";     // ein Gewicht je Tag (keyPath day)
   var ACTS = "activities";     // Aktivitaeten (keyPath id, Index "day")
+  var OUTBOX = "outbox";       // Sync-Warteschlange (keyPath "key": collabiert je Ziel)
   var _db = null;
 
   var supported = (function () {
@@ -55,6 +61,12 @@
         }
         if (!db.objectStoreNames.contains(ACTS)) {
           db.createObjectStore(ACTS, { keyPath: "id" }).createIndex("day", "day", { unique: false });
+        }
+        // v2: OUTBOX — je „Ziel" (z. B. entry:<id>, weight:<day>, steps:<day>) genau EIN
+        // ausstehender Vorgang; ein neuer Vorgang auf dasselbe Ziel ueberschreibt den alten
+        // (letzter Stand gewinnt, kollabiert Mehrfach-Bearbeitungen zu einem Push).
+        if (!db.objectStoreNames.contains(OUTBOX)) {
+          db.createObjectStore(OUTBOX, { keyPath: "key" });
         }
       };
       rq.onsuccess = function () {
@@ -364,6 +376,76 @@
       });
   }
 
+  /* ------------------------------------------------------------- OUTBOX ------
+     Warteschlange fuer die Server-Synchronisation (Dual-Write). Jeder lokale
+     Schreibvorgang legt hier einen Eintrag ab; pk-app.js (data.sync) liest sie,
+     spiegelt sie zum Server (sync_push) und loescht die erfolgreich gespiegelten.
+     Schluessel „key" identifiziert das ZIEL (entry:<id> / act:<id> / steps:<day>
+     / weight:<day>) -> ein neuer Vorgang auf dasselbe Ziel ersetzt den alten.
+     Alle Methoden sind fehlertolerant: eine nicht verfuegbare Outbox darf den
+     lokalen Schreibweg NIE kippen (der Aufrufer umschliesst zusaetzlich mit
+     try/catch). */
+  function outboxPut(rec) {
+    if (!rec || !rec.key) return Promise.resolve({ ok: false });
+    var r = { key: String(rec.key), op: String(rec.op || ""), payload: rec.payload || {}, ts: rec.ts || new Date().toISOString() };
+    return store(OUTBOX, "readwrite").then(function (os) { return reqP(os.put(r)); })
+      .then(function () { return { ok: true }; })
+      .catch(function () { return { ok: false }; });
+  }
+  /* Alle ausstehenden Vorgaenge, aeltester zuerst (stabile Push-Reihenfolge). */
+  function outboxAll() {
+    return getAll(OUTBOX).then(function (l) {
+      return (l || []).slice().sort(function (a, b) { return String(a.ts).localeCompare(String(b.ts)); });
+    });
+  }
+  /* Nur die Schluessel (fuer den „pending"-Schutz beim Einlesen: lokal noch nicht
+     gespiegelte Ziele werden von einem Server-Delta NICHT ueberschrieben). */
+  function outboxKeys() {
+    return outboxAll().then(function (l) { return l.map(function (r) { return r.key; }); });
+  }
+  function outboxDeleteKeys(keys) {
+    keys = (keys || []).map(String);
+    if (!keys.length) return Promise.resolve(0);
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(OUTBOX, "readwrite"), os = tx.objectStore(OUTBOX), n = 0;
+        keys.forEach(function (k) { try { os.delete(k); n++; } catch (e) {} });
+        tx.oncomplete = function () { resolve(n); };
+        tx.onerror = function () { reject(tx.error); };
+        tx.onabort = function () { reject(tx.error || new Error("tx_abort")); };
+      });
+    }).catch(function () { return 0; });
+  }
+  /* Wie outboxDeleteKeys, aber loescht einen Eintrag NUR, wenn sein „ts" noch
+     unveraendert ist. Schuetzt vor dem Verlust einer Bearbeitung, die WAEHREND
+     eines laufenden Push denselben Schluessel neu geschrieben hat: deren neuer
+     ts weicht ab -> der Eintrag bleibt in der Outbox und wird beim naechsten
+     Push gespiegelt. items: [{ key, ts }]. Fehlertolerant (best effort). */
+  function outboxDeleteIfUnchanged(items) {
+    var list = (items || []).filter(function (x) { return x && x.key; })
+      .map(function (x) { return { key: String(x.key), ts: String(x.ts == null ? "" : x.ts) }; });
+    if (!list.length) return Promise.resolve(0);
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(OUTBOX, "readwrite"), os = tx.objectStore(OUTBOX), n = 0;
+        list.forEach(function (it) {
+          var g = os.get(it.key);
+          g.onsuccess = function () {
+            var cur = g.result;
+            if (cur && String(cur.ts) === it.ts) { try { os.delete(it.key); n++; } catch (e) {} }
+          };
+          // Lese-Fehler eines einzelnen Schluessels ignorieren (best effort).
+        });
+        tx.oncomplete = function () { resolve(n); };
+        tx.onerror = function () { reject(tx.error); };
+        tx.onabort = function () { reject(tx.error || new Error("tx_abort")); };
+      });
+    }).catch(function () { return 0; });
+  }
+  function outboxClear() {
+    return clearStores([OUTBOX]).then(function () { return { ok: true }; }).catch(function () { return { ok: false }; });
+  }
+
   root.PKDiary = {
     supported: supported,
     today: todayISO,
@@ -371,6 +453,9 @@
     entryAdd: entryAdd, entryUpdate: entryUpdate, entryDel: entryDel,
     weightSet: weightSet, weightDel: weightDel,
     activityAdd: activityAdd, activitySetSteps: activitySetSteps, activityDel: activityDel,
-    exportAll: exportAll, importAll: importAll
+    exportAll: exportAll, importAll: importAll,
+    outboxPut: outboxPut, outboxAll: outboxAll, outboxKeys: outboxKeys,
+    outboxDeleteKeys: outboxDeleteKeys, outboxDeleteIfUnchanged: outboxDeleteIfUnchanged,
+    outboxClear: outboxClear
   };
 })(typeof window !== "undefined" ? window : globalThis);

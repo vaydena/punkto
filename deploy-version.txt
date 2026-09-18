@@ -1,4 +1,4 @@
-pk-v41-9c2d
+pk-v42-0262
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v39-794a: OFFLINE-Umstellung (5 Phasen). (1) Tagebuch/Gewicht/Aktivität rein gerätelokal
           (IndexedDB, PKDiary) — Mahlzeiten IMMER offline speicherbar. (2) Manueller
@@ -735,3 +735,53 @@ v41-9c2d: SYNC-CHECK nach „Daten nach Schliessen/Oeffnen immer noch weg" (v40 
          unveraendert). Geaendert: app.html (migrateServerDiaryOnce inline + v2-Flag +
          Sprung zum letzten Tag). SW-CACHE auf pk-app-v37 angehoben (app.html-Inline +
          pk-app.js im Shell-Precache -> Purge noetig, damit auch pk-app.js frisch wird).
+v42-0262: SERVER-DUAL-WRITE + SYNC (Durabilitaet + Multi-Geraet). Behebt das seit v39
+         offene Risiko, dass Tagebuch/Gewicht/Aktivitaet NUR lokal (IndexedDB) lagen ->
+         Cache-Loeschung/Neuinstallation/neues Handy/Storage-Eviction = Datenverlust, und
+         kein Abgleich zwischen mehreren Geraeten. Ab jetzt sichert die App jede lokale
+         Aenderung ZUSAETZLICH laufend zum Server und zieht beim Start alle Aenderungen
+         anderer Geraete nach. Rein additiv, nicht-destruktiv, fail-open (das lokale
+         IndexedDB bleibt die Quelle der Wahrheit; jeder Sync-Fehler bleibt folgenlos).
+         MODELL:
+         (1) EINHEITLICHER ID-RAUM: der Server uebernimmt die Client-UUID als eigene id ->
+             Schreiben ist idempotent (kein Doppelanlegen beim erneuten Push desselben
+             Eintrags; Server-id == lokale id auf allen Geraeten).
+         (2) OUTBOX + LWW: jede lokale Schreiboperation landet in einer geraetelokalen
+             Outbox (IndexedDB-Store, je Ziel geschluesselt: entry:<id>/act:<id>/
+             steps:<tag>/weight:<tag>, Last-Writer-Wins-Kollaps pro Schluessel). Ein
+             debouncter Flush schickt sie in Chunks an sync_push; erst nach bestaetigtem
+             Push wird der Outbox-Eintrag entfernt (unveraenderte Eintraege). 402/Netzfehler
+             -> Outbox bleibt erhalten, spaeterer Retry.
+         (3) SOFT-DELETE-TOMBSTONES + DELTA-PULL: Loeschen setzt serverseitig deleted_at
+             (statt Hard-Delete) -> Loeschungen synchronisieren sicher ueber Geraete.
+             sync_pull liefert per updated_at-Cursor nur die NEUEREN Zeilen (inkl.
+             Tombstones als deleted:true); der Client wendet Live-Zeilen per
+             PKDiary.importAll und Tombstones per PKDiary.*Del DIREKT an (kein Echo-Loop,
+             da nicht ueber die Schreib-Wrapper). Ausstehende (noch nicht gepushte) lokale
+             Schluessel werden beim Pull uebersprungen -> ein frischer lokaler Edit wird nie
+             von aelteren Serverdaten ueberschrieben.
+         (4) EINMALIGER BACKFILL: pro Konto/Geraet zieht der erste Lauf die volle Historie
+             (Cursor leer) und merged sie lokal; danach nur noch Deltas.
+         BOOT: app.html ruft nach dem v40/v41-Recovery syncKick() (Guards: online, user.id,
+         API.data.sync vorhanden -> No-op auf noch veraltetem Cache); zusaetzlich bei
+         `online` und `visibilitychange->visible`. Kam per Pull etwas herein, feuert
+         `pk-sync-changed` -> die aktuelle Ansicht wird rein lokal neu gerendert.
+         SERVER (punkto-data): neue Aktionen sync_push (WRITE-gated: Op-Typen entry_up/
+         entry_del/act_up/act_del/act_steps/weight_up/weight_del, max. 500 Ops je Aufruf,
+         eine Transaktion, UUID-validiert, upsert on conflict, Tombstone-Updates) und
+         sync_pull (NICHT WRITE-gated -> niemand wird von den eigenen Daten ausgesperrt;
+         updated_at-Delta, LIM 10000, tie-sichere Cursor-Trunkierung). Migration
+         punkto_v42_sync_columns hatte updated_at + deleted_at auf diary_entries/
+         weight_logs/activity_logs bereits ergaenzt. Function neu deployt (verify_jwt=false!).
+         VALIDIERUNG: voller Vertrag gegen die LIVE-Function an einem WEGWERF-Nutzer geprueft
+         (Push aller Op-Typen, voller Pull mit korrekten Shapes/deleted-Flags, idempotenter
+         Re-Push ohne Duplikate, Edit/LWW, Soft-Delete-Tombstones, Delta-Cursor,
+         401 bei falschem Token, Schritte-Clear id=null -> alle Schritt-Zeilen des Tages
+         getombstoned); Wegwerf-Nutzer danach hart geloescht (kinder-zuerst), das echte
+         Konto unangetastet.
+         Geaendert: supabase/functions/punkto-data (sync_push/sync_pull; deployt),
+         assets/pk-app.js (SYNC-Block: Outbox/Flush/Pull/Bootstrap + Dual-Write-Wrapper um
+         diaryAdd/Update/Del, weightSet/Del, activityAdd/SetSteps/Del), assets/pk-diary.js
+         (Outbox-Store + activity-Shape), app.html (syncKick + Listener). SW-CACHE auf
+         pk-app-v38 angehoben (app.html-Inline + pk-app.js + pk-diary.js im Shell-Precache
+         -> Purge noetig).

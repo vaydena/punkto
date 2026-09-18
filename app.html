@@ -1067,6 +1067,10 @@
     // Tagebuch (nach der Offline-Umstellung v39). Läuft im Hintergrund, blockiert den
     // Start nicht und frischt die Ansicht auf, sobald Daten hereingekommen sind.
     migrateServerDiaryOnce();
+    // Server-Dual-Write + Mehrgeräte-Abgleich anstoßen (v42): erst offene lokale
+    // Änderungen hoch, dann fremde Änderungen herunter. Läuft im Hintergrund und ist
+    // in sich abgesichert (eingeloggt/online, Reentrancy-Sperren, Delta-Cursor, fail-open).
+    syncKick();
   }
 
   /* Wieder online: nur den frisch signierten Abo-Token nachladen (leicht, kein
@@ -1086,6 +1090,39 @@
     } catch (e) { /* offline / Sitzung abgelaufen -> nichts tun */ }
   }
   window.addEventListener("online", refreshTokenOnline);
+
+  /* --- Sync-Ebene (v42) anstoßen: Dual-Write hoch + Mehrgeräte-Delta herunter ---
+     bootstrap() spiegelt erst offene lokale Änderungen zum Server (flush -> sync_push)
+     und liest dann fremde Änderungen wieder ein (pull -> sync_pull). Guard hier: nur
+     eingeloggt + online; alles Weitere (Reentrancy-Sperren, 402-bei-Abo-inaktiv,
+     Delta-Cursor, fail-open) entscheidet die Sync-Ebene selbst. Best-effort: ein Fehler
+     darf den lokalen Schreibweg / die Anzeige NIE stören. Die .sync-Prüfung fängt einen
+     noch cache-first ausgelieferten alten pk-app.js ohne Sync-Ebene ab (dann No-op). */
+  function syncKick(opts) {
+    try {
+      if (!navigator.onLine) return;
+      if (!(S.user && S.user.id)) return;
+      if (!(API && API.data && API.data.sync)) return;
+      var o = opts || {};
+      o.uid = S.user.id;
+      API.data.sync.bootstrap(o);
+    } catch (e) { /* Sync ist best-effort */ }
+  }
+  // Wieder online -> zusätzlich zum Token-Refresh die Sync-Ebene anstoßen.
+  window.addEventListener("online", function () { syncKick(); });
+  // Tab/App wieder sichtbar (z. B. aus dem Hintergrund geholt) -> Änderungen abgleichen.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") syncKick();
+  });
+  // Fremde Änderungen wurden lokal eingespielt -> aktuelle Tagesansicht auffrischen.
+  // loadState(S.day) liest hier rein LOKAL (vorhandene Kontobits, kein Netz, kein Loop),
+  // renderAll() zeichnet neu. Nur wenn die App schon läuft (onboarded).
+  window.addEventListener("pk-sync-changed", function () {
+    try {
+      if (!(S.user && S.user.onboarded)) return;
+      loadState(S.day).then(function () { renderAll(); }).catch(function () {});
+    } catch (e) { /* Anzeige-Refresh ist best-effort */ }
+  });
 
   /* Eigene Offline-Produkte aus IndexedDB in den Zustand laden (für Suche/Liste). */
   async function refreshLocalProducts() {
