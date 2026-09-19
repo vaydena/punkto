@@ -3733,22 +3733,38 @@
       '<div class="field"><label for="pAct">Aktivität</label><select id="pAct">' +
       ['low:Eher sitzend', 'med:Mäßig aktiv', 'high:Sehr aktiv'].map(function (o) { var p = o.split(":"); return '<option value="' + p[0] + '"' + (u.activity_level === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join("") +
       '</select></div>' +
-      '<div class="alert info" style="font-size:.85rem">Tagesbudget bleibt unverändert. Nutze „Budget neu berechnen", um es an neue Werte anzupassen.</div>' +
+      '<div class="field"><label for="pSex">Geschlecht</label><select id="pSex">' +
+      ['w:Weiblich', 'm:Männlich', 'd:Divers'].map(function (o) { var p = o.split(":"); return '<option value="' + p[0] + '"' + (u.sex === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join("") +
+      '</select></div>' +
+      '<div class="alert info" style="font-size:.85rem">Änderst du das Geschlecht, passt Punkto dein Tagesbudget automatisch an. Für neue Gewichts- oder Aktivitätswerte nutze „Budget neu berechnen".</div>' +
       '<button class="btn primary block big" id="pSave">Speichern</button>',
       function (root) {
         $("#pSave", root).addEventListener("click", async function () {
+          var newSex = $("#pSex", root).value;
           var patch = {
             display_name: $("#pName", root).value.trim(),
             start_weight_kg: parseFloat($("#pStart", root).value) || u.start_weight_kg,
             goal_weight_kg: parseFloat($("#pGoal", root).value) || u.goal_weight_kg,
             height_cm: +$("#pHeight", root).value || u.height_cm,
-            activity_level: $("#pAct", root).value
+            activity_level: $("#pAct", root).value,
+            sex: newSex
           };
+          var sexChanged = newSex !== u.sex;
+          if (sexChanged) {
+            // Geschlecht bestimmt Grundumsatz & Kalorien-Minimum -> Budget neu ableiten.
+            var plan = PK.budgetPlan({
+              sex: newSex, weight_kg: patch.start_weight_kg, height_cm: patch.height_cm,
+              birth_year: u.birth_year, goal_weight_kg: patch.goal_weight_kg, activity_level: patch.activity_level
+            });
+            patch.daily_budget = plan.daily_budget;
+            patch.weekly_extra = plan.weekly_extra;
+          }
           this.disabled = true;
           try {
             var r = await API.auth.updateProfile(patch);
             if (r && r.user) S.user = r.user;
-            closeSheet(); renderAll(); toast("Profil gespeichert.");
+            closeSheet(); renderAll();
+            toast(sexChanged ? ("Profil gespeichert – Budget angepasst: " + patch.daily_budget + " Punkte/Tag.") : "Profil gespeichert.");
           } catch (e) { this.disabled = false; toast(humanErr(e)); }
         });
       });

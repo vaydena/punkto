@@ -1,4 +1,4 @@
-pk-v43-1f7a
+pk-v44-57e3
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v39-794a: OFFLINE-Umstellung (5 Phasen). (1) Tagebuch/Gewicht/Aktivität rein gerätelokal
           (IndexedDB, PKDiary) — Mahlzeiten IMMER offline speicherbar. (2) Manueller
@@ -802,3 +802,21 @@ v43-1f7a: LANDINGPAGE-TEXT — Server-Speicherung sichtbar gemacht. Bisher warb 
          KEIN SW-BUMP: index.html wird vom Service Worker network-first ausgeliefert (Shell-
          Precache bleibt pk-app-v38) -> die Textaenderung ist beim naechsten Online-Aufruf
          sofort live, ohne Cache-Purge. Nur dieser Marker wurde erhoeht.
+v44-57e3: GESCHLECHTSFELD im Profil-Editor + Budget-Neuberechnung bei Wechsel.
+         Anlass: Ein maennlicher Nutzer hatte 21 Tagespunkte, seine Frau 33 — verdreht.
+         Ursache war KEIN Formelfehler, sondern ein falsch gespeichertes Geschlecht ("w"
+         statt "m") aus dem Onboarding: die Engine liefert fuer "w" korrekt das
+         Frauen-Minimum (Kalorien-Floor 1200 -> 21 Punkte), fuer "m" das hoehere
+         Maenner-Minimum (Floor 1500 -> 26 Punkte). Der Profil-Editor hatte bisher KEIN
+         Geschlechtsfeld -> ein Tippfehler beim Onboarding war in der App nicht mehr
+         korrigierbar. Fix: In "Profil bearbeiten" gibt es jetzt ein Auswahlfeld
+         Geschlecht (Weiblich/Maennlich/Divers). Aendert sich das Geschlecht beim
+         Speichern, leitet die App das Tagesbudget + Wochenextra ueber PK.budgetPlan()
+         sofort neu ab (Grundumsatz nach Mifflin-St-Jeor haengt am Geschlecht) und der
+         Toast nennt das neue Tagesbudget; bei unveraendertem Geschlecht bleibt das
+         Budget unangetastet (fuer neue Gewichts-/Aktivitaetswerte weiterhin bewusst
+         nur "Budget neu berechnen"). Backend unveraendert: punkto-auth/update_profile
+         akzeptiert sex (Whitelist w/m/d) sowie daily_budget/weekly_extra bereits.
+         Geaendert: nur app.html (openProfileSheet: pSex-Select + Info-Hinweis +
+         Recompute im Speichern-Handler). SW-CACHE auf pk-app-v39 angehoben (app.html
+         ist im Shell-Precache -> Purge noetig, sonst greift der neue Inline-Code nicht).
