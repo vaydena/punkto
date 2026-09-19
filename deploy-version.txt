@@ -1,4 +1,4 @@
-pk-v44-57e3
+pk-v45-601b
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
 v39-794a: OFFLINE-Umstellung (5 Phasen). (1) Tagebuch/Gewicht/Aktivität rein gerätelokal
           (IndexedDB, PKDiary) — Mahlzeiten IMMER offline speicherbar. (2) Manueller
@@ -820,3 +820,23 @@ v44-57e3: GESCHLECHTSFELD im Profil-Editor + Budget-Neuberechnung bei Wechsel.
          Geaendert: nur app.html (openProfileSheet: pSex-Select + Info-Hinweis +
          Recompute im Speichern-Handler). SW-CACHE auf pk-app-v39 angehoben (app.html
          ist im Shell-Precache -> Purge noetig, sonst greift der neue Inline-Code nicht).
+v45-601b: BUDGET-NEUBERECHNUNG feuert jetzt bei ALLEN budget-relevanten Feldern (Folge v44).
+         Anlass: Nach v44 zeigte eine Nutzerin (Ingrid) noch 32 Tagespunkte, obwohl ihr
+         korrektes Budget bei w/med/72 kg/168 cm/Ziel 58 nur 24 ist (Wochenextra 22). Ursache
+         war KEIN Formelfehler: die 32 stammten aus dem Onboarding, als das Profil faelschlich
+         als maennlich + hohe Aktivitaet gespeichert war (~1876 kcal -> 32). v44 rechnete das
+         Budget beim Speichern aber NUR bei Geschlechtswechsel neu -> eine Korrektur von
+         Gewicht/Aktivitaet/Ziel im Profil liess den alten Budgetwert stehen.
+         Fix (nur app.html, openProfileSheet-Speichern-Handler): Tagesbudget + Wochenextra
+         werden jetzt neu ueber PK.budgetPlan() abgeleitet, sobald sich Geschlecht,
+         Aktivitaet, Start-/Zielgewicht ODER Groesse aendert (vorher nur Geschlecht). Der
+         Feldvergleich ist NaN-sicher (Helfer numChanged): ein leeres oder unveraendertes
+         Feld loest nichts aus. Der manuelle Weg "Budget neu berechnen" (Goals-Sheet, eigener
+         Wunschwert) bleibt unangetastet und ueberschreibt weiterhin bewusst; nur eine echte
+         Profil-Feldaenderung leitet das Budget wieder aus der Formel ab. Info-Hinweis + Toast
+         im Profil entsprechend angepasst. Engine (pk-engine.js) unveraendert, Smoke-Test
+         gruen (50 ok, 0 fail).
+         DATENKORREKTUR: Ingrids gespeicherte Zeile in punkto.users direkt korrigiert
+         (daily_budget 32->24, weekly_extra 29->22); ihr Live-Client zeigt den neuen Wert nach
+         dem naechsten Reload/Neu-Oeffnen (die Anzeige liest den gecachten S.user-Wert).
+         SW-CACHE auf pk-app-v40 angehoben (app.html im Shell-Precache -> Purge noetig).
