@@ -97,6 +97,7 @@
   .quick-act.v .qi{background:#ece6fb;color:#7a5cd0}
   .quick-act.z .qi{background:#fdeede;color:#c67d1e}
   .quick-act.r .qi{background:#e6f4ea;color:var(--green-700)}
+  .quick-act.n .qi{background:#e2f6f2;color:#0d9488}
 
   /* Punkte-Rechner (Taschenrechner-Sheet). Eingaben sind echte Inputs mit
      inputmode="none": Bildschirmtastatur bleibt zu, Hardware-Tastatur tippt. */
@@ -125,6 +126,14 @@
   .calc-key.fn{background:var(--green-tint);color:var(--green-800);font-size:1.05rem}
   .calc-key.next{grid-row:span 2;height:auto;background:var(--green);border-color:var(--green);color:#fff}
   .calc-key.zero{grid-column:span 2}
+  /* Nährstoffrechner (zweiter Scanner): Foto-Aufnahme-Kopf über der Rechner-Optik. */
+  .ns-cap{display:flex;align-items:center;gap:10px;background:var(--green-tint);border:1px solid var(--green-tint-2);
+    border-radius:var(--r);padding:10px 12px;margin-bottom:10px}
+  .ns-cap-txt{flex:1;min-width:0;font-size:.84rem;color:var(--ink-2);line-height:1.4}
+  .ns-cap .cap-acts{flex:0 0 auto}
+  .ns-unit{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+  .ns-unit-lbl{font-size:.8rem;font-weight:700;color:var(--muted)}
+  .ns-unit .chip{padding:.35em .8em;font-size:.82rem}
 
   /* Zutatenrechner: Auswahl (Suche + Kategorie-Chips + gruppierte Liste) und
      Mengen-Ansicht (nutzt die .calc-*-Optik des Punkte-Rechners). */
@@ -1810,6 +1819,7 @@
       '<div class="quick-grid">' +
       '<button class="quick-act" data-q="search"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg></span>Essen suchen</button>' +
       '<button class="quick-act a" data-q="barcode"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg></span>Barcode scannen</button>' +
+      '<button class="quick-act n" data-q="nutriscan"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2"/><path d="M8 9h8M8 12h8M8 15h5"/></svg></span>Nährstoffrechner</button>' +
       '<button class="quick-act" data-q="free"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a1.8 1.8 0 0 1-2.55 0l-7.6-7.6A2 2 0 0 1 2.7 11.6V4.5a1.8 1.8 0 0 1 1.8-1.8h7.1a2 2 0 0 1 1.4.6l7.6 7.6a1.8 1.8 0 0 1 0 2.5z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span>0 Punkte</button>' +
       '<button class="quick-act z" data-q="copyday"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>Tag kopieren</button>' +
       '<button class="quick-act b" data-q="weight"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l3-4"/></svg></span>Gewicht</button>' +
@@ -1832,6 +1842,7 @@
             var q = b.dataset.q;
             if (q === "search") openSearchSheet();
             else if (q === "barcode") openScanSheet();
+            else if (q === "nutriscan") openNutriScanSheet();
             else if (q === "weight") openWeightSheet();
             else if (q === "activity") openActivitySheet();
             else if (q === "capture") openCaptureSheet();
@@ -1973,6 +1984,96 @@
         setAct(order[0]);
         try { order[0].focus(); } catch (e) {}
         recalc();
+      });
+  }
+
+  /* ---------------------- NÄHRSTOFFRECHNER (Foto-Scanner) ----------------------
+     Zweiter Scanner neben dem Barcode-Scanner: fotografiert die NÄHRWERTTABELLE
+     (statt des QR-/Barcodes), liest die Nährwerte per Client-OCR (PKOcr) aus und
+     rechnet sie sofort in Punkte um. Baut auf der Rechner-Optik von openCalcSheet
+     auf und ergänzt oben eine Foto-Aufnahme. PKOcr wird beim ANTIPPEN des Foto-
+     Buttons vorgewärmt (parallel zum Bild-Picker) — NIE beim Öffnen des Sheets.
+     OCR bekommt bewusst das Originalfoto (nicht verkleinert). */
+  function openNutriScanSheet() {
+    function tile(id, lbl) {
+      return '<div class="calc-tile"><label for="' + id + '">' + lbl + '</label>' +
+        '<input type="text" id="' + id + '" inputmode="none" autocomplete="off" spellcheck="false" value="0"></div>';
+    }
+    var CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+    var GAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+    openSheet("Nährstoffrechner",
+      '<p style="color:var(--muted);margin-top:-6px;font-size:.9rem">Nährwerttabelle fotografieren (📷) oder aus der Galerie wählen (🖼️) – die Werte werden automatisch ausgelesen und sofort in Punkte umgerechnet. <span class="badge-off">offline</span></p>' +
+      '<div class="ns-cap">' +
+        '<div class="ns-cap-txt">Foto der <b>Nährwerttabelle</b> – oder Werte unten von Hand eintragen.</div>' +
+        '<span class="cap-acts">' +
+          '<button type="button" class="cap-btn" data-nscam aria-label="Nährwerttabelle fotografieren" title="Foto aufnehmen">' + CAM + '</button>' +
+          '<button type="button" class="cap-btn" data-nsgal aria-label="Nährwerttabelle aus Galerie wählen" title="Aus Galerie wählen">' + GAL + '</button>' +
+        '</span>' +
+        '<input type="file" accept="image/*" capture="environment" data-nscam-inp hidden>' +
+        '<input type="file" accept="image/*" data-nsgal-inp hidden>' +
+      '</div>' +
+      '<div class="ocr-status" id="nsOcr" hidden></div>' +
+      '<div class="calc-disp"><div class="sub" id="nsSub"></div>' +
+      '<div class="main"><span id="nsPts">0</span><span class="cu">Punkte</span></div></div>' +
+      '<div class="ns-unit"><span class="ns-unit-lbl">Grundlage:</span>' +
+        '<button type="button" class="chip on" data-unit="g">100 g</button>' +
+        '<button type="button" class="chip" data-unit="ml">100 ml</button></div>' +
+      '<div class="calc-vals">' +
+      tile("nsKcal", "Kalorien") + tile("nsSat", "ges. Fett (g)") + tile("nsSugar", "Zucker (g)") +
+      tile("nsProt", "Eiweiß (g)") + tile("nsFiber", "Ballastst. (g)") + tile("nsBase", "Bezug (g)") +
+      '<div class="calc-tile wide"><div class="amt-row"><label for="nsAmt">Menge (g)</label>' +
+      '<input type="text" id="nsAmt" inputmode="none" autocomplete="off" spellcheck="false" value="100"></div>' +
+      '<div class="chips">' + [50, 100, 150, 200].map(function (g) { return '<button type="button" class="chip" data-g="' + g + '">' + g + ' g</button>'; }).join("") + '</div></div>' +
+      '</div>' +
+      '<div class="calc-keys">' +
+      '<button type="button" class="calc-key" data-k="7">7</button><button type="button" class="calc-key" data-k="8">8</button><button type="button" class="calc-key" data-k="9">9</button><button type="button" class="calc-key fn" data-k="back" aria-label="Letzte Ziffer löschen">⌫</button>' +
+      '<button type="button" class="calc-key" data-k="4">4</button><button type="button" class="calc-key" data-k="5">5</button><button type="button" class="calc-key" data-k="6">6</button><button type="button" class="calc-key fn" data-k="clr" aria-label="Feld leeren">C</button>' +
+      '<button type="button" class="calc-key" data-k="1">1</button><button type="button" class="calc-key" data-k="2">2</button><button type="button" class="calc-key" data-k="3">3</button><button type="button" class="calc-key next" data-k="next" aria-label="Nächstes Feld">→</button>' +
+      '<button type="button" class="calc-key zero" data-k="0">0</button><button type="button" class="calc-key" data-k=",">,</button>' +
+      '</div>' +
+      '<div class="field" style="margin-top:12px"><label for="nsName">Name (optional)</label>' +
+      '<input type="text" id="nsName" maxlength="60" placeholder="z. B. Bio-Haferflocken" autocomplete="off"></div>' +
+      '<button class="btn primary block big" id="nsDiary">Zum Tagebuch</button>' +
+      '<button class="btn ghost block" id="nsSave" style="margin-top:8px">Als Lebensmittel speichern</button>',
+      function (root) {
+        var order = ["#nsKcal", "#nsSat", "#nsSugar", "#nsProt", "#nsFiber", "#nsBase", "#nsAmt"].map(function (s) { return $(s, root); });
+        var ptsEl = $("#nsPts", root), subEl = $("#nsSub", root);
+        var act = order[0], fresh = true, unit = "g", warmed = false;
+        function pnum(el) { var n = parseFloat(String(el.value).replace(",", ".")); return Number.isFinite(n) && n >= 0 ? n : 0; }
+        function food() { return { kcal: pnum(order[0]), sat_fat_g: pnum(order[1]), sugar_g: pnum(order[2]), protein_g: pnum(order[3]), fiber_g: pnum(order[4]), base_g: pnum(order[5]) || 100 }; }
+        function recalc() { var f = food(); var amt = pnum(order[6]); if (!(amt > 0)) amt = f.base_g; var pts = PK.pointsForAmount(f, amt); ptsEl.textContent = pts; subEl.textContent = "≈ " + Math.round(f.kcal * amt / f.base_g) + " kcal · " + String(amt).replace(".", ",") + " " + unit; return pts; }
+        function setAct(inp) { act = inp; fresh = true; $$(".calc-tile", root).forEach(function (t) { t.classList.toggle("on", t.contains(inp)); }); }
+        function focusNext() { var nx = order[(order.indexOf(act) + 1) % order.length]; try { nx.focus(); } catch (e) {} setAct(nx); }
+        function key(k) { if (k === "next") return focusNext(); var v = String(act.value || ""); if (k === "back") { v = v.slice(0, -1); } else if (k === "clr") { v = ""; } else if (k === ",") { if (fresh) v = "0,"; else if (v.indexOf(",") < 0 && v.indexOf(".") < 0) v = (v || "0") + ","; } else { if (fresh || v === "0") v = k; else if (v.replace(/\D/g, "").length < 5) v += k; } fresh = false; act.value = v; recalc(); }
+        function setUnit(u) { unit = (u === "ml") ? "ml" : "g"; $$(".ns-unit .chip", root).forEach(function (c) { c.classList.toggle("on", c.dataset.unit === unit); }); var bl = $('label[for="nsBase"]', root); if (bl) bl.textContent = "Bezug (" + unit + ")"; var al = $('label[for="nsAmt"]', root); if (al) al.textContent = "Menge (" + unit + ")"; $$(".chip[data-g]", root).forEach(function (c) { c.textContent = c.dataset.g + " " + unit; }); recalc(); }
+        function setNum(id, v) { if (v != null) $(id, root).value = v; }
+        async function runOcr(file) {
+          var box = $("#nsOcr", root); box.hidden = false;
+          if (!window.PKOcr) { box.innerHTML = 'Automatisches Auslesen nicht verfügbar – bitte Werte von Hand eintragen.'; return; }
+          box.innerHTML = '<span class="spin"></span> Nährwerte werden gelesen … (beim ersten Mal lädt das Modell)';
+          try {
+            var parsed = await PKOcr.scanNutrition(file, function (m) { if (m && m.status && box) { var pct = m.progress != null ? " " + Math.round(m.progress * 100) + "%" : ""; var label = /recogniz/i.test(m.status) ? "Text wird erkannt" : (/load|init|download/i.test(m.status) ? "Modell wird geladen" : m.status); box.innerHTML = '<span class="spin"></span> ' + esc(label) + pct; } });
+            if (parsed.unit === "ml") setUnit("ml");
+            if (parsed.base_g) setNum("#nsBase", parsed.base_g);
+            setNum("#nsKcal", parsed.kcal); setNum("#nsSat", parsed.sat_fat_g); setNum("#nsSugar", parsed.sugar_g); setNum("#nsProt", parsed.protein_g); setNum("#nsFiber", parsed.fiber_g);
+            fresh = true; recalc();
+            var found = Object.keys(parsed._found || {}).length;
+            if (found) { var miss = []; if (parsed.kcal == null) miss.push("Kalorien"); if (parsed.sat_fat_g == null) miss.push("ges. Fett"); if (parsed.sugar_g == null) miss.push("Zucker"); if (parsed.protein_g == null) miss.push("Eiweiß"); var tail = miss.length ? ' Noch ergänzen: <b>' + miss.join(", ") + '</b>.' : ' Bitte kurz prüfen.'; box.innerHTML = '<span class="filled-flag">✓ ' + found + ' Wert' + (found === 1 ? "" : "e") + ' automatisch übernommen.</span>' + tail; }
+            else { box.innerHTML = 'Konnte nichts sicher lesen – bitte Werte von Hand eintragen.' + (parsed._text ? '<details class="ocr-raw" style="margin-top:6px"><summary style="cursor:pointer;font-size:.8rem;color:var(--muted)">Erkannten Text anzeigen</summary><pre style="white-space:pre-wrap;word-break:break-word;max-height:130px;overflow:auto;font-size:.72rem;opacity:.7;margin:6px 0 0">' + esc(String(parsed._text).slice(0, 800)) + '</pre></details>' : ''); }
+          } catch (e) { box.innerHTML = navigator.onLine ? 'Automatisches Auslesen fehlgeschlagen – bitte Werte von Hand eintragen.' : 'Fürs erste automatische Auslesen einmal online sein. Du kannst die Werte auch von Hand eintragen.'; }
+        }
+        order.forEach(function (inp) { inp.addEventListener("focus", function () { setAct(inp); }); inp.addEventListener("input", function () { var cl = inp.value.replace(/[^0-9.,]/g, ""); if (cl !== inp.value) inp.value = cl; fresh = false; recalc(); }); inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); focusNext(); } }); });
+        $$(".calc-tile", root).forEach(function (t) { t.addEventListener("click", function () { var i = $("input", t); if (i && i !== document.activeElement) { try { i.focus(); } catch (e) {} setAct(i); } }); });
+        $$(".calc-key", root).forEach(function (b) { b.addEventListener("pointerdown", function (e) { e.preventDefault(); }); b.addEventListener("click", function () { key(b.dataset.k); }); });
+        $$(".chip[data-g]", root).forEach(function (c) { c.addEventListener("click", function (e) { e.stopPropagation(); order[6].value = c.dataset.g; fresh = false; recalc(); }); });
+        $$(".ns-unit .chip", root).forEach(function (c) { c.addEventListener("click", function () { setUnit(c.dataset.unit); }); });
+        function warm() { if (!warmed && window.PKOcr) { warmed = true; try { PKOcr.warmup(); } catch (e) {} } }
+        $("[data-nscam]", root).addEventListener("click", function () { warm(); var inp = $("[data-nscam-inp]", root); if (inp) { try { inp.click(); } catch (e) {} } });
+        $("[data-nsgal]", root).addEventListener("click", function () { warm(); var inp = $("[data-nsgal-inp]", root); if (inp) { try { inp.click(); } catch (e) {} } });
+        $$("[data-nscam-inp], [data-nsgal-inp]", root).forEach(function (inp) { inp.addEventListener("change", function () { var f = inp.files && inp.files[0]; inp.value = ""; if (f) runOcr(f); }); });
+        $("#nsDiary", root).addEventListener("click", function () { var f = food(); var amt = pnum(order[6]); if (!(amt > 0)) amt = f.base_g; var k = amt / f.base_g; openFoodDetail({ name: $("#nsName", root).value.trim() || "Nährstoff-Scan", unit: unit, base_g: amt, source: "calc", kcal: f.kcal * k, sat_fat_g: f.sat_fat_g * k, sugar_g: f.sugar_g * k, protein_g: f.protein_g * k, fiber_g: f.fiber_g * k }); });
+        $("#nsSave", root).addEventListener("click", function () { var f = food(); openCustomFoodSheet({ name: $("#nsName", root).value.trim(), base: f.base_g, unit: unit, kcal: f.kcal, sat_fat_g: f.sat_fat_g, sugar_g: f.sugar_g, protein_g: f.protein_g, fiber_g: f.fiber_g }); });
+        setAct(order[0]); try { order[0].focus(); } catch (e) {} recalc();
       });
   }
 

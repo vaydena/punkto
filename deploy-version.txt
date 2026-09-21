@@ -1,5 +1,12 @@
-pk-v45-601b
+pk-v46-f87d
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v46-f87d: NÄHRSTOFFRECHNER — zweiter Scanner neben dem Barcode-Scanner (Hinzufügen-Menü,
+          Kachel 3). Fotografiert die NÄHRWERTTABELLE (Kamera/Galerie), liest die Werte per
+          OCR (pk-ocr.js, unverändert) und rechnet sie sofort über die Punkto-Engine
+          (PK.pointsForAmount) in Punkte um — plus Handeingabe-Fallback (eigene Zifferntastatur,
+          g/ml-Umschalter, Mengen-Chips), „Zum Tagebuch" & „Als Lebensmittel speichern".
+          OCR-Kette wird NUR beim Foto-Button-Tap vorgewärmt (kein 15-MB-Download beim Laden).
+          Landingpage: „neun → zehn Wege" inkl. neuer Kachel. SW-CACHE pk-app-v41.
 v39-794a: OFFLINE-Umstellung (5 Phasen). (1) Tagebuch/Gewicht/Aktivität rein gerätelokal
           (IndexedDB, PKDiary) — Mahlzeiten IMMER offline speicherbar. (2) Manueller
           Export/Import (pk-backup.js, versioniertes JSON inkl. Fotos). (3) Abo-Token
