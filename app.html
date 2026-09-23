@@ -2053,6 +2053,9 @@
           box.innerHTML = '<span class="spin"></span> Nährwerte werden gelesen … (beim ersten Mal lädt das Modell)';
           try {
             var parsed = await PKOcr.scanNutrition(file, function (m) { if (m && m.status && box) { var pct = m.progress != null ? " " + Math.round(m.progress * 100) + "%" : ""; var label = /recogniz/i.test(m.status) ? "Text wird erkannt" : (/load|init|download/i.test(m.status) ? "Modell wird geladen" : m.status); box.innerHTML = '<span class="spin"></span> ' + esc(label) + pct; } });
+            // Neuer Scan mit Treffern ersetzt die alten Werte komplett (sonst blieben
+            // Felder eines vorigen Produkts stehen, die diesmal nicht gelesen wurden).
+            if (Object.keys(parsed._found || {}).length) ["#nsKcal", "#nsSat", "#nsSugar", "#nsProt", "#nsFiber"].forEach(function (id) { $(id, root).value = ""; });
             if (parsed.unit === "ml") setUnit("ml");
             if (parsed.base_g) setNum("#nsBase", parsed.base_g);
             setNum("#nsKcal", parsed.kcal); setNum("#nsSat", parsed.sat_fat_g); setNum("#nsSugar", parsed.sugar_g); setNum("#nsProt", parsed.protein_g); setNum("#nsFiber", parsed.fiber_g);
@@ -3196,6 +3199,8 @@
                 box.innerHTML = '<span class="spin"></span> ' + esc(label) + pct;
               }
             });
+            // Neuer Scan mit Treffern ersetzt die alten Werte komplett.
+            if (Object.keys(parsed._found || {}).length) ["#cpKcal", "#cpSat", "#cpSugar", "#cpProt", "#cpFiber"].forEach(function (id) { $(id, root).value = ""; });
             if (parsed.unit === "ml") $("#cpUnit", root).value = "ml";
             if (parsed.base_g) setNum("#cpBase", parsed.base_g);
             setNum("#cpKcal", parsed.kcal);

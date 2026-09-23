@@ -1,32 +1,34 @@
 /* ============================================================================
    Punkto — OCR fuer Naehrwert-Etiketten (lokal gehostetes Tesseract.js 5.1.1).
-   Liest das Foto der Naehrwerttabelle und versucht, die fuer die Punkte
-   relevanten Werte je 100 g/ml auszulesen: kcal, gesaettigte Fettsaeuren,
-   Zucker, Eiweiss, Ballaststoffe. Reine Autofill-Hilfe — die Felder bleiben
-   im Formular editierbar, damit die Punktzahl notfalls exakt von Hand stimmt.
+   Liest das Foto der Naehrwerttabelle und liefert die Werte je 100 g/ml:
+   kcal, gesaettigte Fettsaeuren, Zucker, Eiweiss, Ballaststoffe (+ Fett,
+   Kohlenhydrate, Salz als Kontrollwerte). Reine Autofill-Hilfe — die Felder
+   bleiben im Formular editierbar.
 
    Alle Ressourcen liegen unter assets/ocr/ (kein CDN), werden LAZY beim ersten
-   Gebrauch geladen und danach vom Service Worker gecached -> offline nutzbar,
-   sobald sie einmal (online) geladen wurden.
+   Gebrauch geladen und danach vom Service Worker gecached -> offline nutzbar.
 
-   Robustheit (v14): an echten Handyfotos validiert (dunkle, gewoelbte Aldi-Dose,
-   kleine Tabelle im Bild, danebenstehender Zutatentext). Erkenntnisse aus dem
-   realen Fehlerfall:
-     (1) TABELLE ZUERST FINDEN. Auf einer dunklen Dose ist die Naehrwerttabelle
-         der helle Block. Eine grobe Helligkeitskarte lokalisiert ihn, wir
-         schneiden ihn frei und rechnen ihn hoch -> Tesseract liest die Tabelle
-         isoliert statt am groesseren Zutaten-Absatz „haengenzubleiben".
-     (2) MEHRERE AUFBEREITUNGEN + FELD-MERGE. Kontrast-Stretch, Graustufe (PSM 6),
-         adaptive Schwelle … je Variante wird geparst und JEDES Feld aus der
-         ERSTEN Variante uebernommen, die einen plausiblen Wert liefert. So muss
-         nicht eine Variante alles koennen — kcal kommt aus der einen, die
-         gesaettigten Fettsaeuren aus der anderen.
-     (3) EINHEIT-„g"-KORREKTUR. OCR klebt das Einheiten-g oft als „9" an die Zahl
-         („0,8 g" -> „0,89", „8,2 g" -> „8,29"). Eine abschliessende 9 nach einer
-         Dezimalstelle wird wieder abgeschnitten.
-     (4) UNSCHARFE STICHWOERTER + FOLGEZEILE. „Zucker" auch als „ucker"/„lucker",
-         „gesaettigte" auch als „…attigt…"; Werte notfalls aus der Folgezeile
-         (Spalten-Layout, das die OCR in getrennte Zeilen zerlegt).
+   v2 (zweistufig, an echten Handyfotos validiert — Milchkarton mit farbigen
+   Zeilen, Nudeltuete, Kaffeebecher mit dunklem Grund und 3 Spalten):
+     (1) TABELLE PER STICHWORT FINDEN. Das ganze Foto wird adaptiv binarisiert
+         (lokale Schwelle -> farbige Zeilenhintergruende verschwinden) und mit
+         PSM 11 gelesen. Die Positionen der Stichwoerter (Brennwert, Fett,
+         Zucker, Eiweiss …) ergeben den Tabellenkasten und die Schrifthoehe.
+     (2) AUSSCHNITT GEZIELT HOCHRECHNEN. Der Kasten wird aus dem Original so
+         skaliert, dass die Schrift ~54 px hoch ist (Komma bleibt lesbar), und in
+         mehreren Aufbereitungen/Segmentierungen gelesen.
+     (3) GEOMETRISCHER ZEILEN-PARSER. Woerter werden ueber ihre y-Position zu
+         Tabellenzeilen gruppiert; je Zeile zaehlt die erste Zahl nach dem
+         Stichwort (= Spalte „100 g/ml"), %-Angaben werden uebersprungen.
+         Zweizeilige Beschriftungen („davon gesaettigte / Fettsaeuren 0,4 g")
+         holen den Wert aus der Folgezeile.
+     (4) KANDIDATEN + ABSTIMMUNG + PLAUSIBILITAET. Typische OCR-Fehler
+         („g" als 9, verlorenes Komma: „829" = 8,2 g) erzeugen gewichtete
+         Kandidaten. Die Varianten stimmen ab; gewaehlt wird die Kombination,
+         die zusaetzlich die Naehrwertlogik erfuellt (ges. Fett <= Fett,
+         Zucker <= Kohlenhydrate, 9·Fett + 4·KH + 4·Eiweiss + 2·Ballast ≈ kcal).
+         Unsichere Felder bleiben LEER statt geraten.
+   BEWUSST KEINE tessedit_char_whitelist (zwingt „g" zu „9", verschlechtert).
 
    Global: window.PKOcr = { recognize(blob,onProgress), parseNutrition(text),
                             scanNutrition(blob,onProgress), ready, warmup() }.
@@ -35,10 +37,11 @@
   "use strict";
 
   var BASE = "assets/ocr/";
-  var LANG = "deu";              // deutsches Modell (Umlaute/ß); nur eng waere ungenauer
+  var LANG = "deu";
   var _worker = null;
   var _loading = null;
-  var _psm = null;               // zuletzt gesetzter Page-Segmentation-Mode (redundante Sets sparen)
+  var _psm = null;
+  var _progress = null;          // aktueller Fortschritts-Callback (Logger ist nur einmal bindbar)
 
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
@@ -51,8 +54,12 @@
     });
   }
 
-  /* Tesseract-Worker (lazy, einmalig). onProgress(m) bekommt {status, progress}. */
+  function emit(m) { if (_progress) { try { _progress(m); } catch (e) {} } }
+
+  /* Tesseract-Worker (lazy, einmalig). Der Logger leitet an _progress weiter,
+     damit auch spaetere Scans (mit neuem Callback) Fortschritt melden. */
   function getWorker(onProgress) {
+    if (onProgress) _progress = onProgress;
     if (_worker) return Promise.resolve(_worker);
     if (_loading) return _loading;
     _loading = (async function () {
@@ -61,27 +68,21 @@
       if (!T || !T.createWorker) throw new Error("ocr_unavailable");
       var w = await T.createWorker(LANG, 1, {
         workerPath: BASE + "worker.min.js",
-        corePath: BASE,            // Verzeichnis -> waehlt tesseract-core(-simd)-lstm.wasm.js (OEM 1)
-        langPath: BASE,            // findet deu.traineddata.gz
+        corePath: BASE,
+        langPath: BASE,
         gzip: true,
-        logger: function (m) { if (onProgress) { try { onProgress(m); } catch (e) {} } }
+        logger: function (m) { if (_stepHook) _stepHook(m); else emit(m); }
       });
-      // BEWUSST KEINE tessedit_char_whitelist: A/B-Tests an realen (kleinen,
-      // gewoelbten) Etiketten zeigten, dass eine Whitelist NICHT hilft — sie
-      // zwingt mehrdeutige Glyphen in die erlaubte Menge (z. B. Einheit „g"
-      // hinter einer Zahl -> „9", aus „2,4 g" wird „249") und die Punktzahl
-      // wird falsch. Der Parser unten arbeitet ohnehin stichwort-/zahlbasiert
-      // und ist gegen Rauschen robust. preserve_interword_spaces haelt Stichwort
-      // und Wert (mehrere Leerzeichen als Spalte) in derselben Zeile zusammen.
-      try {
-        await w.setParameters({ preserve_interword_spaces: "1" });
-      } catch (e) { /* Parameter ist nur Optimierung */ }
+      try { await w.setParameters({ preserve_interword_spaces: "1" }); } catch (e) {}
       _worker = w;
       return w;
     })();
-    _loading.catch(function () { _loading = null; }); // bei Fehlschlag erneut versuchbar
+    _loading.catch(function () { _loading = null; });
     return _loading;
   }
+
+  // Waehrend scanNutrition: Tesseract-Teilfortschritt -> Gesamtfortschritt.
+  var _stepHook = null;
 
   async function setPsm(worker, psm) {
     var p = String(psm || 3);
@@ -90,130 +91,70 @@
   }
 
   /* ---- Bildaufbereitung ---------------------------------------------------- */
-  var OCR_MAXDIM = 2600;
+  var MAXDIM = 3200;             // Originalraster (Obergrenze fuer Speicher)
+  var LOCATE_DIM = 2400;         // Stufe 1: lange Seite
+  var TARGET_H = 54;             // Stufe 2: Ziel-Schrifthoehe in px
+  var CROP_MAX = 2400;           // Stufe 2: max. lange Seite des Ausschnitts
 
-  /* Foto dekodieren, auf ~2600 px skalieren, in Graustufen (Rec. 601) wandeln.
-     Liefert { w, h, gray:Uint8ClampedArray } oder null (keine Canvas/Decode).
-     imageOrientation:"from-image" korrigiert EXIF-gedrehte Handyfotos, damit
-     die OCR nie eine seitwaerts liegende Tabelle bekommt. */
-  async function rasterizeGray(blob) {
+  function mkCanvas(w, h) { var c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
+
+  /* Foto dekodieren (EXIF-Drehung beachten) -> Farb-Canvas. */
+  async function loadImage(blob) {
     if (typeof createImageBitmap !== "function" || typeof document === "undefined") return null;
     var bmp;
     try { bmp = await createImageBitmap(blob, { imageOrientation: "from-image" }); }
     catch (e) { try { bmp = await createImageBitmap(blob); } catch (e2) { return null; } }
     var w = bmp.width, h = bmp.height;
     if (!w || !h) { try { bmp.close && bmp.close(); } catch (e) {} return null; }
-    var scale = Math.min(1, OCR_MAXDIM / Math.max(w, h));
-    var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
-    var cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
-    var cx = cv.getContext("2d", { willReadFrequently: true });
+    var s = Math.min(1, MAXDIM / Math.max(w, h));
+    var cw = Math.max(1, Math.round(w * s)), ch = Math.max(1, Math.round(h * s));
+    var cv = mkCanvas(cw, ch), cx = cv.getContext("2d", { willReadFrequently: true });
     cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = "high";
     cx.drawImage(bmp, 0, 0, cw, ch);
     try { bmp.close && bmp.close(); } catch (e) {}
-    try {
-      var img = cx.getImageData(0, 0, cw, ch), d = img.data;
-      var gray = new Uint8ClampedArray(cw * ch);
-      for (var i = 0, j = 0; j < gray.length; j++, i += 4) {
-        gray[j] = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) | 0;
-      }
-      return { w: cw, h: ch, gray: gray };
-    } catch (e) { return null; } // getImageData kann bei Riesencanvas scheitern
+    return cv;
   }
 
-  /* Graustufen-Puffer (oder bereits binarisiert) -> Canvas fuer den Worker.
-     Tesseract.js akzeptiert ein Canvas direkt — spart den toBlob-Umweg. */
-  function bufToCanvas(w, h, buf) {
-    var cv = document.createElement("canvas"); cv.width = w; cv.height = h;
-    var cx = cv.getContext("2d");
-    var img = cx.createImageData(w, h), d = img.data;
-    for (var i = 0, j = 0; j < buf.length; j++, i += 4) {
-      var v = buf[j]; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+  /* Ausschnitt (Quellkoordinaten) skaliert in neues Canvas zeichnen. */
+  function region(src, sx, sy, sw, sh, scale) {
+    sx = Math.max(0, Math.round(sx)); sy = Math.max(0, Math.round(sy));
+    sw = Math.max(1, Math.min(src.width - sx, Math.round(sw)));
+    sh = Math.max(1, Math.min(src.height - sy, Math.round(sh)));
+    var tw = Math.max(1, Math.round(sw * scale)), th = Math.max(1, Math.round(sh * scale));
+    var cv = mkCanvas(tw, th), cx = cv.getContext("2d", { willReadFrequently: true });
+    cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = "high";
+    cx.drawImage(src, sx, sy, sw, sh, 0, 0, tw, th);
+    return cv;
+  }
+
+  /* Canvas -> Graustufen. mode "lum" (Rec. 601) oder "min" (dunkelster Kanal:
+     trennt farbige Zeilenhintergruende besser von schwarzer Schrift). */
+  function grayOf(cv, mode) {
+    var d = cv.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, cv.width, cv.height).data;
+    var n = cv.width * cv.height, g = new Uint8ClampedArray(n);
+    for (var i = 0, j = 0; j < n; j++, i += 4) {
+      g[j] = mode === "min" ? Math.min(d[i], d[i + 1], d[i + 2]) : (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
     }
+    return g;
+  }
+
+  function bufToCanvas(w, h, buf) {
+    var cv = mkCanvas(w, h), cx = cv.getContext("2d");
+    var img = cx.createImageData(w, h), d = img.data;
+    for (var i = 0, j = 0; j < buf.length; j++, i += 4) { var v = buf[j]; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
     cx.putImageData(img, 0, 0);
     return cv;
   }
 
-  /* Tabelle lokalisieren: groesster HELLER, zusammenhaengender Block, dessen
-     Schwerpunkt zentral liegt (verwirft die helle Wand/Tischplatte am Rand).
-     Auf einer dunklen Dose ist die Naehrwerttabelle genau dieser helle Block.
-     Liefert {x0,y0,x1,y1,frac} in 0..1 oder null. */
-  function brightBox(g) {
-    var tw = 200, th = Math.max(1, Math.round(g.h * tw / g.w));
-    var cv = document.createElement("canvas"); cv.width = tw; cv.height = th;
-    var cx = cv.getContext("2d", { willReadFrequently: true });
-    cx.drawImage(bufToCanvas(g.w, g.h, g.gray), 0, 0, tw, th);
-    var d = cx.getImageData(0, 0, tw, th).data, br = new Uint8Array(tw * th);
-    for (var i = 0, j = 0; j < br.length; j++, i += 4) br[j] = d[i] > 140 ? 1 : 0;
-    var lab = new Int32Array(tw * th), cur = 0, best = null;
-    for (var p = 0; p < br.length; p++) {
-      if (!br[p] || lab[p]) continue; cur++;
-      var st = [p], minx = tw, maxx = 0, miny = th, maxy = 0, cnt = 0, sx = 0, sy = 0;
-      while (st.length) {
-        var q = st.pop(); if (lab[q] || !br[q]) continue; lab[q] = cur;
-        var qx = q % tw, qy = (q / tw) | 0; cnt++; sx += qx; sy += qy;
-        if (qx < minx) minx = qx; if (qx > maxx) maxx = qx; if (qy < miny) miny = qy; if (qy > maxy) maxy = qy;
-        if (qx > 0) st.push(q - 1); if (qx < tw - 1) st.push(q + 1);
-        if (qy > 0) st.push(q - tw); if (qy < th - 1) st.push(q + tw);
-      }
-      var cxx = sx / cnt / tw, cyy = sy / cnt / th;
-      if (cxx < 0.12 || cxx > 0.88 || cyy < 0.15 || cyy > 0.85) continue; // Rand/Wand verwerfen
-      if (!best || cnt > best.cnt) best = { cnt: cnt, minx: minx, maxx: maxx, miny: miny, maxy: maxy };
-    }
-    if (!best) return null;
-    var padx = (best.maxx - best.minx) * 0.06, pady = (best.maxy - best.miny) * 0.06;
-    return {
-      x0: Math.max(0, (best.minx - padx) / tw), x1: Math.min(1, (best.maxx + padx) / tw),
-      y0: Math.max(0, (best.miny - pady) / th), y1: Math.min(1, (best.maxy + pady) / th),
-      frac: best.cnt / (tw * th)
-    };
-  }
-
-  /* Kasten aus dem Graustufenbild ausschneiden und auf ~targetW hochrechnen.
-     Liefert ein neues { w, h, gray } (kleine Tabelle -> lesbare Groesse). */
-  function cropUpscale(g, box, targetW) {
-    var sx = Math.round(box.x0 * g.w), sy = Math.round(box.y0 * g.h);
-    var sw = Math.max(1, Math.round((box.x1 - box.x0) * g.w));
-    var sh = Math.max(1, Math.round((box.y1 - box.y0) * g.h));
-    var src = bufToCanvas(g.w, g.h, g.gray);
-    var scale = Math.max(1, targetW / sw), tw = Math.round(sw * scale), th = Math.round(sh * scale);
-    var cv = document.createElement("canvas"); cv.width = tw; cv.height = th;
-    var cx = cv.getContext("2d", { willReadFrequently: true });
-    cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = "high";
-    cx.drawImage(src, sx, sy, sw, sh, 0, 0, tw, th);
-    try {
-      var d = cx.getImageData(0, 0, tw, th).data, gray = new Uint8ClampedArray(tw * th);
-      for (var i = 0, j = 0; j < gray.length; j++, i += 4) gray[j] = d[i];
-      return { w: tw, h: th, gray: gray };
-    } catch (e) { return null; }
-  }
-
-  /* Globaler Kontrast-Stretch um 128 (×1.7) + leichte Aufhellung.
-     mode "auto": ist das Bild ueberwiegend dunkel (helle Schrift auf dunkler
-     Verpackung), invertieren -> dunkle Schrift auf hell. mode "no": nie
-     invertieren (fuer den bereits hellen, freigeschnittenen Tabellen-Ausschnitt). */
-  function stretchBuf(w, h, gray, mode) {
-    var out = new Uint8ClampedArray(w * h), sum = 0;
-    for (var j = 0; j < gray.length; j++) {
-      var v = (gray[j] - 128) * 1.7 + 128 + 6;
-      out[j] = v < 0 ? 0 : v > 255 ? 255 : v; sum += out[j];
-    }
-    if (mode === "auto" && sum / out.length < 115) { for (var k = 0; k < out.length; k++) out[k] = 255 - out[k]; }
-    return out;
-  }
-
-  /* Adaptive lokale Schwelle (Bradley) per Integralbild: dunkler als (lokaler
-     Mittelwert − C)? -> Tinte. Robust gegen ungleiche Beleuchtung/Woelbung.
-     gInvert=true: wird Tinte zur Mehrheit, war das Original hell-auf-dunkel ->
-     invertieren (nur fuers Vollbild sinnvoll; der Tabellen-Crop ist schon hell). */
-  function adaptiveBuf(w, h, gray, gInvert) {
-    var n = w * h, W1 = w + 1;
-    var integ = new Float64Array(W1 * (h + 1));
+  /* Adaptive lokale Schwelle (Bradley, Integralbild). invert: ueberwiegt danach
+     Tinte (helle Schrift auf dunklem Grund), wird invertiert. */
+  function adaptiveBuf(w, h, gray, rad, C, invert) {
+    var n = w * h, W1 = w + 1, integ = new Float64Array(W1 * (h + 1));
     for (var y = 0; y < h; y++) {
       var rs = 0, row = y * w, irow = (y + 1) * W1, prow = y * W1;
       for (var x = 0; x < w; x++) { rs += gray[row + x]; integ[irow + x + 1] = integ[prow + x + 1] + rs; }
     }
-    var rad = Math.max(8, Math.round(Math.min(w, h) / 22));
-    var C = 10, out = new Uint8ClampedArray(n), black = 0;
+    var out = new Uint8ClampedArray(n), black = 0;
     for (var yy = 0; yy < h; yy++) {
       var y1 = yy - rad < 0 ? 0 : yy - rad, y2 = yy + rad >= h ? h - 1 : yy + rad;
       var a1 = y1 * W1, a2 = (y2 + 1) * W1, base = yy * w;
@@ -224,266 +165,504 @@
         if (gray[base + xx] < (s / cnt) - C) { out[base + xx] = 0; black++; } else out[base + xx] = 255;
       }
     }
-    if (gInvert && black > n * 0.5) { for (var m = 0; m < n; m++) out[m] = 255 - out[m]; }
+    if (invert && black > n * 0.5) { for (var m = 0; m < n; m++) out[m] = 255 - out[m]; }
     return out;
   }
 
-  /* Eine Aufbereitung erkennen. src = {w,h,gray} (oder null -> Original-Blob).
-     which: "stretch"(hell, kein Invert) | "contrast"(Vollbild, Auto-Invert) |
-            "adaptive"(Crop) | "adaptiveG"(Vollbild, Global-Invert) | "gray". */
-  async function recognizeSource(worker, blob, src, which, psm) {
-    var input;
-    if (!src) { input = blob; }
-    else {
-      var buf;
-      if (which === "adaptive") buf = adaptiveBuf(src.w, src.h, src.gray, false);
-      else if (which === "adaptiveG") buf = adaptiveBuf(src.w, src.h, src.gray, true);
-      else if (which === "contrast") buf = stretchBuf(src.w, src.h, src.gray, "auto");
-      else if (which === "stretch") buf = stretchBuf(src.w, src.h, src.gray, "no");
-      else buf = src.gray; // "gray" — Graustufe unveraendert
-      input = bufToCanvas(src.w, src.h, buf);
+  /* Kontrast-Stretch; invertiert bei ueberwiegend dunklem Bild. */
+  function stretchBuf(gray) {
+    var out = new Uint8ClampedArray(gray.length), sum = 0;
+    for (var j = 0; j < gray.length; j++) {
+      var v = (gray[j] - 128) * 1.7 + 134;
+      out[j] = v < 0 ? 0 : v > 255 ? 255 : v; sum += out[j];
     }
+    if (sum / out.length < 110) { for (var k = 0; k < out.length; k++) out[k] = 255 - out[k]; }
+    return out;
+  }
+
+  /* Canvas + Aufbereitung -> Eingabe-Canvas fuer Tesseract. */
+  function prep(cv, kind, rad) {
+    var w = cv.width, h = cv.height;
+    if (kind === "gray") return bufToCanvas(w, h, grayOf(cv, "lum"));
+    if (kind === "stretch") return bufToCanvas(w, h, stretchBuf(grayOf(cv, "lum")));
+    if (kind === "adaptMin") return bufToCanvas(w, h, adaptiveBuf(w, h, grayOf(cv, "min"), rad, 12, true));
+    return bufToCanvas(w, h, adaptiveBuf(w, h, grayOf(cv, "lum"), rad, 12, true)); // "adapt"
+  }
+
+  /* OCR mit Wort-Boxen. Liefert { text, words:[{t,x0,y0,x1,y1}] }. */
+  async function ocrWords(worker, input, psm) {
     await setPsm(worker, psm);
-    var res = await worker.recognize(input);
+    var res = await worker.recognize(input, {}, { text: true, blocks: true });
+    var d = (res && res.data) || {}, words = [];
+    (d.blocks || []).forEach(function (b) {
+      (b.paragraphs || []).forEach(function (p) {
+        (p.lines || []).forEach(function (l) {
+          (l.words || []).forEach(function (wd) {
+            var t = String(wd.text || "").trim();
+            if (t && wd.bbox) words.push({ t: t, x0: wd.bbox.x0, y0: wd.bbox.y0, x1: wd.bbox.x1, y1: wd.bbox.y1 });
+          });
+        });
+      });
+    });
+    return { text: d.text || "", words: words };
+  }
+
+  /* Rohtext (Rueckwaerts-Kompatibilitaet): einfache Ein-Pass-Erkennung. */
+  async function recognize(blob, onProgress) {
+    var worker = await getWorker(onProgress);
+    await setPsm(worker, 3);
+    var res = await worker.recognize(blob);
     return (res && res.data && res.data.text) || "";
   }
 
-  /* Rohtext (Rueckwaerts-Kompatibilitaet): einfache Ein-Pass-Erkennung (Vollbild). */
-  async function recognize(blob, onProgress) {
-    var worker = await getWorker(onProgress);
-    var g = await rasterizeGray(blob);
-    return recognizeSource(worker, blob, g, g ? "contrast" : "orig", 3);
-  }
-
-  /* ---- Zahl-Parsing (deutsche Schreibweise: Komma = Dezimal) ---------------- */
-  function toNum(str) {
-    if (str == null) return null;
-    var s = String(str).trim();
-    s = s.replace(/\.(?=\d{3}(\D|$))/g, ""); // Tausenderpunkt (z. B. 1.234 kJ) entfernen
-    s = s.replace(",", ".");
-    s = s.replace(/[^0-9.]/g, "");
-    if (!s || s === ".") return null;
-    var n = parseFloat(s);
-    return isFinite(n) ? n : null;
-  }
-
-  /* Einheit „g" wird von der OCR oft als „9" an die Zahl geklebt:
-     „0,8 g" -> „0,89", „8,2 g" -> „8,29", „0,18 g" -> „0,189". Deutsche
-     Naehrwerte je 100 g/ml haben i. d. R. hoechstens EINE Dezimalstelle — eine
-     abschliessende 9, die eine zweite Dezimale erzeugt, ist darum das
-     Einheiten-g und wird entfernt. */
-  function cleanNum(tok) {
-    var t = String(tok);
-    var m = t.match(/^(\d{1,3},\d)(\d)$/);        // X,Y + Z
-    if (m && m[2] === "9") t = m[1];              // 8,29 -> 8,2 ; 0,89 -> 0,8 ; 1,09 -> 1,0
-    else { var m2 = t.match(/^(\d{1,3},\d\d)9$/); if (m2) t = m2[1]; } // 0,189 -> 0,18
-    return toNum(t);
-  }
-
-  /* Erste Zahl in einem Text (nach optionalem Entfernen des Stichworts). */
-  function firstNum(line) {
-    var m = String(line).match(/(\d+(?:[.,]\d+)?)/);
-    return m ? cleanNum(m[1]) : null;
-  }
-
-  /* Robustes Normalisieren fuer Stichwort-Treffer (OCR verliert oft Umlaute). */
+  /* ---- Text-Helfer ---------------------------------------------------------- */
   function fold(s) {
     return String(s).toLowerCase()
       .replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss")
       .replace(/\s+/g, " ");
   }
 
-  // Stichwoerter, die eine EIGENE Naehrwertzeile markieren — an ihnen bricht die
-  // Folgezeilen-Suche ab, damit ein Wert nicht aus der naechsten Zeile „geklaut" wird.
-  var ROW_KW = /brennwert|energie|\bfett|zucker|ucker|kohlenhydr|eiwei|iweiss|protein|ballast|\bsalz|natrium|gesatt|attigt|davon/;
+  // Stichwoerter zur Tabellen-Lokalisierung (Stufe 1) -> Art.
+  function kwKind(t) {
+    var f = fold(t);
+    if (/brennw|energie/.test(f)) return "energy";
+    if (/kcal|^kj/.test(f)) return "energy";
+    if (/gesatt|attigt|fettsaur/.test(f)) return "sat";
+    if (/zucker|ucker/.test(f)) return "sugar";
+    if (/kohlenh|ohlenhy|hydrat/.test(f)) return "carbs";
+    if (/ballast/.test(f)) return "fiber";
+    if (/eiwei|iweis|protein/.test(f)) return "protein";
+    if (/salz/.test(f)) return "salt";
+    if (/^fett/.test(f)) return "fat";
+    if (/nahrwert|durchschnitt/.test(f)) return "head";
+    return null;
+  }
 
-  /* ---- Naehrwert-Parser -----------------------------------------------------
-     Liefert best-effort { base_g, unit, kcal, sat_fat_g, sugar_g, protein_g,
-     fiber_g, _found:{feld:true} }. Nicht gefundene Felder bleiben null. Nimmt
-     je Zeile die ERSTE Zahl nach dem Stichwort (i. d. R. die „pro 100 g"-Spalte);
-     steht die Zahl in der Folgezeile (Spalten-Layout), wird sie dort geholt. */
-  function parseNutrition(text) {
-    var out = { base_g: 100, unit: "g", kcal: null, sat_fat_g: null, sugar_g: null, protein_g: null, fiber_g: null, _found: {} };
-    if (!text) return out;
+  /* Zeilen-Art (Beschriftung) einer Tabellenzeile; Reihenfolge wichtig. */
+  function rowKind(f) {
+    if (/ungesatt|einfach|mehrfach|trans/.test(f)) return "other";
+    if (/gesatt|gesat|attigt|fettsaur|ettsaur|ges\.\s*f/.test(f)) return "sat";
+    if (/zucker|ucker/.test(f)) return "sugar";
+    if (/kohlenh|ohlenh|hydrat/.test(f)) return "carbs";
+    if (/ballast/.test(f)) return "fiber";
+    if (/eiwei|iweis|protein/.test(f)) return "protein";
+    if (/salz/.test(f)) return "salt";
+    if (/natrium|calcium|kalzium|vitamin|starke|mehrwert|alkohol|magnes|eisen|zink|jod|kalium|folsa|omega|chlorid/.test(f)) return "other";
+    if (/(^|[^a-z])fett/.test(f)) return "fat";
+    if (/brennw|energie|kcal|\bkj\b|[0-9]\s*kj/.test(f)) return "energy";
+    return null;
+  }
 
-    var rawLines = String(text).split(/\r?\n/);
-    var lines = rawLines.map(function (l) { return { raw: l, f: fold(l) }; })
-      .filter(function (o) { return o.f.trim().length; });
-    var allFold = lines.map(function (o) { return o.f; }).join(" ");
-
-    // Einheit: ml, wenn im Bezug „100 ml" o. ä. vorkommt, sonst g.
-    if (/100\s*ml|je\s*ml|pro\s*ml|\bml\b/.test(allFold)) out.unit = "ml";
-
-    // Bezugsmenge: „pro 100 g/ml" ist Standard; abweichende Bezuege selten -> 100.
-    var mBase = allFold.match(/(?:pro|je)\s*(\d{2,4})\s*(?:g|ml)/);
-    if (mBase) { var b = toNum(mBase[1]); if (b && b >= 1 && b <= 1000) out.base_g = b; }
-
-    // Zahl nach einem Stichwort innerhalb EINER Zeile holen; sonst irgendeine
-    // Zahl DER Zeile (Stichwort evtl. verstuemmelt, Wert steht aber daneben).
-    function valAfter(lineFold, lineRaw, kw) {
-      var idx = kw ? lineFold.indexOf(kw) : -1;
-      if (idx >= 0) {
-        var v = firstNum(lineRaw.slice(idx + kw.length));
-        if (v != null) return v;
+  /* ---- Zahlen-Kandidaten ------------------------------------------------------
+     Aus einem Zahl-Token (+ ob ein „g" folgte) werden gewichtete Lesarten:
+       „1,5 g" / „11,9g" -> 1,5 / 11,9 (sicher, Gewicht 2)
+       „0,99"            -> 0,9 (angeklebtes g) | 0,99 (schwach)
+       „0,139"           -> 0,13
+       „829" / „7249"    -> 8,2 / 72,4 (Komma verloren + g als 9)
+     Plausibilitaet (<= 100 g) filtert den Rest. */
+  function numCands(tok, hasG, field) {
+    var out = [];
+    function add(v, w) { if (v != null && isFinite(v) && v >= 0 && v <= 100) out.push({ v: Math.round(v * 100) / 100, w: w }); }
+    var m;
+    if ((m = tok.match(/^(\d{1,3})[.,](\d+)$/))) {
+      var ip = m[1], dp = m[2], val = parseFloat(ip + "." + dp);
+      if (hasG) { add(val, 2); return out; }
+      if (dp.length === 1) { add(val, 1.5); return out; }
+      if (dp.length === 2 && dp[1] === "9") {
+        var cut = parseFloat(ip + "." + dp[0]);
+        if (field === "salt") { add(cut, 0.8); add(val, 0.6); } else { add(cut, 1); add(val, 0.3); }
+        return out;
       }
-      return firstNum(lineRaw);
+      if (dp.length === 3 && dp[2] === "9") { add(parseFloat(ip + "." + dp.slice(0, 2)), 1); return out; }
+      add(val, field === "salt" ? 1 : 0.6);
+      return out;
     }
-
-    // Erste Zahl aus den bis zu 2 Folgezeilen (Spalten-Layout) — bricht ab,
-    // sobald eine andere Naehrwertzeile beginnt.
-    function nextNum(idx) {
-      for (var k = idx + 1; k <= Math.min(idx + 2, lines.length - 1); k++) {
-        if (ROW_KW.test(lines[k].f)) return null;
-        var v = firstNum(lines[k].raw);
-        if (v != null) return v;
+    if ((m = tok.match(/^\d{1,5}$/))) {
+      var D = m[0];
+      if (hasG) {
+        add(parseInt(D, 10), 1.5);
+        if (D.length >= 2) add(parseFloat(D.slice(0, -1) + "." + D.slice(-1)), 0.4);
+        return out;
       }
-      return null;
+      if (D.length >= 2 && D[D.length - 1] === "9") {
+        var E = D.slice(0, -1);
+        add(parseInt(E, 10), 0.6);
+        if (E.length >= 2) add(parseFloat(E.slice(0, -1) + "." + E.slice(-1)), 0.6);
+        add(parseInt(D, 10), 0.3);
+        return out;
+      }
+      add(parseInt(D, 10), 1);
+      if (D.length >= 2) add(parseFloat(D.slice(0, -1) + "." + D.slice(-1)), 0.3);
+      return out;
     }
-
-    function findIdx(pred) {
-      for (var i = 0; i < lines.length; i++) if (pred(lines[i].f)) return i;
-      return -1;
-    }
-
-    // Wert zu einem Stichwort: erst dieselbe Zeile (Stichwort oder erste Zahl),
-    // sonst die Folgezeile.
-    function valFor(idx, kw) {
-      if (idx < 0) return null;
-      var v = valAfter(lines[idx].f, lines[idx].raw, kw);
-      if (v == null) v = nextNum(idx);
-      return v;
-    }
-
-    // kcal: bevorzugt „NNN kcal" irgendwo; sonst Brennwert/Energie-Zeile; sonst kJ/4,184.
-    (function () {
-      var mk = allFold.match(/(\d{2,4})\s*kcal/);
-      if (mk) { out.kcal = toNum(mk[1]); out._found.kcal = true; return; }
-      var i = findIdx(function (f) { return /brennwert|energie/.test(f); });
-      if (i >= 0) {
-        var mk2 = lines[i].f.match(/(\d{2,4})\s*kcal/);
-        if (mk2) { out.kcal = toNum(mk2[1]); out._found.kcal = true; return; }
-      }
-      var mj = allFold.match(/([\d.]+)\s*kj/); // [\d.] laesst den Tausenderpunkt (2.310 kJ) mit
-      if (mj) { var kj = toNum(mj[1]); if (kj && kj >= 40) { out.kcal = Math.round(kj / 4.184); out._found.kcal = true; } }
-    })();
-
-    // Gesaettigte Fettsaeuren: „gesättigte", „…attigt…", die Abkuerzung
-    // „ges. Fettsäuren" oder eine „davon … Fett"-Zeile.
-    (function () {
-      var i = findIdx(function (f) { return /gesatt|gesat|attigt|ges\.?\s*fett|davon.*fett/.test(f); });
-      if (i < 0) i = findIdx(function (f) { return /\bfett\b/.test(f) && /davon/.test(f); });
-      if (i >= 0) {
-        var kw = lines[i].f.indexOf("gesatt") >= 0 ? "gesatt" : "";
-        var v = valFor(i, kw);
-        if (v != null) { out.sat_fat_g = v; out._found.sat_fat_g = true; }
-      }
-    })();
-
-    // Zucker: „davon Zucker" (auch verstuemmelt „ucker"/„lucker").
-    (function () {
-      var i = findIdx(function (f) { return /zucker|ucker/.test(f); });
-      if (i >= 0) {
-        var kw = lines[i].f.indexOf("zucker") >= 0 ? "zucker" : "";
-        var v = valFor(i, kw);
-        if (v != null) { out.sugar_g = v; out._found.sugar_g = true; }
-      }
-    })();
-
-    // Eiweiss / Protein (auch „…iweiss"/„weiss").
-    (function () {
-      var i = findIdx(function (f) { return /eiwei|iweiss|weiss|protein/.test(f); });
-      if (i >= 0) {
-        var kw = lines[i].f.indexOf("eiwei") >= 0 ? "eiwei" : (lines[i].f.indexOf("protein") >= 0 ? "protein" : "");
-        var v = valFor(i, kw);
-        if (v != null) { out.protein_g = v; out._found.protein_g = true; }
-      }
-    })();
-
-    // Ballaststoffe.
-    (function () {
-      var i = findIdx(function (f) { return /ballaststoff|ballast/.test(f); });
-      var v = valFor(i, "ballast");
-      if (v != null) { out.fiber_g = v; out._found.fiber_g = true; }
-    })();
-
     return out;
   }
 
-  function fieldsFound(p) { return (p && p._found) ? Object.keys(p._found).length : 0; }
-  // Bewertung einer Variante: Feldzahl, kcal als Anker leicht hoeher gewichtet.
-  function scoreParse(p) { return fieldsFound(p) + ((p && p._found && p._found.kcal) ? 0.5 : 0); }
-
-  // Plausible Wertebereiche je 100 g/ml — filtert offensichtlichen OCR-Muell
-  // beim Zusammenfuehren mehrerer Varianten.
-  var RANGES = { kcal: [1, 900], sat_fat_g: [0, 100], sugar_g: [0, 100], protein_g: [0, 100], fiber_g: [0, 100] };
-  function inRange(f, v) { var r = RANGES[f]; return v != null && (!r || (v >= r[0] && v <= r[1])); }
-
-  // Ein Parse-Ergebnis in das Sammel-Ergebnis mergen: jedes Feld nur setzen,
-  // wenn es noch fehlt UND plausibel ist (erste gute Variante gewinnt).
-  function mergeInto(dst, p) {
-    ["kcal", "sat_fat_g", "sugar_g", "protein_g", "fiber_g"].forEach(function (f) {
-      if (dst[f] == null && p._found && p._found[f] && inRange(f, p[f])) { dst[f] = p[f]; dst._found[f] = true; }
-    });
-    if (p.unit === "ml") dst.unit = "ml";
-    if (!dst._baseSet && p._found && p._found.kcal) { dst.base_g = p.base_g; dst._baseSet = true; }
+  /* Zahlen einer Zeile (nach der Beschriftung). Liefert [{tok, hasG, unit}],
+     unit: "pct" | "mg" | "kj" | "kcal" | "g" | "". Verwechslungen am Zahlanfang
+     (d,18 / o,5 / l,5) werden korrigiert. */
+  function numsIn(s) {
+    s = String(s)
+      .replace(/(^|[^a-z0-9])[oOdDQ](?=[.,]\d)/g, "$10")
+      .replace(/(^|[^a-z0-9])[lI|](?=[.,]\d)/g, "$11");
+    var re = /(\d+(?:[.,]\d+)?)\s*(%|mg|µg|ug|kj|k\)|kl\b|k1\b|kcal|kca[l1i]?|keal|kcai|kal\b|g\b|g(?=[^a-z])|g$)?/gi, m, out = [];
+    while ((m = re.exec(s))) {
+      var u = (m[2] || "").toLowerCase(), unit = "";
+      if (u === "%") unit = "pct";
+      else if (/^(mg|µg|ug)$/.test(u)) unit = "mg";
+      else if (/^(kj|k\)|kl|k1)$/.test(u)) unit = "kj";
+      else if (/^k/.test(u)) unit = "kcal";
+      else if (u === "g") unit = "g";
+      // „15%*" hinter einer Zahl in derselben Spalte
+      out.push({ tok: m[1], hasG: unit === "g", unit: unit, idx: m.index });
+    }
+    return out;
   }
-  // „Kern" zum vorzeitigen Abbruch: kcal, gesaett. Fett und Zucker sind die
-  // zuverlaessig lesbaren Anker (und zaehlen am staerksten fuer die Punkte).
-  // Eiweiss/Ballaststoffe sind auf realen Fotos oft unlesbar -> nur best effort,
-  // sie blockieren den Abbruch nicht (sonst liefe immer jede Variante = langsam).
-  function coreComplete(d) { return d.kcal != null && d.sat_fat_g != null && d.sugar_g != null; }
 
-  /* Bequemer Einzelaufruf: Foto -> geparste Naehrwerte (+ Rohtext).
-     Findet zuerst die Tabelle (heller Block auf dunkler Dose), schneidet sie frei
-     und rechnet sie hoch; erkennt sie in mehreren Aufbereitungen und fuehrt die
-     Felder zusammen. Ein sauberes, bildfuellendes Etikett ueberspringt den Crop
-     (heller Anteil zu gross) und laeuft direkt ueber die Vollbild-Varianten. */
+  /* ---- Zeilen-Parser ---------------------------------------------------------
+     rows: [string] in Lesereihenfolge (eine Tabellenzeile je Eintrag).
+     Liefert { cands:{feld:[{v,w}]}, unit, base }. */
+  var FIELDS = ["kcal", "fat", "sat", "carbs", "sugar", "fiber", "protein", "salt"];
+
+  function parseRows(rows) {
+    var res = { cands: {}, unit: null, base: null };
+    FIELDS.forEach(function (f) { res.cands[f] = []; });
+    var R = rows.map(function (r) { var f = fold(r); return { raw: r, f: f, kind: rowKind(f) }; });
+    var all = R.map(function (r) { return r.f; }).join(" ");
+
+    var mb = all.match(/(?:pro|je|per)\s*(\d{2,4})\s*(g|ml|m1|mi)\b/);
+    if (mb) { res.base = parseInt(mb[1], 10); res.unit = /^m/.test(mb[2]) ? "ml" : "g"; }
+    if (!res.unit && /\b100\s*(ml|m1)\b/.test(all)) res.unit = "ml";
+    if (!res.unit && /\b100\s*g\b/.test(all)) res.unit = "g";
+
+    var used = {};
+    for (var i = 0; i < R.length; i++) {
+      var r = R[i], k = r.kind;
+      if (!k || k === "other") continue;
+      var label = k === "energy" ? r.raw : afterLabel(r.raw, k);
+      if (k === "energy") { energyRow(res, r.raw, R, i); continue; }
+      if (used[k]) continue;
+      var nums = valueNums(label);
+      // Beschriftung ohne Zahl -> bis zu 2 Folgezeilen ohne andere Beschriftung
+      for (var j = i + 1; !nums.length && j <= i + 2 && j < R.length; j++) {
+        var kk = R[j].kind;
+        if (kk && kk !== k && !(k === "sat" && kk === "fat")) break;
+        nums = valueNums(kk ? afterLabel(R[j].raw, kk) : R[j].raw);
+      }
+      if (!nums.length) continue;
+      used[k] = true;
+      var n = nums[0];
+      numCands(n.tok, n.hasG, k).forEach(function (c) { res.cands[k].push(c); });
+    }
+    positional(res, R, used);
+    return res;
+  }
+
+  // Reihenfolge-Schluss fuer Zeilen mit Werten, deren Beschriftung die OCR
+  // verloren hat (z. B. dunkle/farbige Beschriftungsspalte): In der EU-Tabelle
+  // folgen die Zeilen fest aufeinander. Nur zwischen/nach sicher erkannten
+  // Zeilen, mit geringem Gewicht; die Energiebilanz in select() prueft mit.
+  // Ballaststoffe sind optional und werden daher nie so erschlossen.
+  var ORDER = ["energy", "fat", "sat", "carbs", "sugar", "protein", "salt"];
+  function positional(res, R, used) {
+    var labelled = {};
+    R.forEach(function (r) { if (r.kind) labelled[r.kind] = 1; });
+    var prev = null, skipKcal = false;
+    for (var i = 0; i < R.length; i++) {
+      var r = R[i];
+      if (r.kind) {
+        prev = r.kind === "fiber" ? "sugar" : r.kind;
+        // kcal in eigener Zeile unter dem Brennwert -> diese Zeile ueberspringen
+        skipKcal = r.kind === "energy" && !/k\s*c?a[l1i]|keal|kcai/.test(r.f);
+        continue;
+      }
+      if (!prev || prev === "other") continue;
+      var all = numsIn(r.raw);
+      if (all.some(function (n) { return n.unit === "kj" || n.unit === "kcal"; })) { skipKcal = false; continue; }
+      var nums = valueNums(r.raw);
+      if (!nums.length) continue;
+      if (skipKcal) { skipKcal = false; continue; }
+      var pi = ORDER.indexOf(prev), k = null;
+      for (var q = pi + 1; q < ORDER.length; q++) {
+        if (labelled[ORDER[q]] || used[ORDER[q]]) continue;
+        k = ORDER[q]; break;
+      }
+      if (!k) continue;
+      // die naechste sicher beschriftete Zeile darf nicht vor k stehen
+      for (var j = i + 1; j < R.length; j++) {
+        if (R[j].kind && R[j].kind !== "other") { if (ORDER.indexOf(R[j].kind) >= 0 && ORDER.indexOf(R[j].kind) < ORDER.indexOf(k)) k = null; break; }
+      }
+      if (!k) continue;
+      used[k] = true; prev = k;
+      numCands(nums[0].tok, nums[0].hasG, k).forEach(function (c) { res.cands[k].push({ v: c.v, w: c.w * 0.7 }); });
+    }
+  }
+
+  // Text hinter dem Stichwort der Zeile (Zahlen in der Beschriftung ignorieren).
+  function afterLabel(raw, kind) {
+    var f = fold(raw);
+    var re = { sat: /(gesatt\S*|gesat\S*|\S*attigt\S*|\S*fettsaur\S*|\S*ettsaur\S*|ges\.\s*f\S*)/,
+      sugar: /\S*ucker\S*/, carbs: /\S*(ohlenh|hydrat)\S*/, fiber: /\S*ballast\S*/,
+      protein: /\S*(eiwei|iweis|protein)\S*/, salt: /\S*salz\S*/, fat: /\S*fett\S*/ }[kind];
+    var m = re ? f.match(re) : null;
+    // fold() erhaelt die Laenge bis auf ß->ss und Leerzeichen-Kollaps; die
+    // Position im gefalteten Text reicht als Naeherung fuer den Schnitt.
+    if (!m) return raw;
+    var cut = m.index + m[0].length;
+    var ff = fold(raw), pos = 0, acc = 0;
+    // Position im Rohtext zur gefalteten Position suchen
+    for (pos = 0; pos < raw.length && acc < cut; pos++) acc = fold(raw.slice(0, pos + 1)).length;
+    return raw.slice(pos);
+  }
+
+  // Werte-Zahlen einer Zeile: %, mg, kJ/kcal ueberspringen.
+  function valueNums(s) {
+    return numsIn(s).filter(function (n) { return n.unit !== "pct" && n.unit !== "mg" && n.unit !== "kj" && n.unit !== "kcal"; });
+  }
+
+  // „S6 kcal" -> „56 kcal": fuehrendes S/s vor einer Ziffer ist fast immer eine 5
+  function fixS5(f) { return f.replace(/(^|[^a-z0-9])s(\d)/g, "$15$2"); }
+
+  function energyRow(res, raw, R, i) {
+    var f = fixS5(fold(raw)), m;
+    var reK = /(\d{1,4})\s*(?:\)|\/|\|)?\s*\(?\s*(?:kcal|kca[l1i]?|keal|kcai|kcel|kc[l1]|kal)\b/g;
+    var got = false;
+    while ((m = reK.exec(f))) { var v = parseInt(m[1], 10); if (v >= 1 && v <= 900) { res.cands.kcal.push({ v: v, w: 2 }); got = true; break; } }
+    // kcal in eigener Folgezeile ohne Beschriftung („56 kcal")
+    if (!got && R[i + 1] && (!R[i + 1].kind || R[i + 1].kind === "energy")) {
+      var f2 = fixS5(R[i + 1].f); reK.lastIndex = 0;
+      if ((m = reK.exec(f2))) { var v2 = parseInt(m[1], 10); if (v2 >= 1 && v2 <= 900) { res.cands.kcal.push({ v: v2, w: 2 }); got = true; } }
+    }
+    var mj = f.match(/(\d{2,4})\s*(?:kj|k\)|kl\b|k1\b)/);
+    if (mj) { var kj = parseInt(mj[1], 10); if (kj >= 20 && kj <= 3800) res.cands.kcal.push({ v: Math.round(kj / 4.184), w: got ? 0.2 : 0.7, kj: true }); }
+  }
+
+  /* Woerter -> Tabellenzeilen (y-Cluster), je Zeile nach x sortiert. */
+  function wordsToRows(words) {
+    var ws = words.slice().map(function (w) { return { t: w.t, x0: w.x0, x1: w.x1, cy: (w.y0 + w.y1) / 2, h: Math.max(1, w.y1 - w.y0) }; });
+    // sehr hohe/flache Rauschbloecke raus
+    var hs = ws.map(function (w) { return w.h; }).sort(function (a, b) { return a - b; });
+    var medH = hs.length ? hs[hs.length >> 1] : 20;
+    ws = ws.filter(function (w) { return w.h < medH * 3; });
+    ws.sort(function (a, b) { return a.cy - b.cy; });
+    var rows = [];
+    ws.forEach(function (w) {
+      var best = null, bd = 1e9;
+      for (var k = Math.max(0, rows.length - 4); k < rows.length; k++) {
+        var r = rows[k], d = Math.abs(w.cy - r.cy);
+        if (d < 0.45 * Math.max(w.h, r.h) && d < bd) { bd = d; best = r; }
+      }
+      if (best) { best.ws.push(w); best.cy = (best.cy * (best.ws.length - 1) + w.cy) / best.ws.length; best.h = Math.max(best.h, w.h); }
+      else rows.push({ cy: w.cy, h: w.h, ws: [w] });
+    });
+    rows.sort(function (a, b) { return a.cy - b.cy; });
+    return rows.map(function (r) {
+      r.ws.sort(function (a, b) { return a.x0 - b.x0; });
+      return r.ws.map(function (w) { return w.t; }).join(" ");
+    });
+  }
+
+  /* ---- Auswahl: Abstimmung + Naehrwertlogik ---------------------------------- */
+  function tally(list) {
+    var m = {};
+    list.forEach(function (c) { var k = String(c.v); m[k] = (m[k] || 0) + c.w; });
+    return Object.keys(m).map(function (k) { return { v: parseFloat(k), w: m[k] }; })
+      .sort(function (a, b) { return b.w - a.w; });
+  }
+
+  function energyOk(s) {
+    if (s.kcal == null || s.fat == null || s.carbs == null || s.protein == null) return null;
+    var e = 9 * s.fat + 4 * s.carbs + 4 * s.protein + 2 * (s.fiber || 0);
+    return Math.abs(e - s.kcal) <= Math.max(8, 0.12 * s.kcal);
+  }
+
+  function select(pool) {
+    var opts = {};
+    FIELDS.forEach(function (f) { opts[f] = tally(pool[f]).slice(0, 4).concat([{ v: null, w: 0 }]); });
+    var best = null, bestSc = -1e9, cur = {}, curW = {};
+    function score() {
+      var sc = 0;
+      FIELDS.forEach(function (f) { sc += curW[f]; });
+      if (cur.sat != null && cur.fat != null && cur.sat > cur.fat + 0.05) sc -= 3;
+      if (cur.sugar != null && cur.carbs != null && cur.sugar > cur.carbs + 0.05) sc -= 3;
+      var ok = energyOk(cur);
+      if (ok === false) sc -= 2.5; else if (ok === true) sc += 1;
+      return sc;
+    }
+    (function rec(i) {
+      if (i === FIELDS.length) {
+        var sc = score();
+        if (sc > bestSc) { bestSc = sc; best = {}; FIELDS.forEach(function (f) { best[f] = { v: cur[f], w: curW[f] }; }); }
+        return;
+      }
+      var f = FIELDS[i];
+      opts[f].forEach(function (o) { cur[f] = o.v; curW[f] = o.w; rec(i + 1); });
+    })(0);
+    var vals = {}; FIELDS.forEach(function (f) { vals[f] = best[f].v; });
+    best._energy = energyOk(vals);
+    return best;
+  }
+
+  /* ---- Oeffentlicher Text-Parser (Rueckwaerts-Kompatibilitaet) --------------- */
+  function finish(sel, meta) {
+    var out = { base_g: meta.base || 100, unit: meta.unit || "g", kcal: null, sat_fat_g: null, sugar_g: null, protein_g: null, fiber_g: null,
+      fat_g: null, carbs_g: null, salt_g: null, _found: {} };
+    var map = { kcal: "kcal", sat: "sat_fat_g", sugar: "sugar_g", protein: "protein_g", fiber: "fiber_g", fat: "fat_g", carbs: "carbs_g", salt: "salt_g" };
+    var APP = { kcal: 1, sat_fat_g: 1, sugar_g: 1, protein_g: 1, fiber_g: 1 };
+    FIELDS.forEach(function (f) {
+      var s = sel[f]; if (!s || s.v == null) return;
+      // nur ausreichend gestuetzte Werte (oder durch die Energiebilanz bestaetigte)
+      var energyField = f === "kcal" || f === "fat" || f === "carbs" || f === "protein";
+      if (s.w >= 1 || (s.w >= 0.5 && energyField && sel._energy === true)) {
+        out[map[f]] = s.v;
+        if (APP[map[f]]) out._found[map[f]] = true;
+      }
+    });
+    return out;
+  }
+
+  function parseNutrition(text) {
+    var rows = String(text || "").split(/\r?\n/).filter(function (l) { return l.trim(); });
+    var p = parseRows(rows);
+    return finish(select(p.cands), p);
+  }
+
+  /* ---- Stufe 1: Tabelle lokalisieren ------------------------------------------ */
+  function locateBox(words, W, H) {
+    var kw = [];
+    words.forEach(function (w) {
+      var k = kwKind(w.t);
+      if (k && (w.y1 - w.y0) > 4) kw.push({ k: k, x0: w.x0, y0: w.y0, x1: w.x1, y1: w.y1, cy: (w.y0 + w.y1) / 2, h: w.y1 - w.y0 });
+    });
+    if (kw.length < 3) return null;
+    var hs = kw.map(function (w) { return w.h; }).sort(function (a, b) { return a - b; });
+    var h = hs[hs.length >> 1];
+    // dichteste vertikale Gruppe (Abstand < 6 Zeilenhoehen) mit den meisten Arten
+    kw.sort(function (a, b) { return a.cy - b.cy; });
+    var groups = [], g = [kw[0]];
+    for (var i = 1; i < kw.length; i++) {
+      if (kw[i].cy - kw[i - 1].cy < 6 * h) g.push(kw[i]); else { groups.push(g); g = [kw[i]]; }
+    }
+    groups.push(g);
+    var best = null, bestN = 0;
+    groups.forEach(function (gr) {
+      var kinds = {}; gr.forEach(function (w) { if (w.k !== "head") kinds[w.k] = 1; });
+      var n = Object.keys(kinds).length;
+      if (n > bestN) { bestN = n; best = gr; }
+    });
+    if (!best || bestN < 3) return null;
+    var hs2 = best.map(function (w) { return w.h; }).sort(function (a, b) { return a - b; });
+    h = hs2[hs2.length >> 1];
+    var minX = Math.min.apply(null, best.map(function (w) { return w.x0; }));
+    var minY = Math.min.apply(null, best.map(function (w) { return w.y0; }));
+    var maxY = Math.max.apply(null, best.map(function (w) { return w.y1; }));
+    var maxX = Math.max.apply(null, best.map(function (w) { return w.x1; }));
+    words.forEach(function (w) {
+      var cy = (w.y0 + w.y1) / 2;
+      if (/\d/.test(w.t) && cy > minY - h && cy < maxY + h && w.x0 > minX && w.x0 < minX + 22 * h) maxX = Math.max(maxX, w.x1);
+    });
+    // Wenige erkannte Arten = Box vermutlich unvollstaendig (z. B. Salz/Eiweiss
+    // unten, Beschriftungsspalte links) -> grosszuegiger auffuellen.
+    var miss = Math.max(0, 6 - bestN);
+    var x0 = Math.max(0, minX - (2 + miss) * h), x1 = Math.min(W, maxX + 2 * h);
+    var y0 = Math.max(0, minY - (2.5 + miss) * h), y1 = Math.min(H, maxY + (2 + 1.5 * miss) * h);
+    return { x0: x0, y0: y0, x1: x1, y1: y1, h: h, kinds: bestN };
+  }
+
+  /* ---- Hauptablauf -------------------------------------------------------------- */
   async function scanNutrition(blob, onProgress) {
     var worker = await getWorker(onProgress);
-    var g = await rasterizeGray(blob); // einmal dekodieren
-    var out = { base_g: 100, unit: "g", kcal: null, sat_fat_g: null, sugar_g: null, protein_g: null, fiber_g: null, _found: {} };
+    var cv = await loadImage(blob);
+    var texts = [], used = [];
+    var pool = {}; FIELDS.forEach(function (f) { pool[f] = []; });
+    var meta = { unit: null, base: null };
+    var box = null, s1 = 0, crop = null;
 
-    var sources;
-    if (g) {
-      var box = brightBox(g);
-      // Crop nur, wenn die Tabelle ein kleiner-mittlerer heller Block ist
-      // (0,02..0,7). Fuellt das Etikett das ganze Bild (frac hoch), lohnt kein Crop.
-      var crop = (box && box.frac >= 0.02 && box.frac <= 0.7) ? cropUpscale(g, box, 1500) : null;
-      sources = [];
-      if (crop) {
-        // PSM 11 (sparse text) liest die gestauchte Brennwert-Zeile (kcal) am
-        // besten; PSM 6 (Block) und PSM 3 (auto) fangen die uebrigen Zeilen.
-        sources.push(["stretch", crop, 11]);
-        sources.push(["gray", crop, 6]);
-        sources.push(["stretch", crop, 3]);
-        sources.push(["adaptive", crop, 11]);
-        sources.push(["gray", crop, 4]);
+    if (!cv) { // kein Canvas (sehr alte Umgebung) -> einfacher Textpfad
+      await setPsm(worker, 6);
+      var r0 = await worker.recognize(blob);
+      var t0 = (r0 && r0.data && r0.data.text) || "";
+      var p0 = parseNutrition(t0); p0._text = t0; p0._variant = "orig/psm6"; return p0;
+    }
+
+    var TOTAL = 6, step = 0;
+    function hook(m) {
+      if (m && /recogniz/i.test(m.status || "")) emit({ status: "recognizing text", progress: Math.min(1, (step + (m.progress || 0)) / TOTAL) });
+      else emit(m);
+    }
+    _stepHook = hook;
+    try {
+      // Stufe 1: Tabelle suchen (ganzes Foto, lange Seite ~2400 px)
+      s1 = LOCATE_DIM / Math.max(cv.width, cv.height);
+      var full = region(cv, 0, 0, cv.width, cv.height, s1);
+      box = null; var locText = "";
+      var tries = [["adapt", 11], ["gray", 11], ["stretch", 11]];
+      for (var t = 0; t < tries.length && !box; t++) {
+        var rad1 = Math.max(10, Math.round(20 * LOCATE_DIM / 2560));
+        var r1 = await ocrWords(worker, prep(full, tries[t][0], rad1), tries[t][1]);
+        locText = locText || r1.text;
+        box = locateBox(r1.words, full.width, full.height);
+        if (t === 0) step = 1;
+        if (!box) { var q = parseRows(wordsToRows(r1.words)); mergeMeta(meta, q); addPool(pool, q.cands, 0.5); }
       }
-      sources.push(["contrast", g, 3]);   // Vollbild-Fallback (bildfuellende Etiketten)
-      sources.push(["adaptiveG", g, 3]);
-    } else {
-      sources = [["orig", null, 3]];
-    }
+      step = 1;
 
-    var firstText = "", bestText = "", bestScore = -1, used = [];
-    for (var i = 0; i < sources.length; i++) {
-      var which = sources[i][0], src = sources[i][1], psm = sources[i][2], text = "";
-      try { text = await recognizeSource(worker, blob, src, which, psm); }
-      catch (e) { if (i === 0 && sources.length === 1) throw e; else continue; }
-      if (i === 0) firstText = text;
-      var p = parseNutrition(text);
-      var sc = scoreParse(p);
-      if (sc > bestScore) { bestScore = sc; bestText = text; }
-      mergeInto(out, p);
-      used.push(which + (psm !== 3 ? ("/psm" + psm) : ""));
-      if (coreComplete(out)) break; // genug -> restliche Varianten sparen
-    }
-    out._text = bestText || firstText;
+      // Stufe 2: Ausschnitt aus dem Original auf Ziel-Schrifthoehe
+      if (box) {
+        var sx = box.x0 / s1, sy = box.y0 / s1, sw = (box.x1 - box.x0) / s1, sh = (box.y1 - box.y0) / s1;
+        var hOrig = box.h / s1;
+        var sc = TARGET_H / hOrig;
+        sc = Math.min(sc, CROP_MAX / Math.max(sw, sh), 4);
+        crop = region(cv, sx, sy, sw, sh, sc);
+      } else {
+        crop = full; // Tabelle nicht gefunden -> ganzes Bild
+      }
+      var textH = box ? Math.min(TARGET_H, box.h / s1 * (crop.width / ((box.x1 - box.x0) / s1))) : 40;
+      var rad = Math.max(10, Math.round(textH * 0.4));
+      var variants = [["adapt", 6], ["adapt", 11], ["gray", 6], ["adaptMin", 6], ["stretch", 4]];
+      for (var v = 0; v < variants.length; v++) {
+        step = 1 + v;
+        var r = await ocrWords(worker, prep(crop, variants[v][0], rad), variants[v][1]);
+        var rows = wordsToRows(r.words);
+        texts.push(rows.join("\n"));
+        used.push(variants[v][0] + "/psm" + variants[v][1]);
+        var p = parseRows(rows);
+        mergeMeta(meta, p);
+        addPool(pool, p.cands, 1);
+        if (v >= 2 && confident(pool)) break;
+      }
+    } finally { _stepHook = null; }
+
+    if (!meta.unit && /\b\d{2,3}\s*m[l1]\b/.test(fold(texts.join(" ") + " " + ""))) meta.unit = "ml";
+    var sel = select(pool);
+    var out = finish(sel, meta);
+    out._text = texts[0] || "";
     out._variant = used.join("+");
     return out;
   }
 
-  /* Optionales Vorwaermen (z. B. sobald das Erfassungs-Sheet geoeffnet wird). */
+  function mergeMeta(meta, p) {
+    if (p.unit && !meta.unit) meta.unit = p.unit;
+    if (p.unit === "ml") meta.unit = "ml";
+    if (p.base && !meta.base && p.base >= 1 && p.base <= 1000) meta.base = p.base;
+  }
+  function addPool(pool, cands, k) {
+    FIELDS.forEach(function (f) { cands[f].forEach(function (c) { pool[f].push({ v: c.v, w: c.w * k }); }); });
+  }
+
+  /* Genug gelesen? Jedes gefundene Feld hat eine klare Mehrheit (>= 2, deutlich
+     vor der zweiten Lesart), Kernfelder vorhanden, Energiebilanz stimmt. */
+  function confident(pool) {
+    var need = ["kcal", "sat", "sugar", "protein", "fat", "carbs"];
+    for (var i = 0; i < FIELDS.length; i++) {
+      var t = tally(pool[FIELDS[i]]);
+      if (!t.length) { if (need.indexOf(FIELDS[i]) >= 0) return false; continue; }
+      if (t[0].w < 3 || (t[1] && t[1].w > t[0].w * 0.5)) return false;
+    }
+    var sel = select(pool);
+    return sel._energy === true;
+  }
+
   function warmup() { getWorker().catch(function () {}); }
 
   root.PKOcr = {

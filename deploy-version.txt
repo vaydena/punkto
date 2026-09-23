@@ -1,5 +1,12 @@
-pk-v46-f87d
+pk-v47-3b9e
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v47-3b9e: NÄHRWERT-SCANNER deutlich verbessert (pk-ocr.js neu): zweistufig — erst Tabelle per
+          Stichworten orten und zuschneiden, dann auf normierte Zeilenhöhe hochrechnen und mit
+          mehreren Vorverarbeitungen (adaptiv/Graustufen/min-Kanal/Kontrast) lesen; Zeilen
+          geometrisch aus Wort-Boxen, gewichtete Kandidaten („1,2g"→„129"), Reihenfolge-Schluss
+          für unlesbare Beschriftungen, Auswahl über Energiebilanz (9F+4KH+4E≈kcal). Neuer Scan
+          ersetzt alte Feldwerte. Test: 3 reale Fotos (Milch/Nudeln/Latte) alle Werte korrekt
+          (vorher 0/2/3 Felder fehlerhaft oder fehlend). SW-CACHE pk-app-v42.
 v46-f87d: NÄHRSTOFFRECHNER — zweiter Scanner neben dem Barcode-Scanner (Hinzufügen-Menü,
           Kachel 3). Fotografiert die NÄHRWERTTABELLE (Kamera/Galerie), liest die Werte per
           OCR (pk-ocr.js, unverändert) und rechnet sie sofort über die Punkto-Engine
