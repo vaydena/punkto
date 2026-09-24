@@ -13,7 +13,7 @@
      Rückfall auf die zuletzt gecachte Fassung (liegt via SHELL ab Install im Cache).
    - Sonstige statische Assets (CSS/JS/Icons/Manifest): Cache zuerst -> schnell; sonst Netz + nachlegen. */
 
-const CACHE = "pk-app-v44";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
+const CACHE = "pk-app-v50";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
 const SHELL = [
   "./anmelden.html",
   "./app.html",
@@ -45,8 +45,9 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE).then((cache) =>
-      // best effort: ein einzelner Fehlschlag (z. B. 404) darf die Installation nicht kippen
-      Promise.allSettled(SHELL.map((u) => cache.add(u)))
+      // best effort: ein einzelner Fehlschlag (z. B. 404) darf die Installation nicht kippen.
+      // cache:"reload" umgeht den HTTP-Cache (max-age=86400) -> nie altes JS vorcachen.
+      Promise.allSettled(SHELL.map((u) => cache.add(new Request(u, { cache: "reload" }))))
     )
   );
 });

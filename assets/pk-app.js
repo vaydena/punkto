@@ -100,6 +100,7 @@
     changePassword(current, password) {
       return call("auth", "change_password", { current: current, password: password });
     },
+    deleteAccount(password) { return call("auth", "delete_account", { password: password }); },
     requestReset(email) { return call("auth", "request_reset", { email: email }, { token: null }); },
     reset(token, password) { return call("auth", "reset", { token: token, password: password }, { token: null }); }
   };
@@ -124,6 +125,7 @@
   var SYNC_BACKFILL_KEY = "pk_sync_backfill_v1_";
   var _syncUid = "";       // aktueller Nutzer (fuer die Cursor-/Backfill-Schluessel)
   var _flushing = false;   // Push-Reentrancy-Sperre
+  var _flushAgain = false; // waehrend eines Push angestossen -> danach erneut spiegeln
   var _pulling = false;    // Pull-Reentrancy-Sperre
   var _kickTimer = null;   // Debounce-Timer fuer den Push-Anstoss
 
@@ -141,6 +143,22 @@
       return root.PKDiary.outboxPut({ key: key, op: op, payload: payload }).catch(function () {});
     },
 
+    /* Eingespielte Sicherung zum Server spiegeln (sonst blieben die Datensaetze
+       nur auf diesem Geraet und fehlten auf allen anderen). */
+    enqueueImported: async function (rec) {
+      if (!rec) return;
+      try {
+        for (var i = 0; i < (rec.entries || []).length; i++) { var e = rec.entries[i]; await sync.enqueue("entry:" + e.id, "entry_up", e); }
+        for (var j = 0; j < (rec.weights || []).length; j++) { var w = rec.weights[j]; await sync.enqueue("weight:" + w.day, "weight_up", { day: w.day, weight_kg: w.weight_kg }); }
+        for (var k = 0; k < (rec.activities || []).length; k++) {
+          var a = rec.activities[k];
+          if (a.kind === "steps") await sync.enqueue("steps:" + a.day, "act_steps", { id: a.id, day: a.day, steps: a.steps, bonus_points: a.bonus_points, created_at: a.created_at, note: a.note || null });
+          else await sync.enqueue("act:" + a.id, "act_up", a);
+        }
+        sync.kick();
+      } catch (e) { /* naechster Flush versucht es erneut */ }
+    },
+
     /* Debounced Push-Anstoss: buendelt schnelle Mehrfach-Schreibvorgaenge zu
        EINEM Push (~1,5 s nach der letzten lokalen Aenderung). */
     kick: function () {
@@ -153,7 +171,7 @@
     /* Outbox -> Server spiegeln (sync_push). In 200er-Bloecken (Server-Cap 500).
        Wirft NICHT nach aussen: bei 402/Netz/Server bleibt die Outbox erhalten. */
     flush: async function () {
-      if (_flushing) return;
+      if (_flushing) { _flushAgain = true; return; }
       if (!getToken()) return;                       // nicht eingeloggt -> spaeter
       if (!root.PKDiary || !root.PKDiary.outboxAll) return;
       _flushing = true;
@@ -169,7 +187,6 @@
           // Nur die gespiegelten Schluessel entfernen, und nur bei unveraendertem ts
           // (eine parallele Bearbeitung desselben Ziels bleibt so in der Outbox).
           await root.PKDiary.outboxDeleteIfUnchanged(chunk.map(function (r) { return { key: r.key, ts: r.ts }; }));
-          if (chunk.length < 200) break;             // war der letzte (Teil-)Block
           recs = await root.PKDiary.outboxAll();      // frisch lesen (koennte Neues geben)
         }
       } catch (e) {
@@ -177,6 +194,9 @@
       } finally {
         _flushing = false;
       }
+      // Kam waehrend des Push ein weiterer Anstoss, jetzt nachziehen (nicht erst
+      // beim naechsten online-/Sichtbarkeits-Ereignis).
+      if (_flushAgain) { _flushAgain = false; sync.kick(); }
     },
 
     /* Server-Delta einlesen (sync_pull) und lokal anwenden. opts.uid setzt den
@@ -462,6 +482,8 @@
         sugar_g: num(n["sugars_100g"]),
         protein_g: num(n["proteins_100g"]),
         fiber_g: num(n["fiber_100g"]),
+        // Packungs-Portion laut Hersteller (g bzw. ml), nur wenn plausibel
+        serving_g: (num(p.serving_quantity) > 0 && num(p.serving_quantity) <= 2000) ? Math.round(num(p.serving_quantity) * 10) / 10 : 0,
         vegan: isVegan,
         vegetarian: isVegetarian,
         // Produktfotos aus der OFF-Datenbank (Auto-Erfassung laedt sie best-effort herunter)

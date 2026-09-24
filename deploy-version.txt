@@ -1,5 +1,30 @@
-pk-v49-c7d1
+pk-v55-b2f7
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v55-b2f7: Konto selbst löschen (Einstellungen); verständliche Fehlermeldungen (falsches
+          Passwort, zu lang, zu viele Versuche); Passwortwechsel meldet andere Geräte ab;
+          .htaccess-Sicherheitsheader + Sperre sensibler Dateitypen; Deploy nur Web-Dateitypen.
+          Server (separat deployen): Sperre, Ratenlimits, 72-Byte-Grenze, delete_account,
+          vollständiger Export, Sync-Überlappung, Zahlungsbuchung transaktional, CORS-Liste.
+v54-8e1d: "Meine Portion" pro Lebensmittel merkbar (Schnell-Hinzufügen nutzt sie) und
+          Packungsportion aus Open Food Facts; neue Karte Körpermaße (Taille/Hüfte,
+          Taille÷Größe); Sicherungsdatei enthält jetzt auch Maße, Mahlzeiten, Portionen;
+          Wochenrückblick-Zeilen korrekt formatiert.
+v53-3c7a: Barcode-Scan jetzt auch auf iPhone/iPad (Safari) und Firefox: selbst gehosteter
+          ZXing-WASM-Ersatz (assets/barcode/), wird erst beim ersten Scan geladen; auch
+          „Barcode aus Foto lesen" funktioniert dort jetzt.
+v52-8b1e: NEU: „+" in der Suche trägt die Standardmenge direkt ein (mit Rückgängig);
+          Budget-Vorschlag nach dem Wiegen; Serie „Tage in Folge" + Meilensteine im Fortschritt;
+          Wasser-Zähler in „Mein Tag"; gespeicherte Mahlzeiten (Lesezeichen an der Mahlzeit,
+          Hinzufügen → Mahlzeiten trägt alles mit einem Tipp ein). Alles gerätelokal.
+v51-d4f2: DESIGN: Dunkelmodus (folgt System); besserer Kontrast der grünen Buttons (WCAG AA);
+          größere Tippflächen (Tagesnavigation, Bearbeiten/Löschen, Tabbar-Beschriftung, kleine
+          Buttons); Hinzufügen-Sheet: Suchen/Scannen groß, Rest kompakt unter „Mehr";
+          Fix „Tagesbudget26" ohne Abstand auf dem Handy. SW-CACHE pk-app-v46.
+v50-e3a8: REVIEW-FIXES: 401 beim Schreiben -> Neuanmeldung; Tageswechsel um Mitternacht; Kontowechsel
+          leert lokales Tagebuch; Logout mit Outbox-Prüfung; Sync-Flush ohne Hänger; Backup-Import
+          wird synchronisiert und validiert; Stück-/Portions-Einheiten korrekt (Schritt 0,5, kcal);
+          Rückgängig beim Löschen; Gewichtskurve mit Trendlinie, Zeitraum 30/90/alle; Zoom erlaubt;
+          SW-Update ohne Reload mitten im Formular; Texte „Kein Abo". SW-CACHE pk-app-v45.
 v49-c7d1: NÄHRWERT-SCANNER robuster: eine einzelne Fehllesung in der Wertespalte (z. B. „-6,8g"
           als „1689") verwirft nicht mehr die ganze Zuordnung; große Zahlen gelten nicht mehr
           pauschal als Fußnote, kcal wird immer übernommen, überzählige Zeilen werden toleriert.

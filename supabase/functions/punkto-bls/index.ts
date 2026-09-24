@@ -8,8 +8,17 @@
 // (Parität zu den uebrigen Lese-Aktionen: nur angemeldete Nutzer).
 import postgres from "npm:postgres@3";
 
+// CORS: nur bekannte Urspruenge (Browser). Zusaetzliche per Secret PK_ALLOWED_ORIGINS
+// (kommagetrennt), z. B. fuer lokale Tests. Aufrufe ohne Origin (Server/CLI) unberuehrt.
+const ORIGINS = new Set(["https://punkto.vaydena.de",
+  ...String(Deno.env.get("PK_ALLOWED_ORIGINS") || "").split(",").map((x) => x.trim()).filter(Boolean)]);
+function withCors(req: Request, res: Response) {
+  const o = req.headers.get("origin") || "";
+  res.headers.set("Access-Control-Allow-Origin", ORIGINS.has(o) ? o : "https://punkto.vaydena.de");
+  res.headers.set("Vary", "Origin");
+  return res;
+}
 const cors = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -36,7 +45,7 @@ async function authUserId(req: Request): Promise<string | null> {
   return r[0]?.user_id ?? null;
 }
 
-Deno.serve(async (req: Request) => {
+const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   let body: Record<string, any>;
@@ -69,4 +78,5 @@ Deno.serve(async (req: Request) => {
     try { console.error("punkto-bls", action, String((e as Error)?.message || e)); } catch (_e) { /* ignore */ }
     return json({ error: "server_error" }, 500);
   }
-});
+};
+Deno.serve(async (req: Request) => withCors(req, await handler(req)));

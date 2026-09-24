@@ -263,7 +263,7 @@
       var week_bonus = Object.keys(wbon).map(function (k) { return { day: k, bonus: wbon[k] }; });
 
       var wsorted = weights.slice().sort(function (a, b) { return a.day < b.day ? -1 : (a.day > b.day ? 1 : 0); });
-      if (wsorted.length > 200) wsorted = wsorted.slice(wsorted.length - 200);
+      if (wsorted.length > 1000) wsorted = wsorted.slice(wsorted.length - 1000);
       var weight_today = null;
       for (var i = 0; i < weights.length; i++) { if (weights[i].day === d) { weight_today = num(weights[i].weight_kg); break; } }
 
@@ -370,7 +370,8 @@
       .then(function (n1) {
         return putAllTx(WEIGHTS, weights).then(function (n2) {
           return putAllTx(ACTS, acts).then(function (n3) {
-            return { ok: true, counts: { entries: n1, weights: n2, activities: n3 } };
+            return { ok: true, counts: { entries: n1, weights: n2, activities: n3 },
+                     records: { entries: entries, weights: weights, activities: acts } };
           });
         });
       });
@@ -446,7 +447,25 @@
     return clearStores([OUTBOX]).then(function () { return { ok: true }; }).catch(function () { return { ok: false }; });
   }
 
+  /* Alles Geraetelokale dieses Tagebuchs loeschen (Eintraege, Gewicht, Aktivitaeten,
+     Outbox) — beim Abmelden bzw. wenn sich auf dem Geraet ein ANDERES Konto anmeldet. */
+  function wipeAll() {
+    return clearStores([ENTRIES, WEIGHTS, ACTS, OUTBOX]).then(function () { return { ok: true }; });
+  }
+  /* Sortierte Liste aller Tage mit mindestens einem Essens-Eintrag (für Serien). */
+  function loggedDays() {
+    return getAll(ENTRIES).then(function (all) {
+      var seen = {};
+      (all || []).forEach(function (e) { if (e && e.day) seen[e.day] = 1; });
+      return Object.keys(seen).sort();
+    }).catch(function () { return []; });
+  }
+  function outboxCount() {
+    return outboxAll().then(function (l) { return (l || []).length; }).catch(function () { return 0; });
+  }
+
   root.PKDiary = {
+    wipeAll: wipeAll, outboxCount: outboxCount, loggedDays: loggedDays,
     supported: supported,
     today: todayISO,
     dayState: dayState,

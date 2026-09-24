@@ -63,15 +63,24 @@
       };
     });
   }
+  /* Werte aus einer (fremden) Datei nie ungeprueft uebernehmen: nur endliche Zahlen. */
+  function safeNum(v) { var n = Number(v); return Number.isFinite(n) && n >= 0 ? n : 0; }
+  function safePts(v) {
+    if (v == null || v === "") return null;
+    var n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.max(0, Math.min(200, n)) : null;
+  }
+  function safeStr(v, n) { return String(v == null ? "" : v).slice(0, n); }
   function plainToProduct(p) {
+    p = p || {};
     var ph = p.photos || {};
     return {
-      barcode: p.barcode, name: p.name, brand: p.brand || "",
-      unit: p.unit || "g", base_g: p.base_g || 100,
-      kcal: p.kcal, sat_fat_g: p.sat_fat_g, sugar_g: p.sugar_g,
-      protein_g: p.protein_g, fiber_g: p.fiber_g,
-      free: !!p.free, source: p.source || "local", points: p.points,
-      vegan: !!p.vegan, vegetarian: !!p.vegetarian, bought_at: p.bought_at || "",
+      barcode: safeStr(p.barcode, 40), name: safeStr(p.name, 120), brand: safeStr(p.brand, 80),
+      unit: safeStr(p.unit || "g", 20), base_g: safeNum(p.base_g) || 100,
+      kcal: safeNum(p.kcal), sat_fat_g: safeNum(p.sat_fat_g), sugar_g: safeNum(p.sugar_g),
+      protein_g: safeNum(p.protein_g), fiber_g: safeNum(p.fiber_g),
+      free: !!p.free, source: safeStr(p.source || "local", 20), points: safePts(p.points),
+      vegan: !!p.vegan, vegetarian: !!p.vegetarian, bought_at: safeStr(p.bought_at, 80),
       created_at: p.created_at, updated_at: p.updated_at,
       photos: {
         product: dataURLToBlob(ph.product),
@@ -79,6 +88,57 @@
         barcode: dataURLToBlob(ph.barcode)
       }
     };
+  }
+
+  /* --- Geraetelokale Extras (localStorage): Koerpermasse, gespeicherte
+     Mahlzeiten, „Meine Portion". Optionales Feld `local` — aeltere Sicherungen
+     ohne es bleiben gueltig, aeltere App-Versionen ignorieren es. --- */
+  var LOCAL_KEYS = { measures: "pk_measure_v1", meals: "pk_meals_v1", portions: "pk_portions_v1" };
+  function lsRead(k, dflt) { try { var v = JSON.parse(localStorage.getItem(k) || "null"); return v == null ? dflt : v; } catch (e) { return dflt; } }
+  function lsWrite(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function buildLocal() {
+    return { measures: lsRead(LOCAL_KEYS.measures, []), meals: lsRead(LOCAL_KEYS.meals, []), portions: lsRead(LOCAL_KEYS.portions, {}) };
+  }
+  /* Zusammenfuehren: Vorhandenes bleibt, Fehlendes wird ergaenzt (idempotent). */
+  function applyLocal(loc) {
+    var n = 0;
+    if (!loc || typeof loc !== "object") return n;
+    var DAY = /^\d{4}-\d{2}-\d{2}$/;
+    if (Array.isArray(loc.measures)) {
+      var cur = lsRead(LOCAL_KEYS.measures, []), have = {};
+      if (!Array.isArray(cur)) cur = [];
+      cur.forEach(function (m) { have[m.day] = 1; });
+      loc.measures.forEach(function (m) {
+        if (!m || !DAY.test(String(m.day)) || have[m.day]) return;
+        var w = +m.waist_cm, h = +m.hip_cm;
+        w = (w >= 30 && w <= 300) ? w : null; h = (h >= 30 && h <= 300) ? h : null;
+        if (w == null && h == null) return;
+        cur.push({ day: String(m.day), waist_cm: w, hip_cm: h }); have[m.day] = 1; n++;
+      });
+      cur.sort(function (a, b) { return a.day < b.day ? -1 : 1; });
+      lsWrite(LOCAL_KEYS.measures, cur);
+    }
+    if (Array.isArray(loc.meals)) {
+      var ml = lsRead(LOCAL_KEYS.meals, []), ids = {};
+      if (!Array.isArray(ml)) ml = [];
+      ml.forEach(function (t) { ids[t.id] = 1; });
+      loc.meals.forEach(function (t) {
+        if (!t || !t.id || ids[t.id] || !Array.isArray(t.items) || ml.length >= 30) return;
+        ml.push(t); ids[t.id] = 1; n++;
+      });
+      lsWrite(LOCAL_KEYS.meals, ml);
+    }
+    if (loc.portions && typeof loc.portions === "object" && !Array.isArray(loc.portions)) {
+      var pm = lsRead(LOCAL_KEYS.portions, {});
+      if (!pm || typeof pm !== "object" || Array.isArray(pm)) pm = {};
+      Object.keys(loc.portions).forEach(function (k) {
+        var v = loc.portions[k];
+        if (pm[k] || !v || !(+v.v > 0)) return;
+        pm[k] = { v: +v.v, unit: String(v.unit || "g").slice(0, 20) }; n++;
+      });
+      lsWrite(LOCAL_KEYS.portions, pm);
+    }
+    return n;
   }
 
   /* --- Aufbauen der Sicherung ---------------------------------------------- */
@@ -94,7 +154,7 @@
     return {
       format: FORMAT, version: VERSION, app: "punkto",
       exported_at: new Date().toISOString(),
-      diary: diary, products: products
+      diary: diary, products: products, local: buildLocal()
     };
   }
 
@@ -114,13 +174,17 @@
         } catch (e) { /* einzelnes Produkt ueberspringen */ }
       }
     }
+    var localN = 0;
+    try { localN = applyLocal(obj.local); } catch (e) { /* Extras sind optional */ }
     return {
       ok: true,
+      records: diaryRes.records || null,
       counts: {
         entries: diaryRes.counts.entries,
         weights: diaryRes.counts.weights,
         activities: diaryRes.counts.activities,
-        products: prodN
+        products: prodN,
+        local: localN
       }
     };
   }

@@ -9,8 +9,17 @@
 // set_key (Schluessel rotieren).
 import postgres from "npm:postgres@3";
 
+// CORS: nur bekannte Urspruenge (Browser). Zusaetzliche per Secret PK_ALLOWED_ORIGINS
+// (kommagetrennt), z. B. fuer lokale Tests. Aufrufe ohne Origin (Server/CLI) unberuehrt.
+const ORIGINS = new Set(["https://punkto.vaydena.de",
+  ...String(Deno.env.get("PK_ALLOWED_ORIGINS") || "").split(",").map((x) => x.trim()).filter(Boolean)]);
+function withCors(req: Request, res: Response) {
+  const o = req.headers.get("origin") || "";
+  res.headers.set("Access-Control-Allow-Origin", ORIGINS.has(o) ? o : "https://punkto.vaydena.de");
+  res.headers.set("Vary", "Origin");
+  return res;
+}
 const cors = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-admin-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -46,7 +55,7 @@ async function checkAdmin(req: Request) {
   return ctEq(h, String(stored));
 }
 
-Deno.serve(async (req: Request) => {
+const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   let body: Record<string, any>;
@@ -125,13 +134,17 @@ Deno.serve(async (req: Request) => {
     if (action === "extend") {
       const id = String(body.id || ""); if (!UUID_RE.test(id)) return json({ error: "bad_id" }, 400);
       const months = clamp(Number(body.months) || 1, 1, 36);
-      const amount = clamp(Number(body.amount_cents) ?? 299, 0, 1000000);
+      const amount = Math.round(clamp(num(body.amount_cents, 299), 0, 1000000)); // fehlt -> 299 (vorher NaN)
       const method = ["bank", "paypal", "cash", "other"].includes(String(body.method)) ? String(body.method) : "bank";
       const plan = ["monthly", "yearly"].includes(String(body.plan)) ? String(body.plan) : "monthly";
       const ref = body.ref ? String(body.ref).slice(0, 120) : null;
       const note = body.note ? String(body.note).slice(0, 300) : null;
       // Basis = groesserer von jetzt / bisherigem Periodenende; darauf N Monate.
-      const upd = await sql`
+      // Abo-Verlaengerung und Zahlungsbuchung in EINER Transaktion (Zeile gesperrt):
+      // nie Zahlung ohne Verlaengerung oder umgekehrt, keine doppelte Basis bei Parallelklicks.
+      const upd = await sql.begin(async (tx) => {
+      await tx`select 1 from punkto.subscriptions where user_id = ${id} for update`;
+      const r = await tx`
         insert into punkto.subscriptions (user_id, status, plan, current_period_end, updated_at)
         values (${id}, 'active', ${plan},
                 greatest(now(), coalesce((select current_period_end from punkto.subscriptions where user_id = ${id}), now())) + (${months} * interval '1 month'),
@@ -142,8 +155,10 @@ Deno.serve(async (req: Request) => {
           current_period_end = greatest(now(), coalesce(punkto.subscriptions.current_period_end, now())) + (${months} * interval '1 month'),
           updated_at = now()
         returning status, current_period_end`;
-      await sql`insert into punkto.payments (user_id, amount_cents, method, months, ref, note, created_by)
+      await tx`insert into punkto.payments (user_id, amount_cents, method, months, ref, note, created_by)
                 values (${id}, ${amount}, ${method}, ${months}, ${ref}, ${note}, 'operator')`;
+      return r;
+      });
       return json({ ok: true, subscription: upd[0] });
     }
 
@@ -339,4 +354,5 @@ Deno.serve(async (req: Request) => {
     try { console.error("punkto-admin", action, String((e as Error)?.message || e)); } catch (_e) { /* ignore */ }
     return json({ error: "server_error" }, 500);
   }
-});
+};
+Deno.serve(async (req: Request) => withCors(req, await handler(req)));
