@@ -167,6 +167,14 @@
   .ns-cap .cap-acts{flex:0 0 auto}
   .ns-unit{display:flex;align-items:center;gap:8px;margin:0 0 10px}
   .ns-unit-lbl{font-size:.8rem;font-weight:700;color:var(--muted)}
+  .measure-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--line-2);font-size:.95rem}
+  .measure-row b{text-align:right}
+  .measure-hist{display:flex;flex-direction:column;gap:2px;margin-top:8px}
+  .measure-item{display:flex;justify-content:space-between;background:none;border:0;padding:6px 2px;font:inherit;font-size:.86rem;color:var(--ink-2);cursor:pointer;text-align:left;border-radius:8px}
+  .measure-item:hover{background:var(--green-tint)}
+  .portion-chip{border-color:var(--green-700);color:var(--green-800);font-weight:600}
+  .mine-btn{background:none;border:0;padding:6px 0;margin-top:6px;color:var(--green-700);font:inherit;font-size:.86rem;cursor:pointer}
+  .mine-btn:disabled{opacity:.45;cursor:default}
   .ns-unit .chip{padding:.35em .8em;font-size:.82rem}
 
   /* Zutatenrechner: Auswahl (Suche + Kategorie-Chips + gruppierte Liste) und
@@ -655,6 +663,13 @@
       </div>
 
       <div class="card" style="margin-top:16px">
+        <div class="card-h"><h3>Körpermaße</h3>
+          <button class="btn ghost small" id="btnAddMeasure">Eintragen</button>
+        </div>
+        <div id="measureBox"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
         <div class="card-h"><h3>Meilensteine</h3></div>
         <div class="ms-list" id="milestones"></div>
       </div>
@@ -886,6 +901,7 @@
       kcal: +f.kcal || 0, sat_fat_g: +f.sat_fat_g || 0, sugar_g: +f.sugar_g || 0,
       protein_g: +f.protein_g || 0, fiber_g: +f.fiber_g || 0,
       free: !!f.free, per: f.per || (base + " g"), points: f.points,
+      serving_g: +f.serving_g > 0 ? +f.serving_g : 0,
       barcode: f.barcode || "", source: f.source || "", photo_url: f.photo_url || "",
       vegan: !!f.vegan, vegetarian: !!f.vegetarian || !!f.vegan, bought_at: f.bought_at || ""
     };
@@ -1179,7 +1195,7 @@
     if (!owner) { try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {} return false; }
     await PKDiary.wipeAll();
     resetSyncMarks(uid);
-    try { ["pk_milestones_v1", "pk_budget_hint_v1", "pk_water_v1", "pk_meals_v1"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
+    try { ["pk_milestones_v1", "pk_budget_hint_v1", "pk_water_v1", "pk_meals_v1", "pk_portions_v1", "pk_measure_v1"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
     try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {}
     return true;
   }
@@ -1858,6 +1874,7 @@
         (goal ? (toGoal > 0 ? fmtKg(toGoal) : "0") : "–") + '</div><div class="l">kg bis Ziel</div></div>' +
       '<div class="stat"><div class="v" id="statStreak">–</div><div class="l">Tage in Folge</div></div>';
     renderMilestones(start, cur, goal);
+    renderMeasures();
 
     $("#weightChart").innerHTML = weightChartSVG(weights, start, goal);
 
@@ -1869,8 +1886,8 @@
     var onBudget = week.filter(function (w) { return (+w.points || 0) > 0 && (+w.points || 0) <= budget; }).length;
     var avg = daysLogged ? Math.round(totalWeek / daysLogged) : 0;
     $("#weekSummary").innerHTML =
-      '<div class="krow" style="border-color:var(--line-2)"><span>Punkte gesamt</span><b>' + Math.round(totalWeek) + '</b></div>' +
-      '<div class="krow" style="border-color:var(--line-2)"><span>Ø pro erfasstem Tag</span><b>' + avg + '</b></div>' +
+      '<div class="measure-row"><span>Punkte gesamt</span><b>' + Math.round(totalWeek) + '</b></div>' +
+      '<div class="measure-row"><span>Ø pro erfasstem Tag</span><b>' + avg + '</b></div>' +
       '<div class="krow" style="border-color:var(--line-2);border-bottom:0"><span>Tage im Budget</span><b>' + onBudget + ' / ' + daysLogged + '</b></div>';
 
     renderActivityList();
@@ -1923,6 +1940,80 @@
       ids = ids.concat(known.filter(function (k) { return ids.indexOf(k) < 0; }));
     }
     try { localStorage.setItem(MS_KEY, JSON.stringify(ids)); } catch (e) {}
+  }
+
+  /* ---------------------- KÖRPERMASSE ----------------------
+     Taille/Hüfte je Tag, gerätelokal (localStorage) — sind in der Sicherungsdatei
+     enthalten. Taille zeigt Fortschritt oft früher als die Waage. */
+  var LS_MEASURE = "pk_measure_v1";
+  function getMeasures() {
+    var a = lsGet(LS_MEASURE);
+    return (Array.isArray(a) ? a : []).filter(function (m) { return m && m.day; })
+      .sort(function (x, y) { return x.day < y.day ? -1 : 1; });
+  }
+  function setMeasure(day, waist, hip) {
+    var a = getMeasures().filter(function (m) { return m.day !== day; });
+    if (waist || hip) a.push({ day: day, waist_cm: waist || null, hip_cm: hip || null });
+    a.sort(function (x, y) { return x.day < y.day ? -1 : 1; });
+    lsSet(LS_MEASURE, a);
+  }
+  function fmtCm(v) { return fmtNum(Math.round(v * 10) / 10, 1); }
+  function renderMeasures() {
+    var host = $("#measureBox"); if (!host) return;
+    var all = getMeasures();
+    if (!all.length) {
+      host.innerHTML = '<div class="list-empty" style="padding:8px 0">Miss ab und zu deinen Bauchumfang (auf Höhe des Bauchnabels) – er zeigt Fortschritt oft früher als die Waage.</div>';
+      return;
+    }
+    function series(key) { return all.filter(function (m) { return +m[key] > 0; }); }
+    function row(label, key) {
+      var s = series(key); if (!s.length) return "";
+      var last = +s[s.length - 1][key], first = +s[0][key], d = last - first;
+      return '<div class="measure-row"><span>' + label + '</span><b>' + fmtCm(last) + ' cm' +
+        (s.length > 1 ? ' <small style="color:' + (d <= 0 ? 'var(--green-700)' : 'var(--berry)') + ';font-weight:600">(' + (d > 0 ? '+' : '') + fmtCm(d) + ' seit ' + esc(fmtShortDate(s[0].day)) + ')</small>' : '') +
+        '</b></div>';
+    }
+    var html = row("Taille", "waist_cm") + row("Hüfte", "hip_cm");
+    var w = series("waist_cm"), h = +S.user.height_cm;
+    if (w.length && h >= 100) {
+      var r = +w[w.length - 1].waist_cm / h;
+      html += '<div class="measure-row"><span>Taille ÷ Größe</span><b>' + fmtNum(r, 2) +
+        ' <small style="color:var(--muted);font-weight:500">(Richtwert unter 0,5)</small></b></div>';
+    }
+    var recent = all.slice(-4).reverse();
+    html += '<div class="measure-hist">' + recent.map(function (m) {
+      return '<button type="button" class="measure-item" data-mday="' + esc(m.day) + '"><span>' + esc(fmtShortDate(m.day)) + '</span><span>' +
+        [m.waist_cm ? 'T ' + fmtCm(m.waist_cm) : '', m.hip_cm ? 'H ' + fmtCm(m.hip_cm) : ''].filter(Boolean).join(' · ') + ' cm</span></button>';
+    }).join("") + '</div>';
+    host.innerHTML = html;
+    $$("[data-mday]", host).forEach(function (b) { b.addEventListener("click", function () { openMeasureSheet(b.dataset.mday); }); });
+  }
+  function openMeasureSheet(day) {
+    day = day || S.day;
+    var cur = getMeasures().filter(function (m) { return m.day === day; })[0] || {};
+    var prev = getMeasures().filter(function (m) { return m.day < day; }).pop() || {};
+    openSheet("Körpermaße eintragen",
+      '<p style="color:var(--muted);margin-top:-4px">Für ' + esc(fmtLongDate(day)) + ' · nur auf diesem Gerät gespeichert (in der Sicherungsdatei enthalten)</p>' +
+      '<div class="row"><div class="field"><label for="mWaist">Taille (cm)</label>' +
+      '<input type="number" id="mWaist" inputmode="decimal" step="0.5" min="30" max="300" value="' + (cur.waist_cm || "") + '" placeholder="' + (prev.waist_cm ? fmtCm(prev.waist_cm).replace(",", ".") : "90") + '"></div>' +
+      '<div class="field"><label for="mHip">Hüfte (cm, optional)</label>' +
+      '<input type="number" id="mHip" inputmode="decimal" step="0.5" min="30" max="300" value="' + (cur.hip_cm || "") + '" placeholder="' + (prev.hip_cm ? fmtCm(prev.hip_cm).replace(",", ".") : "100") + '"></div></div>' +
+      '<p class="cp-note">Tipp: morgens, entspannt ausatmen, Maßband waagerecht auf Höhe des Bauchnabels.</p>' +
+      '<button class="btn primary block big" id="mSave">Speichern</button>' +
+      ((cur.waist_cm || cur.hip_cm) ? '<button class="btn ghost block" id="mDel" style="margin-top:10px">Eintrag für diesen Tag löschen</button>' : ''),
+      function (root) {
+        $("#mWaist", root).focus();
+        $("#mSave", root).addEventListener("click", function () {
+          var w = parseFloat(String($("#mWaist", root).value).replace(",", ".")) || 0;
+          var h = parseFloat(String($("#mHip", root).value).replace(",", ".")) || 0;
+          var ok = function (v) { return v === 0 || (v >= 30 && v <= 300); };
+          if (!w && !h) return toast("Bitte mindestens einen Wert eintragen.");
+          if (!ok(w) || !ok(h)) return toast("Bitte Werte zwischen 30 und 300 cm.");
+          setMeasure(day, w, h); closeSheet(); renderMeasures(); toast("Maße gespeichert.");
+        });
+        var del = $("#mDel", root);
+        if (del) del.addEventListener("click", function () { setMeasure(day, 0, 0); closeSheet(); renderMeasures(); toast("Eintrag gelöscht."); });
+      });
   }
 
   function renderActivityList() {
@@ -2403,6 +2494,21 @@
     var portionMode = (nf.points != null && !nf.kcal);
     return { portion: portionMode, count: !portionMode && isCountUnit(nf.unit) };
   }
+  /* „Meine Portion" je Lebensmittel (gerätelokal): {foodKey: {v, unit}} in der
+     Eingabe-Einheit (g/ml oder Zähleinheit). Gilt nur, solange die Einheit passt. */
+  var LS_PORTIONS = "pk_portions_v1";
+  function portionMap() { try { var o = JSON.parse(localStorage.getItem(LS_PORTIONS) || "{}"); return (o && typeof o === "object" && !Array.isArray(o)) ? o : {}; } catch (e) { return {}; } }
+  function myPortion(nf) {
+    var md = foodMode(nf); if (md.portion) return 0;
+    var p = portionMap()[foodKey(nf)];
+    return (p && +p.v > 0 && p.unit === (nf.unit || "g")) ? +p.v : 0;
+  }
+  function setMyPortion(nf, v) {
+    var m = portionMap(), k = foodKey(nf);
+    if (v > 0) m[k] = { v: v, unit: nf.unit || "g" }; else delete m[k];
+    var keys = Object.keys(m); if (keys.length > 300) delete m[keys[0]];
+    try { localStorage.setItem(LS_PORTIONS, JSON.stringify(m)); } catch (e) {}
+  }
   function buildFoodEntry(nf, v, meal, pts) {
     var md = foodMode(nf);
     var entry = {
@@ -2419,7 +2525,7 @@
      eintragen, Sheet bleibt offen (mehrere Dinge nacheinander), mit Rückgängig. */
   async function quickAddFood(food, preMeal, btn) {
     var nf = normFood(food), md = foodMode(nf);
-    var v = (md.portion || md.count) ? 1 : (nf.base_g || 100);
+    var v = myPortion(nf) || ((md.portion || md.count) ? 1 : (nf.serving_g || nf.base_g || 100));
     var pts = nf.free ? 0 : (md.portion ? Math.max(0, Math.round(nf.points || 0)) : PK.pointsForAmount(nf, md.count ? v * nf.base_g : v));
     var entry = buildFoodEntry(nf, v, preMeal || mealFor(S.day), pts);
     if (btn) btn.disabled = true;
@@ -2450,6 +2556,10 @@
     var countMode = !portionMode && isCountUnit(nf.unit);
     var step = portionMode ? 0.5 : (countMode ? 0.5 : 10);
     var unitLabel = portionMode ? "Portion(en)" : (countMode ? nf.unit + (" · 1 = " + fmtNum(nf.base_g) + " g") : (nf.unit || "g"));
+    var mine = myPortion(nf);
+    var u0 = nf.unit || "g";
+    var startV = mine || ((portionMode || countMode) ? 1 : nf.base_g);
+    function presetLbl(v) { return countMode ? fmtNum(v) + ' ' + esc(nf.unit) : fmtNum(v) + ' ' + esc(u0); }
 
     openSheet(nf.name,
       (nf.photo_url ? '<img class="food-photo" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
@@ -2475,15 +2585,18 @@
       '<label>Menge (' + esc(unitLabel) + ')</label>' +
       '<div class="stepper">' +
       '<button type="button" id="dMinus">−</button>' +
-      '<input type="number" id="dAmount" inputmode="decimal" value="' + ((portionMode || countMode) ? 1 : nf.base_g) + '" step="' + step + '" min="0">' +
+      '<input type="number" id="dAmount" inputmode="decimal" value="' + startV + '" step="' + step + '" min="0">' +
       '<button type="button" id="dPlus">+</button>' +
       '</div>' +
       (portionMode ? '' :
         '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
+        (mine ? '<button class="chip portion-chip" data-preset="' + mine + '">★ Meine Portion · ' + presetLbl(mine) + '</button>' : '') +
+        (!countMode && nf.serving_g && nf.serving_g !== mine ? '<button class="chip portion-chip" data-preset="' + nf.serving_g + '">1 Portion (Packung) · ' + presetLbl(nf.serving_g) + '</button>' : '') +
         (countMode ? [0.5, 1, 2, 3] : [50, 100, 150, 200]).map(function (g) {
-          return '<button class="chip" data-preset="' + g + '">' + (countMode ? fmtNum(g) + ' ' + esc(nf.unit) : g + ' ' + esc(nf.unit || "g")) + '</button>';
+          return '<button class="chip" data-preset="' + g + '">' + presetLbl(g) + '</button>';
         }).join("") +
-        '</div>') +
+        '</div>' +
+        '<button type="button" class="mine-btn" id="dMine"></button>') +
       '<div class="detail-points" id="dPtsBox"><span class="coin" id="dPts">0</span><span id="dPtsLbl">Punkte für diese Menge</span></div>' +
       '<div class="free-warn" id="dFreeWarn">⚠️ Größere Mengen kosten hier Punkte – in üblicher Portion bleibt es bei 0.</div>' +
       '<button class="btn primary block big" id="dAdd">Zum Tagebuch</button>',
@@ -2515,15 +2628,28 @@
           if (warnEl) warnEl.classList.toggle("show", formulaFree && pts > 0);
           return pts;
         }
-        amtEl.addEventListener("input", recalc);
+        var mineBtn = $("#dMine", root);
+        function mineState() {
+          if (!mineBtn) return;
+          var v = parseFloat(amtEl.value) || 0, cur = myPortion(nf);
+          mineBtn.textContent = (cur && Math.abs(cur - v) < 1e-9) ? "★ Ist meine Portion · vergessen" : "☆ Diese Menge als meine Portion merken";
+          mineBtn.disabled = !(v > 0) && !cur;
+        }
+        if (mineBtn) mineBtn.addEventListener("click", function () {
+          var v = parseFloat(amtEl.value) || 0, cur = myPortion(nf);
+          if (cur && Math.abs(cur - v) < 1e-9) { setMyPortion(nf, 0); toast("Portion vergessen."); }
+          else if (v > 0) { setMyPortion(nf, v); toast("Gemerkt – wird künftig vorgeschlagen."); }
+          mineState();
+        });
+        amtEl.addEventListener("input", function () { recalc(); mineState(); });
         $("#dMinus", root).addEventListener("click", function () {
-          amtEl.value = Math.max(0, (parseFloat(amtEl.value) || 0) - step); recalc();
+          amtEl.value = Math.max(0, (parseFloat(amtEl.value) || 0) - step); recalc(); mineState();
         });
         $("#dPlus", root).addEventListener("click", function () {
-          amtEl.value = (parseFloat(amtEl.value) || 0) + step; recalc();
+          amtEl.value = (parseFloat(amtEl.value) || 0) + step; recalc(); mineState();
         });
         $$("[data-preset]", root).forEach(function (c) {
-          c.addEventListener("click", function () { amtEl.value = c.dataset.preset; recalc(); });
+          c.addEventListener("click", function () { amtEl.value = c.dataset.preset; recalc(); mineState(); });
         });
         $$("#dMeal button", root).forEach(function (b) {
           b.addEventListener("click", function () {
@@ -2531,7 +2657,7 @@
             b.classList.add("on"); meal = b.dataset.m;
           });
         });
-        recalc();
+        recalc(); mineState();
 
         $("#dAdd", root).addEventListener("click", async function () {
           var v = parseFloat(amtEl.value) || 0;
@@ -4858,6 +4984,7 @@
     });
 
     $("#btnAddWeight").addEventListener("click", openWeightSheet);
+    $("#btnAddMeasure").addEventListener("click", function () { openMeasureSheet(); });
     $$("#weightRange button").forEach(function (b) {
       b.addEventListener("click", function () {
         $$("#weightRange button").forEach(function (x) { x.classList.toggle("on", x === b); });

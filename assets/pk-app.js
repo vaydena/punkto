@@ -481,6 +481,8 @@
         sugar_g: num(n["sugars_100g"]),
         protein_g: num(n["proteins_100g"]),
         fiber_g: num(n["fiber_100g"]),
+        // Packungs-Portion laut Hersteller (g bzw. ml), nur wenn plausibel
+        serving_g: (num(p.serving_quantity) > 0 && num(p.serving_quantity) <= 2000) ? Math.round(num(p.serving_quantity) * 10) / 10 : 0,
         vegan: isVegan,
         vegetarian: isVegetarian,
         // Produktfotos aus der OFF-Datenbank (Auto-Erfassung laedt sie best-effort herunter)

@@ -1,5 +1,9 @@
-pk-v53-3c7a
+pk-v54-8e1d
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v54-8e1d: "Meine Portion" pro Lebensmittel merkbar (Schnell-Hinzufügen nutzt sie) und
+          Packungsportion aus Open Food Facts; neue Karte Körpermaße (Taille/Hüfte,
+          Taille÷Größe); Sicherungsdatei enthält jetzt auch Maße, Mahlzeiten, Portionen;
+          Wochenrückblick-Zeilen korrekt formatiert.
 v53-3c7a: Barcode-Scan jetzt auch auf iPhone/iPad (Safari) und Firefox: selbst gehosteter
           ZXing-WASM-Ersatz (assets/barcode/), wird erst beim ersten Scan geladen; auch
           „Barcode aus Foto lesen" funktioniert dort jetzt.
