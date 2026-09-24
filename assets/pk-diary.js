@@ -452,12 +452,20 @@
   function wipeAll() {
     return clearStores([ENTRIES, WEIGHTS, ACTS, OUTBOX]).then(function () { return { ok: true }; });
   }
+  /* Sortierte Liste aller Tage mit mindestens einem Essens-Eintrag (für Serien). */
+  function loggedDays() {
+    return getAll(ENTRIES).then(function (all) {
+      var seen = {};
+      (all || []).forEach(function (e) { if (e && e.day) seen[e.day] = 1; });
+      return Object.keys(seen).sort();
+    }).catch(function () { return []; });
+  }
   function outboxCount() {
     return outboxAll().then(function (l) { return (l || []).length; }).catch(function () { return 0; });
   }
 
   root.PKDiary = {
-    wipeAll: wipeAll, outboxCount: outboxCount,
+    wipeAll: wipeAll, outboxCount: outboxCount, loggedDays: loggedDays,
     supported: supported,
     today: todayISO,
     dayState: dayState,

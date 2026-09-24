@@ -101,6 +101,23 @@
   .quick-act.n .qi{background:#e2f6f2;color:#0d9488}
   .quick-grid:not(.quick-list) .quick-act{padding:22px 10px;font-size:1.02rem}
   .quick-grid:not(.quick-list) .quick-act .qi{width:52px;height:52px}
+  .water-card{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:var(--r);box-shadow:var(--shadow-sm);
+    padding:10px 12px 10px 14px;margin:14px 0 18px}
+  .water-card .wi{font-size:1.5rem}
+  .water-card .wt{flex:1;min-width:0;display:flex;flex-direction:column;font-size:.85rem;color:var(--muted)}
+  .water-card .wt b{color:var(--ink);font-size:.95rem}
+  .wdots{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+  .wdots i{width:14px;height:6px;border-radius:3px;background:var(--line)}
+  .wdots i.on{background:var(--sky)}
+  .wbtn{width:44px;height:44px;border-radius:50%;border:1.6px solid var(--line);background:var(--field);color:var(--ink);
+    font:inherit;font-size:1.4rem;font-weight:700;cursor:pointer;display:grid;place-items:center;flex:0 0 auto}
+  .wbtn.plus{background:#1f7fb0;border-color:#1f7fb0;color:#fff}
+  .wbtn:disabled{opacity:.4}
+  .ms-list{display:flex;flex-wrap:wrap;gap:8px}
+  .ms{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:var(--r-pill);font-size:.85rem;font-weight:700;
+    border:1.6px dashed var(--line);color:var(--muted)}
+  .ms small{font-weight:600}
+  .ms.on{border:1.6px solid var(--green-tint-2);background:var(--green-tint);color:var(--green-800)}
   .qs-label{font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:14px 2px 8px}
   .quick-list{gap:8px}
   .quick-list .quick-act{flex-direction:row;justify-content:flex-start;text-align:left;gap:10px;padding:8px 10px;
@@ -603,6 +620,14 @@
         </div>
       </div>
 
+      <div class="water-card" id="waterCard">
+        <span class="wi" aria-hidden="true">💧</span>
+        <div class="wt"><b>Wasser</b><span id="waterLbl">0 von 8 Gläsern</span>
+          <div class="wdots" id="waterDots" aria-hidden="true"></div></div>
+        <button type="button" class="wbtn" id="waterMinus" aria-label="Ein Glas weniger">−</button>
+        <button type="button" class="wbtn plus" id="waterPlus" aria-label="Ein Glas Wasser (250 ml) mehr">+</button>
+      </div>
+
       <div id="mealGroups"></div>
     </section>
 
@@ -619,6 +644,11 @@
           <button data-r="30">30 Tage</button><button data-r="90" class="on">90 Tage</button><button data-r="all">Alles</button>
         </div>
         <div class="chart-wrap" id="weightChart"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-h"><h3>Meilensteine</h3></div>
+        <div class="ms-list" id="milestones"></div>
       </div>
 
       <div class="card" style="margin-top:16px">
@@ -1141,6 +1171,7 @@
     if (!owner) { try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {} return false; }
     await PKDiary.wipeAll();
     resetSyncMarks(uid);
+    try { ["pk_milestones_v1", "pk_budget_hint_v1", "pk_water_v1"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
     try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {}
     return true;
   }
@@ -1692,6 +1723,24 @@
   /* ---------------------- MEIN TAG ---------------------- */
   var RING_CIRC = 2 * Math.PI * 52;
 
+  /* Wasser-Zähler: Gläser à 250 ml je Tag, gerätelokal (letzte 90 Tage). */
+  var LS_WATER = "pk_water_v1", WATER_GOAL = 8;
+  function waterGet() { try { return JSON.parse(localStorage.getItem(LS_WATER) || "{}") || {}; } catch (e) { return {}; } }
+  function waterSet(day, n) {
+    var m = waterGet(); m[day] = Math.max(0, Math.min(30, n));
+    var keys = Object.keys(m).sort(); while (keys.length > 90) delete m[keys.shift()];
+    try { localStorage.setItem(LS_WATER, JSON.stringify(m)); } catch (e) {}
+    renderWater();
+  }
+  function renderWater() {
+    var n = +waterGet()[S.day] || 0;
+    var lbl = $("#waterLbl"); if (!lbl) return;
+    lbl.textContent = n + " von " + WATER_GOAL + " Gläsern" + (n ? " · " + fmtNum(n * 0.25, 2) + " l" : "") + (n >= WATER_GOAL ? " ✓" : "");
+    var dots = ""; for (var i = 0; i < Math.max(WATER_GOAL, n); i++) dots += '<i' + (i < n ? ' class="on"' : '') + '></i>';
+    $("#waterDots").innerHTML = dots;
+    $("#waterMinus").disabled = n <= 0;
+  }
+
   function renderToday() {
     var d = S.data;
     var budget = currentBudget();
@@ -1700,6 +1749,7 @@
     var actBonus = (d.activity || []).reduce(function (s, a) { return s + (+a.bonus_points || 0); }, 0);
     var remain = budget - eaten;
 
+    renderWater();
     $("#dayLabel").textContent = fmtDayLabel(S.day);
     $("#heroDate").textContent = fmtLongDate(S.day);
     $("#dayNext").disabled = (S.day >= S.today);
@@ -1795,7 +1845,9 @@
       '<div class="stat"><div class="v" style="color:' + (diff <= 0 ? "var(--green-700)" : "var(--berry)") + '">' +
         (diff > 0 ? "+" : "") + fmtKg(diff) + '</div><div class="l">kg seit Start</div></div>' +
       '<div class="stat"><div class="v" style="color:var(--amber-600)">' +
-        (goal ? (toGoal > 0 ? fmtKg(toGoal) : "0") : "–") + '</div><div class="l">kg bis Ziel</div></div>';
+        (goal ? (toGoal > 0 ? fmtKg(toGoal) : "0") : "–") + '</div><div class="l">kg bis Ziel</div></div>' +
+      '<div class="stat"><div class="v" id="statStreak">–</div><div class="l">Tage in Folge</div></div>';
+    renderMilestones(start, cur, goal);
 
     $("#weightChart").innerHTML = weightChartSVG(weights, start, goal);
 
@@ -1812,6 +1864,55 @@
       '<div class="krow" style="border-color:var(--line-2);border-bottom:0"><span>Tage im Budget</span><b>' + onBudget + ' / ' + daysLogged + '</b></div>';
 
     renderActivityList();
+  }
+
+  /* Serie = aufeinanderfolgende Tage mit Einträgen bis heute (ein noch leerer
+     heutiger Tag bricht die Serie nicht). */
+  function streakFrom(days) {
+    var set = {}; days.forEach(function (d) { set[d] = 1; });
+    var d = set[S.today] ? S.today : addDays(S.today, -1), n = 0;
+    while (set[d]) { n++; d = addDays(d, -1); }
+    return n;
+  }
+  var MS_KEY = "pk_milestones_v1";
+  async function renderMilestones(start, cur, goal) {
+    var host = $("#milestones"); if (!host) return;
+    var days = (window.PKDiary && PKDiary.loggedDays) ? await PKDiary.loggedDays() : [];
+    var streak = streakFrom(days);
+    var st = $("#statStreak"); if (st) st.textContent = streak ? streak + (streak >= 7 ? " 🔥" : "") : "0";
+    var lost = start && cur ? Math.max(0, start - cur) : 0;
+    var pct = start ? lost / start * 100 : 0;
+    var list = [
+      { id: "first", ic: "📝", t: "Erster Eintrag", ok: days.length > 0 },
+      { id: "s7", ic: "🔥", t: "7 Tage in Folge", ok: streak >= 7 },
+      { id: "s30", ic: "🏅", t: "30 Tage in Folge", ok: streak >= 30 },
+      { id: "d30", ic: "📅", t: "30 Tage erfasst", ok: days.length >= 30 }
+    ];
+    [1, 2, 5, 10, 15, 20].forEach(function (k) { list.push({ id: "kg" + k, ic: "⚖️", t: "−" + k + " kg", ok: lost >= k, need: k - lost }); });
+    list.push({ id: "p5", ic: "⭐", t: "−5 % Körpergewicht", ok: pct >= 5 });
+    list.push({ id: "p10", ic: "🌟", t: "−10 % Körpergewicht", ok: pct >= 10 });
+    if (goal && start > goal) list.push({ id: "goal", ic: "🏆", t: "Ziel erreicht", ok: cur && cur <= goal });
+
+    var done = list.filter(function (m) { return m.ok; });
+    var next = list.filter(function (m) { return !m.ok; }).slice(0, 2);
+    host.innerHTML = (done.length ? done.map(function (m) {
+      return '<span class="ms on"><span aria-hidden="true">' + m.ic + '</span>' + esc(m.t) + '</span>';
+    }).join("") : '') + next.map(function (m) {
+      return '<span class="ms"><span aria-hidden="true">' + m.ic + '</span>' + esc(m.t) +
+        (m.need > 0 ? ' <small>· noch ' + fmtKg(m.need) + ' kg</small>' : '') + '</span>';
+    }).join("");
+
+    // Neu erreichte Meilensteine einmalig feiern (gerätelokal gemerkt; beim allerersten
+    // Aufruf nur still merken, damit Bestandsnutzer nicht mit Toasts überschüttet werden).
+    var known = null;
+    try { known = JSON.parse(localStorage.getItem(MS_KEY) || "null"); } catch (e) {}
+    var ids = done.map(function (m) { return m.id; });
+    if (known && Array.isArray(known)) {
+      var fresh = done.filter(function (m) { return known.indexOf(m.id) < 0; });
+      if (fresh.length) toast("🎉 Meilenstein: " + fresh[fresh.length - 1].t + "!");
+      ids = ids.concat(known.filter(function (k) { return ids.indexOf(k) < 0; }));
+    }
+    try { localStorage.setItem(MS_KEY, JSON.stringify(ids)); } catch (e) {}
   }
 
   function renderActivityList() {
@@ -2792,6 +2893,29 @@
   }
 
   /* ---------------------- GEWICHT ---------------------- */
+  /* Nach dem Wiegen: Budget neu vorschlagen, wenn das aktuelle Gewicht (nur für
+     „heute") ein anderes Tagesbudget ergibt. Nie automatisch — per Toast-Aktion.
+     Ein abgelehnter Vorschlag wird für diesen Zielwert nicht erneut gezeigt. */
+  function suggestBudgetForWeight(kg) {
+    if (S.day !== S.today || !S.user) return false;
+    var p = profileFromUser(); p.weight_kg = kg;
+    var plan = PK.budgetPlan(p);
+    var cur = +S.user.daily_budget || 0;
+    if (!cur || plan.daily_budget === cur) return false;
+    var key = "pk_budget_hint_v1", seen = null;
+    try { seen = localStorage.getItem(key); } catch (e) {}
+    if (seen === String(plan.daily_budget)) return false;
+    try { localStorage.setItem(key, String(plan.daily_budget)); } catch (e) {}
+    toastAction("Neues Gewicht → Budget " + cur + " → " + plan.daily_budget + " P?", "Anpassen", async function () {
+      try {
+        var r = await API.auth.updateProfile({ daily_budget: plan.daily_budget, weekly_extra: plan.weekly_extra });
+        if (r && r.user) S.user = r.user;
+        renderAll(); toast("Tagesbudget: " + plan.daily_budget + " Punkte.");
+      } catch (e) { toast(humanErr(e)); }
+    });
+    return true;
+  }
+
   function openWeightSheet() {
     var cur = S.data.weight_today || (S.user.start_weight_kg || "");
     openSheet("Gewicht eintragen",
@@ -2807,7 +2931,7 @@
           if (!(kg >= 30 && kg <= 400)) return toast("Bitte ein Gewicht zwischen 30 und 400 kg.");
           this.disabled = true;
           var r = await guardWrite(function () { return API.data.weightSet(kg, S.day); });
-          if (r) { closeSheet(); await refreshDay(); toast("Gewicht gespeichert."); }
+          if (r) { closeSheet(); await refreshDay(); if (!suggestBudgetForWeight(kg)) toast("Gewicht gespeichert."); }
           else this.disabled = false;
         });
         var del = $("#wDel", root);
@@ -4552,6 +4676,8 @@
     });
 
     $("#dayPrev").addEventListener("click", function () { gotoDay(addDays(S.day, -1)); });
+    $("#waterPlus").addEventListener("click", function () { waterSet(S.day, (+waterGet()[S.day] || 0) + 1); });
+    $("#waterMinus").addEventListener("click", function () { waterSet(S.day, (+waterGet()[S.day] || 0) - 1); });
     $("#dayNext").addEventListener("click", function () { if (S.day < S.today) gotoDay(addDays(S.day, 1)); });
 
     // Delegierte Klicks für dynamische Löschen/Hinzufügen im Tag
