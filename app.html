@@ -2889,9 +2889,45 @@
       });
   }
 
-  /* ---------------------- BARCODE-SCAN ---------------------- */
+  /* ---------------------- BARCODE-SCAN ----------------------
+     Nativ (Chrome/Android) über BarcodeDetector; sonst (Safari/iOS, Firefox) lädt
+     getBarcodeDetector() beim ersten Scan einen selbst gehosteten ZXing-WASM-Ersatz
+     mit gleicher API nach (assets/barcode/, ~1,1 MB, danach vom Browser gecacht). */
+  var BC_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"];
+  var _bdLoad = null;
+  function getBarcodeDetector() {
+    if ("BarcodeDetector" in window) {
+      try { return Promise.resolve(new window.BarcodeDetector({ formats: BC_FORMATS })); }
+      catch (e) { return Promise.resolve(new window.BarcodeDetector()); }
+    }
+    if (_bdLoad) return _bdLoad;
+    _bdLoad = new Promise(function (resolve, reject) {
+      if (window.BarcodeDetectionAPI) return resolve();
+      var sc = document.createElement("script");
+      sc.src = "assets/barcode/barcode-detector.min.js"; sc.async = true;
+      sc.onload = function () { resolve(); };
+      sc.onerror = function () { reject(new Error("barcode_script_failed")); };
+      document.head.appendChild(sc);
+    }).then(async function () {
+      var A = window.BarcodeDetectionAPI;
+      if (!A || !A.BarcodeDetector) throw new Error("barcode_unavailable");
+      var wasmUrl = new URL("assets/barcode/zxing_reader.wasm", location.href).href;
+      await A.prepareZXingModule({
+        overrides: { locateFile: function (path, prefix) { return /\.wasm$/.test(path) ? wasmUrl : prefix + path; } },
+        fireImmediately: true
+      });
+      return new A.BarcodeDetector({ formats: BC_FORMATS });
+    });
+    _bdLoad.catch(function () { _bdLoad = null; });
+    return _bdLoad;
+  }
+  function canLiveScan() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) &&
+      (("BarcodeDetector" in window) || typeof WebAssembly === "object");
+  }
+
   function openScanSheet() {
-    var supported = ("BarcodeDetector" in window);
+    var supported = canLiveScan();
     openSheet("Barcode scannen",
       (supported ?
         '<div class="scan-box"><video id="scanVideo" playsinline muted></video><div class="reticle"></div></div>' +
@@ -2924,11 +2960,19 @@
       return;
     }
     var detector;
-    try { detector = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] }); }
-    catch (e) { detector = new window.BarcodeDetector(); }
-    var stopped = false;
+    try { detector = await getBarcodeDetector(); }
+    catch (e) {
+      stopCamera();
+      var box2 = $(".scan-box", root); if (box2) box2.remove();
+      var hint2 = $(".scan-hint", root); if (hint2) hint2.remove();
+      status.innerHTML = '<div class="alert info">Scanner konnte nicht geladen werden (offline?). Bitte die Nummer manuell eingeben.</div>';
+      return;
+    }
+    var stopped = false, busy = false;
     var tick = async function () {
       if (stopped || !S.camStream) return;
+      if (busy) { requestAnimationFrame(tick); return; }
+      busy = true;
       try {
         var codes = await detector.detect(video);
         if (codes && codes.length) {
@@ -2939,6 +2983,7 @@
           return;
         }
       } catch (e) { /* Frame überspringen */ }
+      busy = false;
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -3269,12 +3314,10 @@
 
   /* Barcode aus einem Standbild lesen (BarcodeDetector auf ImageBitmap). */
   async function decodeBarcodeFromBlob(blob) {
-    if (!("BarcodeDetector" in window)) return "";
+    if (!("BarcodeDetector" in window) && typeof WebAssembly !== "object") return "";
     try {
+      var det = await getBarcodeDetector();
       var bmp = await createImageBitmap(blob);
-      var det;
-      try { det = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] }); }
-      catch (e) { det = new window.BarcodeDetector(); }
       var codes = await det.detect(bmp);
       try { bmp.close && bmp.close(); } catch (e) {}
       return (codes && codes.length) ? String(codes[0].rawValue).replace(/\s+/g, "").replace(/\D/g, "") : "";
@@ -3488,7 +3531,7 @@
           var box = $("#cpScanBox", root);
           if (!box || !box.hidden) return;         // schon aktiv -> Doppel-Loop vermeiden
           box.hidden = false;
-          if (!("BarcodeDetector" in window)) {
+          if (!canLiveScan()) {
             box.innerHTML = '<div class="alert info">Live-Scan wird von diesem Browser nicht unterstützt. Wähle den Barcode aus der Galerie (🖼️) oder tippe die Nummer unten ein.</div>';
             return;
           }
@@ -3510,10 +3553,17 @@
             return;
           }
           var detector;
-          try { detector = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] }); }
-          catch (e) { detector = new window.BarcodeDetector(); }
+          try { detector = await getBarcodeDetector(); }
+          catch (e) {
+            stopped = true; stopCamera();
+            box.innerHTML = '<div class="alert warn">Scanner konnte nicht geladen werden (offline?). Wähle den Barcode aus der Galerie (🖼️) oder tippe die Nummer unten ein.</div>';
+            return;
+          }
+          var busy = false;
           var tick = async function () {
             if (stopped || !S.camStream) return;   // Abbrechen/closeSheet räumt S.camStream ab
+            if (busy) { requestAnimationFrame(tick); return; }
+            busy = true;
             try {
               var codes = await detector.detect(video);
               if (codes && codes.length) {
@@ -3538,6 +3588,7 @@
                 }
               }
             } catch (e4) { /* Frame überspringen */ }
+            busy = false;
             requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
@@ -3552,7 +3603,7 @@
           var src = originals[key] || photos[key];
           if (!src) return;                       // Button erscheint ohnehin nur mit Foto
           var what = CAP_LABELS[key] || "Foto";
-          if (!("BarcodeDetector" in window)) {
+          if (!("BarcodeDetector" in window) && typeof WebAssembly !== "object") {
             toast("Barcode-Erkennung wird von diesem Browser nicht unterstützt. Bitte die Nummer unten eintragen.");
             return;
           }

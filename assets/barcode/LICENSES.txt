@@ -1,0 +1,10 @@
+Barcode-Erkennung (Fallback für Browser ohne native BarcodeDetector-API, z. B. Safari/iOS)
+
+barcode-detector 3.2.2  (barcode-detector.min.js = dist/iife/ponyfill.js)
+  https://github.com/Sec-ant/barcode-detector  — MIT License, Copyright (c) 2023 Ze-Zheng Wu
+zxing-wasm 3.1.3  (zxing_reader.wasm)
+  https://github.com/Sec-ant/zxing-wasm  — MIT License, Copyright (c) 2023 Ze-Zheng Wu
+zxing-cpp (im WASM enthalten)
+  https://github.com/zxing-cpp/zxing-cpp  — Apache License 2.0
+
+Selbst gehostet (keine Drittanbieter-Anfrage); wird erst beim ersten Scan nachgeladen.

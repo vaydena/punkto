@@ -1,5 +1,8 @@
-pk-v52-8b1e
+pk-v53-3c7a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v53-3c7a: Barcode-Scan jetzt auch auf iPhone/iPad (Safari) und Firefox: selbst gehosteter
+          ZXing-WASM-Ersatz (assets/barcode/), wird erst beim ersten Scan geladen; auch
+          „Barcode aus Foto lesen" funktioniert dort jetzt.
 v52-8b1e: NEU: „+" in der Suche trägt die Standardmenge direkt ein (mit Rückgängig);
           Budget-Vorschlag nach dem Wiegen; Serie „Tage in Folge" + Meilensteine im Fortschritt;
           Wasser-Zähler in „Mein Tag"; gespeicherte Mahlzeiten (Lesezeichen an der Mahlzeit,
