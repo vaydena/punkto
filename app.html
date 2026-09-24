@@ -113,6 +113,14 @@
     font:inherit;font-size:1.4rem;font-weight:700;cursor:pointer;display:grid;place-items:center;flex:0 0 auto}
   .wbtn.plus{background:#1f7fb0;border-color:#1f7fb0;color:#fff}
   .wbtn:disabled{opacity:.4}
+  .mh-save{margin-left:auto;margin-right:6px;width:40px;height:40px;border:0;background:none;color:var(--muted);cursor:pointer;
+    display:grid;place-items:center;border-radius:50%}
+  .mh-save:hover{background:var(--green-tint);color:var(--green-700)}
+  .tpl-row{position:relative}
+  .tpl-row .food-item{padding-right:60px}
+  .tpl-row .food-item .meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tpl-del{position:absolute;right:6px;top:calc(50% - 4px);transform:translateY(-50%);width:44px;height:44px;border:0;background:none;
+    color:var(--muted);cursor:pointer;display:grid;place-items:center}
   .ms-list{display:flex;flex-wrap:wrap;gap:8px}
   .ms{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:var(--r-pill);font-size:.85rem;font-weight:700;
     border:1.6px dashed var(--line);color:var(--muted)}
@@ -1171,7 +1179,7 @@
     if (!owner) { try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {} return false; }
     await PKDiary.wipeAll();
     resetSyncMarks(uid);
-    try { ["pk_milestones_v1", "pk_budget_hint_v1", "pk_water_v1"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
+    try { ["pk_milestones_v1", "pk_budget_hint_v1", "pk_water_v1", "pk_meals_v1"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
     try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {}
     return true;
   }
@@ -1806,6 +1814,8 @@
           '</div>';
       }).join("");
       g.innerHTML = '<div class="mh"><div class="t">' + m.em + ' ' + m.label + '</div>' +
+        (items.length ? '<button class="mh-save" data-save-meal="' + m.key + '" aria-label="' + m.label + ' als Mahlzeit speichern" title="Als Mahlzeit speichern">' +
+          '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>' : '') +
         '<div class="sum">' + sum + ' P</div></div>' +
         (rows || '<button class="food-item" data-add-meal="' + m.key + '" style="justify-content:center;color:var(--muted)">+ ' + m.label + ' hinzufügen</button>');
       host.appendChild(g);
@@ -2052,6 +2062,7 @@
       '</div><div class="qs-label">Mehr</div><div class="quick-grid quick-list">' +
       '<button class="quick-act n" data-q="nutriscan"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2"/><path d="M8 9h8M8 12h8M8 15h5"/></svg></span>Nährstoffrechner</button>' +
       '<button class="quick-act" data-q="free"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a1.8 1.8 0 0 1-2.55 0l-7.6-7.6A2 2 0 0 1 2.7 11.6V4.5a1.8 1.8 0 0 1 1.8-1.8h7.1a2 2 0 0 1 1.4.6l7.6 7.6a1.8 1.8 0 0 1 0 2.5z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span>0 Punkte</button>' +
+      '<button class="quick-act r" data-q="meals"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>Mahlzeiten</button>' +
       '<button class="quick-act z" data-q="copyday"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>Tag kopieren</button>' +
       '<button class="quick-act b" data-q="weight"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l3-4"/></svg></span>Gewicht</button>' +
       '<button class="quick-act s" data-q="activity"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></span>Aktivität</button>' +
@@ -2081,6 +2092,7 @@
             else if (q === "recipe") openRecipeCalcSheet();
             else if (q === "free") openFreeFoodsSheet();
             else if (q === "copyday") openCopyDaySheet();
+            else if (q === "meals") openMealTemplatesSheet();
           });
         });
       });
@@ -2617,6 +2629,82 @@
      Übernimmt alle Tagebuch-Einträge eines anderen Tages in den aktuell
      angezeigten Tag (S.day). Rein clientseitig: state(quelle) laden, Vorschau
      zeigen, dann pro Eintrag diaryAdd mit day=S.day (wie im Detail-Sheet). */
+  /* ---------------------- GESPEICHERTE MAHLZEITEN ----------------------
+     Vorlagen aus den Einträgen einer Mahlzeit (gerätelokal, max. 30). Beim
+     Eintragen werden alle Positionen mit day=S.day in die gewählte Mahlzeit kopiert. */
+  var LS_MEALS = "pk_meals_v1";
+  function mealTemplates() { try { var a = JSON.parse(localStorage.getItem(LS_MEALS) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function storeMealTemplates(a) { try { localStorage.setItem(LS_MEALS, JSON.stringify(a.slice(0, 30))); return true; } catch (e) { return false; } }
+  function saveMealTemplate(mealKey) {
+    var items = (S.data.diary || []).filter(function (e) { return mealKeyOf(e) === mealKey; });
+    if (!items.length) return;
+    var m = MEALS.filter(function (x) { return x.key === mealKey; })[0] || { label: "Mahlzeit" };
+    var name = prompt("Name der Mahlzeit:", items.length === 1 ? items[0].name : m.label + " (" + items.map(function (e) { return e.name; }).slice(0, 2).join(", ") + (items.length > 2 ? " …" : "") + ")");
+    if (name == null) return;
+    name = String(name).trim().slice(0, 60) || m.label;
+    var tpl = {
+      id: "m" + Date.now().toString(36), name: name, meal: mealKey,
+      items: items.map(function (e) {
+        return { name: e.name, points: +e.points || 0, qty: e.qty, unit: e.unit || null, kcal: +e.kcal || 0, source: e.source || "db", ref_code: e.ref_code || "" };
+      })
+    };
+    var all = mealTemplates().filter(function (t) { return t.name !== name; });
+    all.unshift(tpl);
+    if (storeMealTemplates(all)) toast("Gespeichert: „" + name + "“ – unter Hinzufügen → Mahlzeiten.");
+    else toast("Speichern nicht möglich (Speicher voll?).");
+  }
+  function openMealTemplatesSheet() {
+    var meal = mealFor(S.day);
+    function listHTML() {
+      var all = mealTemplates();
+      if (!all.length) return '<div class="list-empty">Noch keine gespeicherten Mahlzeiten.<br>Tipp: Bei einer Mahlzeit in „Mein Tag" auf das Lesezeichen tippen.</div>';
+      return all.map(function (t) {
+        var pts = t.items.reduce(function (s, i) { return s + (+i.points || 0); }, 0);
+        return '<div class="tpl-row"><button class="food-item" data-tpl="' + esc(t.id) + '">' +
+          '<div class="info"><div class="nm">' + esc(t.name) + '</div><div class="meta">' + t.items.length + ' Position' + (t.items.length === 1 ? '' : 'en') +
+          ' · ' + esc(t.items.map(function (i) { return i.name; }).join(", ")) + '</div></div>' +
+          '<span class="' + (pts ? "coin" : "coin zero") + '">' + pts + '</span></button>' +
+          '<button class="tpl-del" data-tpl-del="' + esc(t.id) + '" aria-label="„' + esc(t.name) + '“ löschen">' +
+          '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div>';
+      }).join("");
+    }
+    openSheet("Gespeicherte Mahlzeiten",
+      '<p class="cp-note">Tippe eine Mahlzeit an, um alle Positionen für ' + esc(fmtLongDate(S.day)) + ' einzutragen.</p>' +
+      '<label>Eintragen als</label>' +
+      '<div class="seg" id="tMeal" style="margin-bottom:14px">' +
+      MEALS.map(function (m) { return '<button data-m="' + m.key + '"' + (m.key === meal ? ' class="on"' : '') + '>' + m.label + '</button>'; }).join("") +
+      '</div><div id="tplList">' + listHTML() + '</div>',
+      function (root) {
+        $$("#tMeal button", root).forEach(function (b) {
+          b.addEventListener("click", function () {
+            $$("#tMeal button", root).forEach(function (x) { x.classList.remove("on"); });
+            b.classList.add("on"); meal = b.dataset.m;
+          });
+        });
+        $("#tplList", root).addEventListener("click", async function (e) {
+          var del = e.target.closest("[data-tpl-del]");
+          if (del) {
+            if (!confirm("Diese gespeicherte Mahlzeit löschen?")) return;
+            storeMealTemplates(mealTemplates().filter(function (t) { return t.id !== del.dataset.tplDel; }));
+            $("#tplList", root).innerHTML = listHTML();
+            return;
+          }
+          var b = e.target.closest("[data-tpl]"); if (!b) return;
+          var t = mealTemplates().filter(function (x) { return x.id === b.dataset.tpl; })[0]; if (!t) return;
+          b.disabled = true;
+          var n = 0, pts = 0;
+          for (var i = 0; i < t.items.length; i++) {
+            var it = Object.assign({}, t.items[i], { meal: meal, day: S.day });
+            var r = await guardWrite(function () { return API.data.diaryAdd(it); });
+            if (!r) break;
+            n++; pts += +it.points || 0;
+          }
+          b.disabled = false;
+          if (n) { closeSheet(); await refreshDay(); toast("„" + t.name + "“ eingetragen · " + pts + " P"); }
+        });
+      });
+  }
+
   function openCopyDaySheet(preSrc) {
     var target = S.day;
     var src = preSrc || addDays(target, -1);
@@ -4704,6 +4792,8 @@
         }
         return;
       }
+      var sv = e.target.closest("[data-save-meal]");
+      if (sv) { saveMealTemplate(sv.dataset.saveMeal); return; }
       var add = e.target.closest("[data-add-meal]");
       if (add) openSearchSheet(add.dataset.addMeal);
     });

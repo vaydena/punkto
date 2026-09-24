@@ -1,5 +1,9 @@
-pk-v51-d4f2
+pk-v52-8b1e
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v52-8b1e: NEU: „+" in der Suche trägt die Standardmenge direkt ein (mit Rückgängig);
+          Budget-Vorschlag nach dem Wiegen; Serie „Tage in Folge" + Meilensteine im Fortschritt;
+          Wasser-Zähler in „Mein Tag"; gespeicherte Mahlzeiten (Lesezeichen an der Mahlzeit,
+          Hinzufügen → Mahlzeiten trägt alles mit einem Tipp ein). Alles gerätelokal.
 v51-d4f2: DESIGN: Dunkelmodus (folgt System); besserer Kontrast der grünen Buttons (WCAG AA);
           größere Tippflächen (Tagesnavigation, Bearbeiten/Löschen, Tabbar-Beschriftung, kleine
           Buttons); Hinzufügen-Sheet: Suchen/Scannen groß, Rest kompakt unter „Mehr";
