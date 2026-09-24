@@ -216,6 +216,18 @@
   .cp-pick{cursor:pointer;user-select:none;transition:opacity .12s}
   .cp-pick input{flex:0 0 auto;width:20px;height:20px;accent-color:var(--green-700);margin:0;cursor:pointer}
   .cp-pick.off{opacity:.45}
+  /* Freitext-Eintrag: Vorschauzeilen mit Original-Text, Auswahl der Alternativen und Menge. */
+  .ft-hint{color:var(--muted);font-size:.8rem;margin:6px 2px 0}
+  .ft-row{align-items:flex-start;padding:10px 12px}
+  .ft-row>input[type=checkbox]{flex:0 0 auto;width:20px;height:20px;margin:2px 0 0;accent-color:var(--green-700)}
+  .ft-row.off .ft-main,.ft-row.off .coin{opacity:.45}
+  .ft-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+  .ft-raw{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ft-miss{font-size:.85rem;color:var(--ink)}
+  .ft-sel{width:100%;min-width:0;padding:8px 10px;font-size:.92rem;font-weight:600}
+  .ft-amt{display:flex;align-items:center;gap:8px}
+  .ft-amt .ft-v{width:90px;padding:7px 10px;font-size:.92rem}
+  .ft-amt .ft-u{color:var(--muted);font-size:.88rem}
   /* Portions-Warnung im Detail-Sheet: nur bei „formelfreien" Lebensmitteln, die
      erst in großer Menge Punkte bekommen (per .show umgeschaltet – nie via [hidden]). */
   .free-warn{display:none;background:var(--amber-tint);color:var(--amber-ink);border-radius:12px;
@@ -2159,6 +2171,7 @@
       '<button class="quick-act" data-q="search"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg></span>Essen suchen</button>' +
       '<button class="quick-act a" data-q="barcode"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg></span>Barcode scannen</button>' +
       '</div><div class="qs-label">Mehr</div><div class="quick-grid quick-list">' +
+      '<button class="quick-act s" data-q="text"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 10h16M4 14h10M4 18h7"/><path d="M18 14l3 3-4 4h-3v-3z"/></svg></span>Freitext</button>' +
       '<button class="quick-act n" data-q="nutriscan"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2"/><path d="M8 9h8M8 12h8M8 15h5"/></svg></span>Nährstoffrechner</button>' +
       '<button class="quick-act" data-q="free"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a1.8 1.8 0 0 1-2.55 0l-7.6-7.6A2 2 0 0 1 2.7 11.6V4.5a1.8 1.8 0 0 1 1.8-1.8h7.1a2 2 0 0 1 1.4.6l7.6 7.6a1.8 1.8 0 0 1 0 2.5z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span>0 Punkte</button>' +
       '<button class="quick-act r" data-q="meals"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>Mahlzeiten</button>' +
@@ -2192,6 +2205,7 @@
             else if (q === "free") openFreeFoodsSheet();
             else if (q === "copyday") openCopyDaySheet();
             else if (q === "meals") openMealTemplatesSheet();
+            else if (q === "text") openFreeTextSheet();
           });
         });
       });
@@ -2787,6 +2801,289 @@
     if (storeMealTemplates(all)) toast("Gespeichert: „" + name + "“ – unter Hinzufügen → Mahlzeiten.");
     else toast("Speichern nicht möglich (Speicher voll?).");
   }
+  /* ---------------------- FREITEXT („200 g Quark, 1 Apfel") ----------------------
+     Mehrere Lebensmittel in einem Rutsch: Text in Positionen zerlegen (Komma,
+     Zeilenumbruch, „und", „+"), je Position Menge/Einheit/Name erkennen und das
+     passendste Lebensmittel aus allen Quellen wählen (Zuletzt/Favoriten, eigene,
+     lokale Produkte, Basis, zentrale DB, BLS). Vorschau mit Alternativen, Menge
+     und Häkchen, dann alles auf einmal eintragen. Rein clientseitig -> offline. */
+  var FT_WORDNUM = { ein: 1, eine: 1, einen: 1, einem: 1, einer: 1, eins: 1, zwei: 2, drei: 3, vier: 4,
+    "fünf": 5, fuenf: 5, sechs: 6, halb: 0.5, halbe: 0.5, halber: 0.5, halbes: 0.5, halben: 0.5 };
+  var FT_UNITS = [
+    [/^(g|gr|gramm)$/, "g"], [/^(kg|kilo)$/, "kg"], [/^(ml|milliliter)$/, "ml"], [/^(l|liter)$/, "l"],
+    [/^(stück|stueck|stk|st)$/, "stück"], [/^scheiben?$/, "scheibe"], [/^(el|essl[öo]ffel)$/, "el"],
+    [/^(tl|teel[öo]ffel)$/, "tl"], [/^becher$/, "becher"], [/^gl[äa]s(er)?$/, "glas"],
+    [/^tassen?$/, "tasse"], [/^portion(en)?$/, "portion"], [/^handvoll$/, "handvoll"],
+    [/^(schalen?|schüsseln?|schuesseln?)$/, "schale"], [/^riegel$/, "riegel"], [/^prisen?$/, "prise"]
+  ];
+  /* Grobe Grammzahl je Zähleinheit, wenn das Lebensmittel selbst in g/ml geführt wird. */
+  var FT_GRAMS = { el: 15, tl: 5, becher: 150, glas: 200, tasse: 200, handvoll: 30, scheibe: 30, schale: 250, riegel: 25, prise: 1 };
+
+  function ftUnit(w) {
+    w = String(w || "").toLowerCase();
+    for (var i = 0; i < FT_UNITS.length; i++) if (FT_UNITS[i][0].test(w)) return FT_UNITS[i][1];
+    return "";
+  }
+  function ftNum(t) {
+    if (t === "½") return 0.5;
+    if (t.indexOf("/") > 0) { var p = t.split("/"); return +p[1] ? +p[0] / +p[1] : null; }
+    var n = parseFloat(t.replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+  /* Eine Position („200 g Quark", „Apfel", „Quark 250 g", „2 EL Öl") -> {qty, unit, name}. */
+  function ftParseLine(s) {
+    s = String(s || "").replace(/\s+/g, " ").replace(/^[-–•*·]\s*/, "").trim();
+    if (!s) return null;
+    var qty = null, unit = "", rest = s, m;
+    m = rest.match(/^(\d+(?:[.,]\d+)?(?:\/\d+)?|½)\s*/);
+    if (m) { qty = ftNum(m[1]); rest = rest.slice(m[0].length); }
+    else {
+      m = rest.match(/^(\S+)\s+/);
+      if (m && FT_WORDNUM[m[1].toLowerCase()] != null) { qty = FT_WORDNUM[m[1].toLowerCase()]; rest = rest.slice(m[0].length); }
+    }
+    m = rest.match(/^([A-Za-zÄÖÜäöüß]+)\.?(?:\s+|$)/);
+    if (m) {
+      var u = ftUnit(m[1]);
+      if (u && rest.slice(m[0].length).trim()) { unit = u; rest = rest.slice(m[0].length); }
+    }
+    if (qty == null) {   // nachgestellte Menge: „Quark 250 g", „Apfel x2"
+      m = rest.match(/\s+(?:x\s*)?(\d+(?:[.,]\d+)?)\s*([A-Za-zÄÖÜäöüß]+)?\.?$/i);
+      if (m && (!m[2] || ftUnit(m[2]))) { qty = ftNum(m[1]); unit = m[2] ? ftUnit(m[2]) : ""; rest = rest.slice(0, m.index); }
+    }
+    rest = rest.replace(/^(von|vom|mit)\s+/i, "").trim();
+    if (!rest) return null;
+    if (unit === "kg") { qty = (qty || 1) * 1000; unit = "g"; }
+    if (unit === "l") { qty = (qty || 1) * 1000; unit = "ml"; }
+    return { raw: s.replace(/(\d)\.(\d)/g, "$1,$2"), qty: qty, unit: unit, name: rest.slice(0, 60) };
+  }
+  function ftParse(text) {
+    return String(text || "")
+      .replace(/(\d),(\d)/g, "$1.$2")   // Dezimalkomma schützen („1,5 l Wasser")
+      .split(/\n|;|,|\s+und\s+|\s+\+\s+|\s+&\s+/i)
+      .map(ftParseLine).filter(Boolean).slice(0, 20);
+  }
+  /* Suchvarianten: Umlaute gefaltet, einfache Plural-/Beugungsendungen gekappt
+     („Äpfel" -> apfel, „Eier" -> ei, „Tomaten" -> tomate), bei Mehrwort-Namen
+     zusätzlich das letzte Wort („griechischer Joghurt" -> joghurt). */
+  function ftVariants(name) {
+    var n = blsNorm(name), out = [n];
+    function add(v) { if (v && v.length >= 2 && out.indexOf(v) < 0) out.push(v); }
+    function stems(w) {
+      if (/en$/.test(w)) { add(w.slice(0, -1)); add(w.slice(0, -2)); }
+      else if (/er$/.test(w)) add(w.slice(0, -2));
+      else if (/[ns]$/.test(w)) add(w.slice(0, -1));
+      else if (/e$/.test(w) && w.length > 4) add(w.slice(0, -1));
+    }
+    stems(n);
+    var words = n.split(" ");
+    if (words.length > 1) { var last = words[words.length - 1]; add(last); stems(last); }
+    return out;
+  }
+  function ftScore(nf, vars) {
+    var nn = blsNorm(nf.name), best = 9;
+    var core = nn.replace(/\s*\([^)]*\)/g, "").replace(/,.*$/, "").trim();   // „Ei (gekocht)" / „Apfel, roh" -> ei / apfel
+    vars.forEach(function (v, vi) {
+      var s = 9, re = new RegExp("(^|[ ,(/-])" + v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[ ,)/-])");
+      if (nn === v || core === v) s = 0;
+      else if (nn.indexOf(v) === 0 && re.test(nn)) s = 1;
+      else if (re.test(nn)) s = 2;
+      else if (nn.indexOf(v) === 0) s = 3;
+      else if (nn.indexOf(v) >= 0) s = 4;
+      if (vi > 0 && s < 9) s += 0.5;   // Variante statt Original -> knapp schlechter
+      if (s < best) best = s;
+    });
+    return best;
+  }
+  async function ftCandidates(name) {
+    var vars = ftVariants(name), pool = [], seen = {};
+    function add(list, prio) {
+      (list || []).forEach(function (f) {
+        var nf = normFood(f), k = blsNorm(nf.name) + "|" + nf.unit + "|" + nf.base_g;
+        if (seen[k]) return;
+        var sc = ftScore(nf, vars);
+        if (sc >= 9) return;
+        seen[k] = 1; pool.push({ f: f, nf: nf, sc: sc, prio: prio });
+      });
+    }
+    add(getFavs().concat(getRecent()).map(resolveLiveFood), 0);
+    add(S.data.custom_foods || [], 0);
+    for (var i = 0; i < vars.length; i++) {
+      var v = vars[i];
+      add(localProductMatches(v), 0);
+      var base = [];
+      try { base = await API.foods.search(v); } catch (e) { base = []; }
+      add(base, 1);
+      add(communityMatches(v), 1);
+      if (v.length >= 2) {
+        var d = null;
+        try { d = await blsFetch(v); } catch (e) { d = null; }
+        add(((d && d.foods) || []).map(blsToFood), 2);
+      }
+      if (pool.some(function (c) { return c.sc === 0; })) break;   // exakter Treffer -> keine weiteren Varianten
+    }
+    pool.sort(function (a, b) {
+      return (a.sc - b.sc) || (a.prio - b.prio) || (a.nf.name.length - b.nf.name.length);
+    });
+    return pool.slice(0, 6);
+  }
+  /* Menge in der Eingabe-Einheit des Lebensmittels (Portion, Zähleinheit oder g/ml). */
+  function ftAmount(nf, it) {
+    var md = foodMode(nf), q = it.qty > 0 ? it.qty : null, u = it.unit;
+    var mass = (u === "g" || u === "ml");
+    if (md.portion) return (q && !mass) ? q : 1;
+    if (md.count) {
+      if (mass) return q ? Math.round(q / (nf.base_g || 100) * 100) / 100 : 1;
+      if (!u && q >= 10) return Math.round(q / (nf.base_g || 100) * 100) / 100;   // „Apfel 150" -> Gramm
+      return q || 1;
+    }
+    if (mass) return q || myPortion(nf) || nf.serving_g || nf.base_g || 100;
+    if (!u && q >= 10) return q;                                                  // „Quark 250" -> Gramm
+    var one = (u && FT_GRAMS[u]) || myPortion(nf) || nf.serving_g || nf.base_g || 100;
+    return Math.round((q || 1) * one);
+  }
+  function ftPoints(nf, v) {
+    var md = foodMode(nf);
+    return nf.free ? 0 : (md.portion ? Math.max(0, Math.round((nf.points || 0) * v)) : PK.pointsForAmount(nf, md.count ? v * nf.base_g : v));
+  }
+  /* Mengenfeld: ohne Tausenderpunkt ("1.500" würde beim Zurücklesen zu 1,5). */
+  function ftFmt(v) { return String(Math.round((+v || 0) * 100) / 100).replace(".", ","); }
+  function ftUnitLabel(nf) {
+    var md = foodMode(nf);
+    return md.portion ? "Portion" : (nf.unit || "g");
+  }
+
+  function openFreeTextSheet(preMeal) {
+    var meal = preMeal || mealFor(S.day), rows = [];
+    openSheet("Freitext-Eintrag",
+      '<p class="cp-note">Schreib einfach auf, was du gegessen hast – mehrere Dinge mit Komma oder neuer Zeile trennen. Punkto sucht die passenden Lebensmittel heraus.</p>' +
+      '<textarea id="ftText" rows="3" maxlength="600" placeholder="z. B. 200 g Magerquark, 1 Apfel, 2 Scheiben Vollkornbrot" autocomplete="off" style="width:100%;resize:vertical"></textarea>' +
+      '<div class="ft-hint">Tipp: Über das Mikrofon der Tastatur kannst du auch diktieren.</div>' +
+      '<button class="btn ghost block" id="ftGo" style="margin-top:10px">Erkennen</button>' +
+      '<div id="ftOut"></div>',
+      function (root) {
+        var ta = $("#ftText", root), out = $("#ftOut", root), go = $("#ftGo", root);
+        try { ta.focus(); } catch (e) {}
+
+        function rowHTML(r, i) {
+          if (!r.cands.length) {
+            return '<div class="cp-row ft-row off" data-i="' + i + '"><input type="checkbox" disabled aria-label="Nicht übernehmbar">' +
+              '<div class="ft-main"><div class="ft-raw">„' + esc(r.it.raw) + '“</div><div class="ft-miss">Nichts Passendes gefunden – bitte über „Essen suchen" eintragen.</div></div>' +
+              '<span class="coin sm zero">–</span></div>';
+          }
+          var c = r.cands[r.sel];
+          return '<div class="cp-row ft-row" data-i="' + i + '"><input type="checkbox" class="ft-on" checked aria-label="Übernehmen">' +
+            '<div class="ft-main"><div class="ft-raw">„' + esc(r.it.raw) + '“</div>' +
+            '<select class="ft-sel" aria-label="Lebensmittel">' + r.cands.map(function (x, k) {
+              return '<option value="' + k + '"' + (k === r.sel ? ' selected' : '') + '>' + esc(x.nf.name + (x.nf.brand ? " (" + x.nf.brand + ")" : "")) + '</option>';
+            }).join("") + '</select>' +
+            '<div class="ft-amt"><input type="text" class="ft-v" inputmode="decimal" autocomplete="off" aria-label="Menge" value="' + esc(ftFmt(r.v)) + '">' +
+            '<span class="ft-u">' + esc(ftUnitLabel(c.nf)) + '</span></div></div>' +
+            '<span class="coin sm' + (r.pts ? '' : ' zero') + '">' + r.pts + '</span></div>';
+        }
+        function totals() {
+          var n = 0, pts = 0;
+          rows.forEach(function (r) { if (r.on && r.cands.length) { n++; pts += r.pts; } });
+          return { n: n, pts: pts };
+        }
+        function updateBar() {
+          var t = totals(), bar = $("#ftCount", out), btn = $("#ftDo", out);
+          if (bar) bar.innerHTML = '<b>' + t.n + '</b> Position' + (t.n === 1 ? '' : 'en') + ' · <b>' + t.pts + '</b> P';
+          if (btn) btn.disabled = !t.n;
+        }
+        function render() {
+          if (!rows.length) { out.innerHTML = '<div class="list-empty">Nichts erkannt. Beispiel: „150 g Joghurt, 1 Banane".</div>'; return; }
+          out.innerHTML =
+            '<label style="margin-top:14px">Eintragen als</label>' +
+            '<div class="seg" id="ftMeal" style="margin-bottom:12px">' +
+            MEALS.map(function (m) { return '<button type="button" data-m="' + m.key + '"' + (m.key === meal ? ' class="on"' : '') + '>' + m.label + '</button>'; }).join("") +
+            '</div>' +
+            '<div class="cp-bar"><span id="ftCount"></span></div>' +
+            rows.map(rowHTML).join("") +
+            '<button class="btn primary block big" id="ftDo" style="margin-top:10px">Alles eintragen</button>';
+          updateBar();
+        }
+        function recalcRow(i, fromSelect) {
+          var r = rows[i], c = r.cands[r.sel], el = $('.ft-row[data-i="' + i + '"]', out);
+          if (fromSelect) r.v = ftAmount(c.nf, r.it);
+          r.pts = ftPoints(c.nf, r.v);
+          if (!el) return;
+          if (fromSelect) { $(".ft-v", el).value = ftFmt(r.v); $(".ft-u", el).textContent = ftUnitLabel(c.nf); }
+          var coin = $(".coin", el); coin.textContent = r.pts; coin.classList.toggle("zero", !r.pts);
+          updateBar();
+        }
+
+        async function recognize() {
+          var items = ftParse(ta.value);
+          if (!items.length) { rows = []; render(); return; }
+          go.disabled = true; go.textContent = "Suche …";
+          out.innerHTML = '<div class="list-empty">Suche passende Lebensmittel …</div>';
+          try {
+            rows = [];
+            for (var i = 0; i < items.length; i++) {
+              var cands = await ftCandidates(items[i].name);
+              var r = { it: items[i], cands: cands, sel: 0, on: !!cands.length, v: 0, pts: 0 };
+              if (cands.length) { r.v = ftAmount(cands[0].nf, items[i]); r.pts = ftPoints(cands[0].nf, r.v); }
+              rows.push(r);
+            }
+            render();
+          } finally { go.disabled = false; go.textContent = "Erneut erkennen"; }
+        }
+        go.addEventListener("click", recognize);
+        ta.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); recognize(); }
+        });
+
+        out.addEventListener("click", function (e) {
+          var mb = e.target.closest("#ftMeal button");
+          if (mb) {
+            $$("#ftMeal button", out).forEach(function (x) { x.classList.remove("on"); });
+            mb.classList.add("on"); meal = mb.dataset.m;
+          }
+        });
+        out.addEventListener("change", function (e) {
+          var el = e.target.closest(".ft-row"); if (!el) return;
+          var i = +el.dataset.i, r = rows[i];
+          if (e.target.classList.contains("ft-on")) { r.on = e.target.checked; el.classList.toggle("off", !r.on); updateBar(); }
+          else if (e.target.classList.contains("ft-sel")) { r.sel = +e.target.value; recalcRow(i, true); }
+        });
+        out.addEventListener("input", function (e) {
+          if (!e.target.classList.contains("ft-v")) return;
+          var i = +e.target.closest(".ft-row").dataset.i, n = parseFloat(String(e.target.value).replace(",", "."));
+          rows[i].v = Number.isFinite(n) && n > 0 ? Math.min(n, 99999) : 0;
+          recalcRow(i, false);
+        });
+        out.addEventListener("click", async function (e) {
+          var btn = e.target.closest("#ftDo"); if (!btn) return;
+          var todo = rows.filter(function (r) { return r.on && r.cands.length && r.v > 0; });
+          if (!todo.length) return;
+          btn.disabled = true;
+          var ids = [], pts = 0;
+          for (var i = 0; i < todo.length; i++) {
+            var c = todo[i].cands[todo[i].sel];
+            var entry = buildFoodEntry(c.nf, todo[i].v, meal, todo[i].pts);
+            var r = await guardWrite(function () { return API.data.diaryAdd(entry); });
+            if (!r) break;
+            pushRecent(c.f);
+            pts += todo[i].pts;
+            if (r.entry && r.entry.id) ids.push(r.entry.id);
+          }
+          btn.disabled = false;
+          if (!ids.length && !pts && i === 0) return;
+          closeSheet();
+          await refreshDay();
+          var msg = i + " eingetragen · " + pts + " P";
+          if (ids.length) toastAction(msg, "Rückgängig", async function () {
+            for (var k = 0; k < ids.length; k++) {
+              var d = await guardWrite(function () { return API.data.diaryDel(ids[k]); });
+              if (!d) break;
+            }
+            await refreshDay(); toast("Entfernt.");
+          });
+          else toast(msg);
+        });
+      });
+  }
+
   function openMealTemplatesSheet() {
     var meal = mealFor(S.day);
     function listHTML() {
