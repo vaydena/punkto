@@ -2270,14 +2270,59 @@
         : (nf.vegetarian ? ' <span class="diet-tag" title="Vegetarisch">🥕</span>' : '');
       var coinCls = pts === 0 ? "coin zero" : "coin";
       host._foods = host._foods || {}; host._foods[i] = f;
-      return '<button class="food-item" data-fi="' + i + '">' +
+      return '<div class="food-row"><button class="food-item" data-fi="' + i + '">' +
         (nf.photo_url ? '<img class="food-thumb" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
         '<div class="info"><div class="nm">' + esc(nf.name) + '</div><div class="meta">' + esc(meta) + dietMark + '</div></div>' +
-        '<span class="' + coinCls + '">' + pts + '</span></button>';
+        '<span class="' + coinCls + '">' + pts + '</span></button>' +
+        '<button class="fi-add" data-qa="' + i + '" aria-label="' + esc(nf.name) + ' direkt eintragen">+</button></div>';
     }).join("");
     $$(".food-item", host).forEach(function (b) {
       b.addEventListener("click", function () { openFoodDetail(host._foods[+b.dataset.fi], preMeal); });
     });
+    $$(".fi-add", host).forEach(function (b) {
+      b.addEventListener("click", function () { quickAddFood(host._foods[+b.dataset.qa], preMeal, b); });
+    });
+  }
+
+  /* Tagebuch-Eintrag aus einem (normalisierten) Lebensmittel bauen. `v` ist die
+     Menge in der Eingabe-Einheit: Portionen, Stück (Zähleinheit) oder g/ml. */
+  function foodMode(nf) {
+    var portionMode = (nf.points != null && !nf.kcal);
+    return { portion: portionMode, count: !portionMode && isCountUnit(nf.unit) };
+  }
+  function buildFoodEntry(nf, v, meal, pts) {
+    var md = foodMode(nf);
+    var entry = {
+      name: nf.name, meal: meal, points: pts, source: nf.source || (nf.id && String(nf.id).indexOf("off-") === 0 ? "openfoodfacts" : "db"),
+      ref_code: nf.barcode || String(nf.id || "")
+    };
+    if (md.portion) { entry.qty = v; entry.unit = "Portion"; entry.kcal = 0; }
+    else if (md.count) { entry.qty = v; entry.unit = nf.unit; entry.kcal = Math.round((nf.kcal || 0) * v); }
+    else { entry.qty = v; entry.unit = nf.unit || "g"; entry.kcal = Math.round((nf.kcal || 0) * v / (nf.base_g || 100)); }
+    entry.day = S.day;   // Tag immer explizit (nie implizit „heute")
+    return entry;
+  }
+  /* „+" in der Trefferliste: Standardmenge (1 Portion/1 Stück/Basismenge) direkt
+     eintragen, Sheet bleibt offen (mehrere Dinge nacheinander), mit Rückgängig. */
+  async function quickAddFood(food, preMeal, btn) {
+    var nf = normFood(food), md = foodMode(nf);
+    var v = (md.portion || md.count) ? 1 : (nf.base_g || 100);
+    var pts = nf.free ? 0 : (md.portion ? Math.max(0, Math.round(nf.points || 0)) : PK.pointsForAmount(nf, md.count ? v * nf.base_g : v));
+    var entry = buildFoodEntry(nf, v, preMeal || mealFor(S.day), pts);
+    if (btn) btn.disabled = true;
+    var r = await guardWrite(function () { return API.data.diaryAdd(entry); });
+    if (btn) btn.disabled = false;
+    if (!r) return;
+    pushRecent(food);
+    if (btn) { btn.classList.add("done"); setTimeout(function () { btn.classList.remove("done"); }, 900); }
+    await refreshDay();
+    var id = r.entry && r.entry.id;
+    var label = nf.name + " · " + pts + " P";
+    if (id) toastAction("Hinzugefügt: " + label, "Rückgängig", async function () {
+      var d = await guardWrite(function () { return API.data.diaryDel(id); });
+      if (d) { await refreshDay(); toast("Entfernt."); }
+    });
+    else toast("Hinzugefügt: " + label);
   }
 
   /* ---------------------- FOOD-DETAIL (Menge + Mahlzeit) ---------------------- */
@@ -2379,14 +2424,7 @@
           var v = parseFloat(amtEl.value) || 0;
           if (v <= 0) return toast("Bitte eine Menge größer 0 eingeben.");
           var pts = recalc();
-          var entry = {
-            name: nf.name, meal: meal, points: pts, source: nf.source || (nf.id && String(nf.id).indexOf("off-") === 0 ? "openfoodfacts" : "db"),
-            ref_code: nf.barcode || String(nf.id || "")
-          };
-          if (portionMode) { entry.qty = v; entry.unit = "Portion"; entry.kcal = 0; }
-          else if (countMode) { entry.qty = v; entry.unit = nf.unit; entry.kcal = Math.round((nf.kcal || 0) * v); }
-          else { entry.qty = v; entry.unit = nf.unit || "g"; entry.kcal = Math.round((nf.kcal || 0) * v / (nf.base_g || 100)); }
-          entry.day = S.day;   // Tag immer explizit (nie implizit „heute")
+          var entry = buildFoodEntry(nf, v, meal, pts);
           var btn = this; btn.disabled = true;
           var r = await guardWrite(function () { return API.data.diaryAdd(entry); });
           if (r) { pushRecent(food); closeSheet(); await refreshDay(); toast("Hinzugefügt · " + pts + " P"); }
