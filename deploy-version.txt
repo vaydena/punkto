@@ -1,5 +1,9 @@
-pk-v50-e3a8
+pk-v51-d4f2
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v51-d4f2: DESIGN: Dunkelmodus (folgt System); besserer Kontrast der grünen Buttons (WCAG AA);
+          größere Tippflächen (Tagesnavigation, Bearbeiten/Löschen, Tabbar-Beschriftung, kleine
+          Buttons); Hinzufügen-Sheet: Suchen/Scannen groß, Rest kompakt unter „Mehr";
+          Fix „Tagesbudget26" ohne Abstand auf dem Handy. SW-CACHE pk-app-v46.
 v50-e3a8: REVIEW-FIXES: 401 beim Schreiben -> Neuanmeldung; Tageswechsel um Mitternacht; Kontowechsel
           leert lokales Tagebuch; Logout mit Outbox-Prüfung; Sync-Flush ohne Hänger; Backup-Import
           wird synchronisiert und validiert; Stück-/Portions-Einheiten korrekt (Schritt 0,5, kcal);

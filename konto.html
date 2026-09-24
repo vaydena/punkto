@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0fa958">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="light dark">
 <title>Punkto — Zugang & Zahlung</title>
 
 <!-- Direktstart / beforeinstallprompt früh abfangen (Kern-Lehre 1): das Event
@@ -67,7 +67,7 @@
 
   /* Zahl-Wege Umschalter */
   .pay-seg{display:flex;gap:8px;margin:2px 0 18px}
-  .pay-seg button{flex:1;background:#fff;border:1.6px solid var(--line);border-radius:var(--r);padding:.7em .6em;
+  .pay-seg button{flex:1;background:var(--field);color:var(--ink);border:1.6px solid var(--line);border-radius:var(--r);padding:.7em .6em;
     font-weight:700;font-size:.95rem;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;
     justify-content:center;gap:.5em;transition:all .12s ease}
   .pay-seg button svg{width:1.15em;height:1.15em}
@@ -75,7 +75,7 @@
   .plan-seg{margin-bottom:12px}
   .plan-seg button{flex-direction:column;gap:.2em;line-height:1.15}
   .plan-save{font-size:.72rem;font-weight:800;color:var(--green-800);background:var(--green-tint);border-radius:999px;padding:.12em .6em}
-  .plan-seg button.on .plan-save{background:#fff}
+  .plan-seg button.on .plan-save{background:var(--field)}
 
   /* Kopier-Zeilen */
   .pay-row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
@@ -84,7 +84,7 @@
   .pay-row .pr-lbl{display:block;font-size:.76rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
   .pay-row .pr-val{display:block;font-size:1.02rem;font-weight:700;color:var(--ink);word-break:break-word}
   .pay-row .pr-val.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.01em}
-  .pr-copy{flex:0 0 auto;background:#fff;border:1.6px solid var(--line);border-radius:var(--r-pill);
+  .pr-copy{flex:0 0 auto;background:var(--field);color:var(--ink);border:1.6px solid var(--line);border-radius:var(--r-pill);
     width:40px;height:40px;display:grid;place-items:center;cursor:pointer;color:var(--green-700)}
   .pr-copy:hover{background:var(--green-tint);border-color:var(--green-tint-2)}
   .pr-copy svg{width:19px;height:19px}

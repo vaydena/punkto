@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0fa958">
-<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#0fa958" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1612" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
 <title>Punkto — Meine App</title>
 
 <!-- Direktstart / beforeinstallprompt früh abfangen (Kern-Lehre 1): das Event
@@ -49,13 +50,13 @@
   /* Zugangs-/Trial-Banner oben in der App */
   .access-banner{border-radius:var(--r);padding:.7em 1em;margin-bottom:14px;font-size:.9rem;font-weight:600;
     display:flex;align-items:center;gap:.6em;flex-wrap:wrap}
-  .access-banner.warn{background:var(--amber-tint);color:#8a5c05}
+  .access-banner.warn{background:var(--amber-tint);color:var(--amber-ink)}
   .access-banner.err{background:var(--danger-tint);color:var(--danger)}
   .access-banner .btn{margin-left:auto}
 
   /* Tages-Navigation */
   .day-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
-  .day-nav button{background:#fff;border:1.6px solid var(--line);width:38px;height:38px;border-radius:var(--r-pill);
+  .day-nav button{background:var(--field);color:var(--ink);border:1.6px solid var(--line);width:44px;height:44px;border-radius:var(--r-pill);
     display:grid;place-items:center;cursor:pointer;color:var(--ink-2)}
   .day-nav button:disabled{opacity:.4;cursor:not-allowed}
   .day-nav .lbl{font-weight:800;font-size:1.05rem}
@@ -65,7 +66,7 @@
 
   /* Amount-Stepper im Food-Detail */
   .stepper{display:flex;align-items:center;gap:0}
-  .stepper button{width:44px;height:46px;border:1.6px solid var(--line);background:#fff;font-size:1.4rem;cursor:pointer;
+  .stepper button{width:44px;height:46px;border:1.6px solid var(--line);background:var(--field);color:var(--ink);font-size:1.4rem;cursor:pointer;
     color:var(--green-700);flex:0 0 auto}
   .stepper button:first-child{border-radius:var(--r) 0 0 var(--r)}
   .stepper button:last-child{border-radius:0 var(--r) var(--r) 0}
@@ -98,10 +99,18 @@
   .quick-act.z .qi{background:#fdeede;color:#c67d1e}
   .quick-act.r .qi{background:#e6f4ea;color:var(--green-700)}
   .quick-act.n .qi{background:#e2f6f2;color:#0d9488}
+  .quick-grid:not(.quick-list) .quick-act{padding:22px 10px;font-size:1.02rem}
+  .quick-grid:not(.quick-list) .quick-act .qi{width:52px;height:52px}
+  .qs-label{font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:14px 2px 8px}
+  .quick-list{gap:8px}
+  .quick-list .quick-act{flex-direction:row;justify-content:flex-start;text-align:left;gap:10px;padding:8px 10px;
+    min-height:52px;font-size:.9rem;line-height:1.2}
+  .quick-list .quick-act .qi{width:36px;height:36px;flex:0 0 36px;border-radius:10px}
+  .quick-list .quick-act .qi svg{width:20px;height:20px}
 
   /* Punkte-Rechner (Taschenrechner-Sheet). Eingaben sind echte Inputs mit
      inputmode="none": Bildschirmtastatur bleibt zu, Hardware-Tastatur tippt. */
-  .calc-disp{background:var(--green-800);color:#fff;border-radius:var(--r);padding:12px 16px;margin-bottom:12px;text-align:right}
+  .calc-disp{background:var(--deep-2);color:#fff;border-radius:var(--r);padding:12px 16px;margin-bottom:12px;text-align:right}
   .calc-disp .sub{font-size:.82rem;opacity:.78;min-height:1.2em;font-variant-numeric:tabular-nums}
   .calc-disp .main{font-size:2.3rem;font-weight:900;line-height:1.15;font-variant-numeric:tabular-nums}
   .calc-disp .main .cu{font-size:1rem;font-weight:700;opacity:.85;margin-left:.4em}
@@ -124,7 +133,7 @@
     font-size:1.25rem;font-weight:800;color:var(--ink);cursor:pointer;display:grid;place-items:center;padding:0}
   .calc-key:active{transform:scale(.96)}
   .calc-key.fn{background:var(--green-tint);color:var(--green-800);font-size:1.05rem}
-  .calc-key.next{grid-row:span 2;height:auto;background:var(--green);border-color:var(--green);color:#fff}
+  .calc-key.next{grid-row:span 2;height:auto;background:var(--deep);border-color:var(--deep);color:#fff}
   .calc-key.zero{grid-column:span 2}
   /* Nährstoffrechner (zweiter Scanner): Foto-Aufnahme-Kopf über der Rechner-Optik. */
   .ns-cap{display:flex;align-items:center;gap:10px;background:var(--green-tint);border:1px solid var(--green-tint-2);
@@ -176,7 +185,7 @@
   .cp-pick.off{opacity:.45}
   /* Portions-Warnung im Detail-Sheet: nur bei „formelfreien" Lebensmitteln, die
      erst in großer Menge Punkte bekommen (per .show umgeschaltet – nie via [hidden]). */
-  .free-warn{display:none;background:var(--amber-tint);color:#8a5c05;border-radius:12px;
+  .free-warn{display:none;background:var(--amber-tint);color:var(--amber-ink);border-radius:12px;
     padding:.7em .9em;font-size:.86rem;line-height:1.4;margin:0 0 12px}
   .free-warn.show{display:block}
 
@@ -208,7 +217,7 @@
   .fav-line .fs{flex:0 0 auto;display:inline-flex}
   .fav-line .fs svg{width:20px;height:20px;display:block}
   .fav-line .fs path{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
-  .fav-line.on{background:var(--amber-tint);border-color:#f1c879;color:#8a5c05}
+  .fav-line.on{background:var(--amber-tint);border-color:#f1c879;color:var(--amber-ink)}
   .fav-line.on .fs path{fill:var(--amber);stroke:var(--amber-600)}
 
   .qf-strip-wrap{margin:0 0 14px}
@@ -264,7 +273,7 @@
   #pkInstall .tx{flex:1;min-width:0}
   #pkInstall .tx b{display:block;font-size:.92rem}
   #pkInstall .tx span{font-size:.8rem;color:var(--muted)}
-  #pkInstall .x{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;flex:0 0 auto}
+  #pkInstall .x{background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;flex:0 0 auto;min-width:40px;min-height:40px;display:grid;place-items:center}
   #pkInstall .btn{flex:0 0 auto}
   @media(max-width:420px){#pkInstall .tx span{display:none}}
   #pkInstall .pp{margin:10px 0 0;padding:9px 11px;background:var(--green-tint-2);border-radius:12px;
@@ -310,7 +319,7 @@
   /* „Barcode aus Foto lesen": erst sichtbar, wenn ein Foto anliegt; grüner Akzent
      hebt die Lese-Aktion von den (dunklen) Ersetzen-Buttons ab. */
   .cap-read{display:none}
-  .cap-tile.has .cap-read{display:grid;background:var(--green-700);color:#fff}
+  .cap-tile.has .cap-read{display:grid;background:var(--deep);color:#fff}
   .cap-btn.busy{opacity:.5;pointer-events:none}
   #cpBarcode.flash{box-shadow:0 0 0 3px var(--green-tint-2);border-color:var(--green)}
   .cap-tile .ck{position:absolute;top:5px;right:5px;width:19px;height:19px;border-radius:50%;background:var(--green);
@@ -379,7 +388,7 @@
   .diet-badges{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 12px}
   .diet-badge{display:inline-flex;align-items:center;gap:.35em;font-size:.78rem;font-weight:700;
     padding:.2em .7em;border-radius:var(--r-pill);line-height:1.4}
-  .diet-badge.vegan{background:var(--green-700);color:#fff}
+  .diet-badge.vegan{background:var(--deep);color:#fff}
   .diet-badge.vegetarian{background:var(--green-tint-2);color:var(--green-800)}
   /* Kompakter Marker in der Ergebnisliste (nur vegan, damit die Zeile ruhig bleibt). */
   .diet-tag{color:var(--green-700);font-weight:700}
@@ -415,7 +424,7 @@
   .off-src{color:var(--green-800);font-size:.78rem;margin-top:10px}
 
   /* Offline-Hinweis oben in der App */
-  .offline-banner{background:#eef3ef;color:var(--ink-2);border-radius:var(--r);padding:.6em 1em;margin-bottom:14px;
+  .offline-banner{background:var(--line-2);color:var(--ink-2);border-radius:var(--r);padding:.6em 1em;margin-bottom:14px;
     font-size:.86rem;font-weight:600;display:flex;align-items:center;gap:.5em}
   .offline-banner .dot{width:8px;height:8px;border-radius:50%;background:var(--amber-600);flex:0 0 auto}
 
@@ -1939,6 +1948,7 @@
       '<div class="quick-grid">' +
       '<button class="quick-act" data-q="search"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg></span>Essen suchen</button>' +
       '<button class="quick-act a" data-q="barcode"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg></span>Barcode scannen</button>' +
+      '</div><div class="qs-label">Mehr</div><div class="quick-grid quick-list">' +
       '<button class="quick-act n" data-q="nutriscan"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2"/><path d="M8 9h8M8 12h8M8 15h5"/></svg></span>Nährstoffrechner</button>' +
       '<button class="quick-act" data-q="free"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a1.8 1.8 0 0 1-2.55 0l-7.6-7.6A2 2 0 0 1 2.7 11.6V4.5a1.8 1.8 0 0 1 1.8-1.8h7.1a2 2 0 0 1 1.4.6l7.6 7.6a1.8 1.8 0 0 1 0 2.5z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg></span>0 Punkte</button>' +
       '<button class="quick-act z" data-q="copyday"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>Tag kopieren</button>' +
