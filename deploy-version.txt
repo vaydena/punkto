@@ -1,5 +1,10 @@
-pk-v49-c7d1
+pk-v50-e3a8
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v50-e3a8: REVIEW-FIXES: 401 beim Schreiben -> Neuanmeldung; Tageswechsel um Mitternacht; Kontowechsel
+          leert lokales Tagebuch; Logout mit Outbox-Prüfung; Sync-Flush ohne Hänger; Backup-Import
+          wird synchronisiert und validiert; Stück-/Portions-Einheiten korrekt (Schritt 0,5, kcal);
+          Rückgängig beim Löschen; Gewichtskurve mit Trendlinie, Zeitraum 30/90/alle; Zoom erlaubt;
+          SW-Update ohne Reload mitten im Formular; Texte „Kein Abo". SW-CACHE pk-app-v45.
 v49-c7d1: NÄHRWERT-SCANNER robuster: eine einzelne Fehllesung in der Wertespalte (z. B. „-6,8g"
           als „1689") verwirft nicht mehr die ganze Zuordnung; große Zahlen gelten nicht mehr
           pauschal als Fußnote, kcal wird immer übernommen, überzählige Zeilen werden toleriert.

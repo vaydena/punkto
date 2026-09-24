@@ -63,15 +63,24 @@
       };
     });
   }
+  /* Werte aus einer (fremden) Datei nie ungeprueft uebernehmen: nur endliche Zahlen. */
+  function safeNum(v) { var n = Number(v); return Number.isFinite(n) && n >= 0 ? n : 0; }
+  function safePts(v) {
+    if (v == null || v === "") return null;
+    var n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.max(0, Math.min(200, n)) : null;
+  }
+  function safeStr(v, n) { return String(v == null ? "" : v).slice(0, n); }
   function plainToProduct(p) {
+    p = p || {};
     var ph = p.photos || {};
     return {
-      barcode: p.barcode, name: p.name, brand: p.brand || "",
-      unit: p.unit || "g", base_g: p.base_g || 100,
-      kcal: p.kcal, sat_fat_g: p.sat_fat_g, sugar_g: p.sugar_g,
-      protein_g: p.protein_g, fiber_g: p.fiber_g,
-      free: !!p.free, source: p.source || "local", points: p.points,
-      vegan: !!p.vegan, vegetarian: !!p.vegetarian, bought_at: p.bought_at || "",
+      barcode: safeStr(p.barcode, 40), name: safeStr(p.name, 120), brand: safeStr(p.brand, 80),
+      unit: safeStr(p.unit || "g", 20), base_g: safeNum(p.base_g) || 100,
+      kcal: safeNum(p.kcal), sat_fat_g: safeNum(p.sat_fat_g), sugar_g: safeNum(p.sugar_g),
+      protein_g: safeNum(p.protein_g), fiber_g: safeNum(p.fiber_g),
+      free: !!p.free, source: safeStr(p.source || "local", 20), points: safePts(p.points),
+      vegan: !!p.vegan, vegetarian: !!p.vegetarian, bought_at: safeStr(p.bought_at, 80),
       created_at: p.created_at, updated_at: p.updated_at,
       photos: {
         product: dataURLToBlob(ph.product),
@@ -116,6 +125,7 @@
     }
     return {
       ok: true,
+      records: diaryRes.records || null,
       counts: {
         entries: diaryRes.counts.entries,
         weights: diaryRes.counts.weights,

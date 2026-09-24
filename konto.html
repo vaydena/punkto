@@ -2,10 +2,10 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0fa958">
 <meta name="color-scheme" content="light">
-<title>Punkto — Abo & Zahlung</title>
+<title>Punkto — Zugang & Zahlung</title>
 
 <!-- Direktstart / beforeinstallprompt früh abfangen (Kern-Lehre 1): das Event
      feuert nur EINMAL. Auch hier, falls die App direkt über das Icon landet. -->
@@ -152,7 +152,7 @@
         <rect x="1" y="1" width="32" height="32" rx="10" fill="#0fa958"/>
         <circle cx="17" cy="17" r="6.6" fill="#ffc555"/>
       </svg>
-      Abo &amp; Zahlung
+      Zugang &amp; Zahlung
     </span>
     <span class="sp"></span>
   </div>
@@ -334,7 +334,7 @@
       payRow("Betrag", fmtEuro(d.amount), (Number(d.amount) || 0).toFixed(2), false) +
       payRow("Verwendungszweck", d.reference, d.reference, false) +
       btn +
-      '<p style="color:var(--muted);font-size:.84rem;margin:16px 0 0">Wähle bei PayPal <b>„An Freunde &amp; Familie"</b>, wenn möglich — so kommt der volle Betrag an. Gib den Verwendungszweck genau so an.</p>' +
+      '<p style="color:var(--muted);font-size:.84rem;margin:16px 0 0">Gib den Verwendungszweck genau so an, damit wir die Zahlung deinem Konto zuordnen können. Als Waren-/Dienstleistungszahlung bist du über den PayPal-Käuferschutz abgesichert.</p>' +
       '</div>';
   }
 

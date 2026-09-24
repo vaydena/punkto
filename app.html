@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0fa958">
 <meta name="color-scheme" content="light">
 <title>Punkto — Meine App</title>
@@ -423,6 +423,8 @@
     background:var(--ink);color:#fff;padding:.7em 1.2em;border-radius:var(--r-pill);font-size:.9rem;font-weight:600;
     z-index:60;opacity:0;transition:all .25s ease;pointer-events:none;box-shadow:var(--shadow-lg);max-width:90vw}
   .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.act{pointer-events:auto;display:flex;align-items:center;gap:14px}
+  .toast .tact{background:none;border:0;color:#9be7bd;font:inherit;font-weight:800;padding:10px 4px;margin:-10px 0;cursor:pointer}
 </style>
 </head>
 
@@ -604,6 +606,9 @@
         <div class="card-h"><h3>Gewichtsverlauf</h3>
           <button class="btn ghost small" id="btnAddWeight">Gewicht eintragen</button>
         </div>
+        <div class="seg small" id="weightRange" role="group" aria-label="Zeitraum">
+          <button data-r="30">30 Tage</button><button data-r="90" class="on">90 Tage</button><button data-r="all">Alles</button>
+        </div>
         <div class="chart-wrap" id="weightChart"></div>
       </div>
 
@@ -780,8 +785,18 @@
     });
   }
   function toast(msg) {
-    var t = $("#toast"); t.textContent = msg; t.classList.add("on");
+    var t = $("#toast"); t.textContent = msg; t.classList.remove("act"); t.classList.add("on");
+    t.setAttribute("role", "status");
     clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove("on"); }, 2200);
+  }
+  /* Toast mit Aktion (z. B. „Rückgängig") — bleibt 6 s stehen. */
+  function toastAction(msg, label, fn) {
+    var t = $("#toast"); t.innerHTML = ""; t.classList.add("on", "act");
+    var sp = document.createElement("span"); sp.textContent = msg; t.appendChild(sp);
+    var b = document.createElement("button"); b.type = "button"; b.className = "tact"; b.textContent = label;
+    b.addEventListener("click", function () { clearTimeout(t._t); t.classList.remove("on", "act"); fn(); });
+    t.appendChild(b);
+    clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove("on", "act"); }, 6000);
   }
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
   function isoOf(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
@@ -794,6 +809,7 @@
     var wd = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][d.getDay()];
     return wd + ", " + d.getDate() + "." + (d.getMonth() + 1) + ".";
   }
+  function fmtShortDate(iso) { var d = parseISO(iso); return d.getDate() + "." + (d.getMonth() + 1) + "." + d.getFullYear(); }
   function fmtLongDate(iso) {
     var d = parseISO(iso);
     var wd = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"][d.getDay()];
@@ -802,6 +818,17 @@
   }
 
   /* Normalisiert ein Food (lokal / eigenes / Barcode) auf ein einheitliches Schema. */
+  /* Zähl-Einheiten (Stück, Scheibe, EL …): base_g ist das Gewicht EINER Einheit. */
+  function isCountUnit(u) { return !!u && !/^(g|ml)$/i.test(String(u).trim()); }
+  function fmtNum(n, d) {
+    var x = Number(n); if (!Number.isFinite(x)) return "";
+    return x.toLocaleString("de-DE", { maximumFractionDigits: d == null ? 1 : d });
+  }
+
+  function perLabel(f) {
+    return isCountUnit(f.unit) ? "je 1 " + f.unit + " (" + fmtNum(f.base_g) + " g)" : "je " + fmtNum(f.base_g) + " " + (f.unit || "g");
+  }
+
   function normFood(f) {
     var base = f.base_g;
     if (!base && f.per) { var m = String(f.per).match(/([\d.]+)/); base = m ? parseFloat(m[1]) : 100; }
@@ -869,7 +896,7 @@
     try { return await fn(); }
     catch (e) {
       if (isNoAccess(e)) { if (e.data && e.data.subscription) S.sub = e.data.subscription; renderAccessBanner(); openPaywall(); return null; }
-      if (e.status === 401) { location.replace("anmelden.html?reset=1"); return null; }
+      if (e.status === 401) { API.clearToken(); location.replace("anmelden.html"); return null; }
       // Offline: Schreiben (Tagebuch/Profil) braucht das Netz — freundlich abfangen statt roter Fehler.
       if (e.code === "network") { S.offline = true; toast("Dafür brauchst du eine Internetverbindung."); return null; }
       toast(humanErr(e)); throw e;
@@ -882,6 +909,11 @@
     { key: "dinner", label: "Abend", em: "🍽️" },
     { key: "snack", label: "Snacks", em: "🍎" }
   ];
+  /* Unbekannte/alte Mahlzeit-Schlüssel („other") landen wie in der Tagesansicht bei Snacks. */
+  function mealKeyOf(e) {
+    var k = e && e.meal;
+    return MEALS.some(function (m) { return m.key === k; }) ? k : "snack";
+  }
   function mealFor(iso) {
     if (iso !== S.today) return "snack";
     var h = new Date().getHours();
@@ -903,7 +935,9 @@
          Änderungen) frisch geholt; offline greift der zuletzt gesicherte Stand.
      opts.account=true erzwingt das Nachladen der Kontobits vom Server. */
   async function loadState(day, opts) {
-    if (!S.today) S.today = PKDiary.today();
+    // „heute" bei jedem Laden ohne festen Tag frisch bestimmen: sonst bleibt die über
+    // Nacht im Hintergrund liegende App auf dem Vortag stehen.
+    if (!S.today || day == null) S.today = PKDiary.today();
     var forceAccount = !!(opts && opts.account);
     var localDay = day || S.today;
     var haveAccount = !!(S.data && S.user);
@@ -1069,6 +1103,10 @@
       return;
     }
 
+    // Gehört das lokale Tagebuch zu einem anderen Konto (Kontowechsel auf demselben
+    // Gerät)? Dann vor der Anzeige leeren — nie fremde Einträge zeigen/hochladen.
+    try { if (await ensureDiaryOwner()) await loadState(undefined); } catch (e) { /* best effort */ }
+
     $("#loading").hidden = true;
     if (!S.user.onboarded) { startOnboarding(); }
     else { showApp(); if (S.offline) toast("Offline — deine Einträge werden lokal gespeichert."); }
@@ -1080,6 +1118,29 @@
     // Änderungen hoch, dann fremde Änderungen herunter. Läuft im Hintergrund und ist
     // in sich abgesichert (eingeloggt/online, Reentrancy-Sperren, Delta-Cursor, fail-open).
     syncKick();
+  }
+
+  /* Lokales Tagebuch an ein Konto binden. Liefert true, wenn geleert wurde.
+     Bestandsgeräte ohne Besitzer-Vermerk werden dem aktuellen Konto zugeordnet. */
+  var OWNER_KEY = "pk_diary_owner";
+  async function ensureDiaryOwner() {
+    var uid = S.user && S.user.id ? String(S.user.id) : "";
+    if (!uid) return false;
+    var owner = "";
+    try { owner = localStorage.getItem(OWNER_KEY) || ""; } catch (e) { return false; }
+    if (owner === uid) return false;
+    if (!owner) { try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {} return false; }
+    await PKDiary.wipeAll();
+    resetSyncMarks(uid);
+    try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {}
+    return true;
+  }
+  /* Sync-Cursor zurücksetzen -> der nächste Abgleich holt die ganze Server-Historie. */
+  function resetSyncMarks(uid) {
+    try {
+      localStorage.removeItem("pk_sync_cursor_" + uid);
+      localStorage.removeItem("pk_sync_backfill_v1_" + uid);
+    } catch (e) { /* egal */ }
   }
 
   /* Wieder online: nur den frisch signierten Abo-Token nachladen (leicht, kein
@@ -1121,8 +1182,21 @@
   window.addEventListener("online", function () { syncKick(); });
   // Tab/App wieder sichtbar (z. B. aus dem Hintergrund geholt) -> Änderungen abgleichen.
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible") syncKick();
+    if (document.visibilityState === "visible") { checkDayRollover(); syncKick(); }
   });
+  /* Tageswechsel erkennen (App lag über Mitternacht offen/im Hintergrund): stand
+     die Ansicht auf dem alten „heute", springt sie auf den neuen Tag. */
+  function checkDayRollover() {
+    try {
+      if (!(S.user && S.user.onboarded) || !S.today) return;
+      var now = PKDiary.today();
+      if (now === S.today) return;
+      var wasToday = (S.day === S.today);
+      S.today = now;
+      if (wasToday) gotoDay(now); else { renderToday(); }
+    } catch (e) { /* best effort */ }
+  }
+  setInterval(checkDayRollover, 60000);
   // Fremde Änderungen wurden lokal eingespielt -> aktuelle Tagesansicht auffrischen.
   // loadState(S.day) liest hier rein LOKAL (vorhandene Kontobits, kein Netz, kein Loop),
   // renderAll() zeichnet neu. Nur wenn die App schon läuft (onboarded).
@@ -1362,7 +1436,7 @@
   function qfRowHTML(f, idx, ns) {
     var nf = normFood(f);
     var pts = nf.free ? 0 : (nf.points != null && !nf.kcal ? nf.points : PK.pointsFor(nf));
-    var meta = (nf.cat ? nf.cat + " · " : "") + "je " + nf.base_g + " " + (nf.unit || "g");
+    var meta = (nf.cat ? nf.cat + " · " : "") + perLabel(nf);
     var coinCls = pts === 0 ? "coin zero sm" : "coin sm";
     var fav = isFav(nf);
     return '<div class="qf-item">' +
@@ -1601,12 +1675,17 @@
     }
   }
 
+  /* Ein einziger Ort für das Tagesbudget (vorher zwei unterschiedliche Fallbacks). */
+  function currentBudget() {
+    return +S.user.daily_budget || PK.dailyBudget(profileFromUser()) || 23;
+  }
+
   /* ---------------------- MEIN TAG ---------------------- */
   var RING_CIRC = 2 * Math.PI * 52;
 
   function renderToday() {
     var d = S.data;
-    var budget = +S.user.daily_budget || PK.dailyBudget(profileFromUser()) || 23;
+    var budget = currentBudget();
     var weekly = +S.user.weekly_extra || PK.weeklyExtra(budget);
     var eaten = PK.sumPoints(d.diary);
     var actBonus = (d.activity || []).reduce(function (s, a) { return s + (+a.bonus_points || 0); }, 0);
@@ -1621,8 +1700,8 @@
     var fill = $("#ringFill");
     fill.setAttribute("stroke-dashoffset", (RING_CIRC * (1 - frac)).toFixed(1));
     fill.setAttribute("stroke", remain < 0 ? "#ffd27a" : "#fff");
-    $("#ringRemain").textContent = remain;
-    $("#ringLbl").textContent = remain < 0 ? "Punkte drüber" : (remain === 1 ? "Punkt übrig" : "Punkte übrig");
+    $("#ringRemain").textContent = Math.abs(remain);
+    $("#ringLbl").textContent = remain < 0 ? (remain === -1 ? "Punkt drüber" : "Punkte drüber") : (remain === 1 ? "Punkt übrig" : "Punkte übrig");
 
     $("#metaBudget").textContent = budget;
     $("#metaEaten").textContent = eaten;
@@ -1630,18 +1709,19 @@
 
     // Wochenextra: aufgelaufene Überschreitungen der Woche ziehen daraus.
     var overflow = 0;
-    (d.week || []).forEach(function (w) { var over = (+w.points || 0) - budget; if (over > 0) overflow += over; });
+    // Nur Tage bis einschließlich des angezeigten Tages (keine Einträge aus der Zukunft).
+    (d.week || []).forEach(function (w) { if (w.day > S.day) return; var over = (+w.points || 0) - budget; if (over > 0) overflow += over; });
     var bonusWeek = (d.week_bonus || []).reduce(function (s, w) { return s + (+w.bonus || 0); }, 0);
     var pool = weekly + bonusWeek;
     var usedPct = pool > 0 ? PK.clamp((overflow / pool) * 100, 0, 100) : 0;
     $("#weeklyFill").style.width = usedPct + "%";
-    $("#weeklyLbl").textContent = Math.min(overflow, pool) + " / " + pool;
+    $("#weeklyLbl").textContent = "noch " + Math.max(0, pool - overflow) + " von " + pool + (overflow > pool ? " · " + (overflow - pool) + " drüber" : "");
 
     // Mahlzeiten
     var host = $("#mealGroups"); host.innerHTML = "";
     var byMeal = {}; MEALS.forEach(function (m) { byMeal[m.key] = []; });
     (d.diary || []).forEach(function (e) {
-      var k = e.meal || "other"; if (!byMeal[k]) k = "snack"; byMeal[k].push(e);
+      byMeal[mealKeyOf(e)].push(e);
     });
     var anyEntry = (d.diary || []).length > 0;
 
@@ -1651,8 +1731,8 @@
       var g = document.createElement("div"); g.className = "meal-group";
       var rows = items.map(function (e) {
         var qt = [];
-        if (e.qty && e.unit) qt.push(esc(e.qty + " " + e.unit));
-        else if (e.qty && e.qty !== 1) qt.push(esc(e.qty + "×"));
+        if (e.qty && e.unit) qt.push(esc(fmtNum(e.qty) + " " + e.unit));
+        else if (e.qty && e.qty !== 1) qt.push(esc(fmtNum(e.qty) + "×"));
         if (e.kcal) qt.push(esc(e.kcal) + " kcal");
         var coinCls = (+e.points === 0) ? "coin sm zero" : "coin sm";
         return '<div class="entry" data-id="' + esc(e.id) + '">' +
@@ -1702,16 +1782,16 @@
 
     var sg = $("#statGrid");
     sg.innerHTML =
-      '<div class="stat"><div class="v">' + (cur ? cur.toFixed(1) : "–") + '</div><div class="l">kg aktuell</div></div>' +
+      '<div class="stat"><div class="v">' + (cur ? fmtKg(cur) : "–") + '</div><div class="l">kg aktuell</div></div>' +
       '<div class="stat"><div class="v" style="color:' + (diff <= 0 ? "var(--green-700)" : "var(--berry)") + '">' +
-        (diff > 0 ? "+" : "") + diff.toFixed(1) + '</div><div class="l">kg seit Start</div></div>' +
+        (diff > 0 ? "+" : "") + fmtKg(diff) + '</div><div class="l">kg seit Start</div></div>' +
       '<div class="stat"><div class="v" style="color:var(--amber-600)">' +
-        (goal ? (toGoal > 0 ? toGoal.toFixed(1) : "0") : "–") + '</div><div class="l">kg bis Ziel</div></div>';
+        (goal ? (toGoal > 0 ? fmtKg(toGoal) : "0") : "–") + '</div><div class="l">kg bis Ziel</div></div>';
 
     $("#weightChart").innerHTML = weightChartSVG(weights, start, goal);
 
     // Wochen-Zusammenfassung
-    var budget = +S.user.daily_budget || 23;
+    var budget = currentBudget();
     var week = d.week || [];
     var totalWeek = week.reduce(function (s, w) { return s + (+w.points || 0); }, 0);
     var daysLogged = week.filter(function (w) { return (+w.points || 0) > 0; }).length;
@@ -1745,56 +1825,92 @@
     }).join("");
   }
 
+  function fmtKg(v) { return fmtNum(Math.round(v * 10) / 10, 1); }
+  function dayNum(day) { var p = String(day).split("-"); return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 864e5; }
+
+  /* Gleitender Trend: Mittel aller Messungen der letzten 7 Kalendertage
+     (glättet Wasser-Schwankungen, ehrlicher als die Rohkurve). */
+  function weightTrend(pts) {
+    return pts.map(function (p, i) {
+      var d0 = dayNum(p.day), sum = 0, n = 0;
+      for (var k = i; k >= 0 && d0 - dayNum(pts[k].day) < 7; k--) { sum += +pts[k].weight_kg; n++; }
+      return { day: p.day, v: sum / n };
+    });
+  }
+
   function weightChartSVG(weights, start, goal) {
     if (!weights || weights.length < 1) {
       return '<div class="list-empty" style="padding-top:70px">Noch keine Gewichtsdaten.<br>Trag oben dein Gewicht ein.</div>';
     }
-    var W = 600, H = 210, padL = 34, padR = 12, padT = 14, padB = 24;
-    var pts = weights.slice(-30);
+    var range = S.weightRange || 90;
+    var all = weights.filter(function (p) { return +p.weight_kg > 0; });
+    var trendAll = weightTrend(all);
+    var lastDay = all.length ? dayNum(all[all.length - 1].day) : 0;
+    var from = range === "all" ? -Infinity : lastDay - range + 1;
+    var pts = [], trend = [];
+    all.forEach(function (p, i) { if (dayNum(p.day) >= from) { pts.push(p); trend.push(trendAll[i]); } });
+    if (!pts.length) { pts = all.slice(-1); trend = trendAll.slice(-1); }
+
+    var W = 600, H = 230, padL = 40, padR = 14, padT = 16, padB = 28;
     var vals = pts.map(function (p) { return +p.weight_kg; });
     var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-    if (goal) { lo = Math.min(lo, goal); hi = Math.max(hi, goal); }
-    if (start) { hi = Math.max(hi, start); lo = Math.min(lo, start); }
-    var span = (hi - lo) || 1; lo -= span * 0.12; hi += span * 0.12; span = hi - lo;
-    var n = pts.length;
-    var x = function (i) { return padL + (n <= 1 ? (W - padL - padR) / 2 : i * (W - padL - padR) / (n - 1)); };
+    if (goal && goal >= lo - 5) { lo = Math.min(lo, goal); hi = Math.max(hi, goal); }
+    var span = (hi - lo) || 1; lo -= span * 0.15; hi += span * 0.15; span = hi - lo;
+    var d0 = dayNum(pts[0].day), d1 = dayNum(pts[pts.length - 1].day), dspan = (d1 - d0) || 1;
+    var single = pts.length === 1;
+    var x = function (day) { return single ? (padL + (W - padL - padR) / 2) : padL + (dayNum(day) - d0) / dspan * (W - padL - padR); };
     var y = function (v) { return padT + (1 - (v - lo) / span) * (H - padT - padB); };
 
-    var line = pts.map(function (p, i) { return (i ? "L" : "M") + x(i).toFixed(1) + " " + y(+p.weight_kg).toFixed(1); }).join(" ");
-    var area = line + " L" + x(n - 1).toFixed(1) + " " + (H - padB) + " L" + x(0).toFixed(1) + " " + (H - padB) + " Z";
-
-    var dots = pts.map(function (p, i) {
-      return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(+p.weight_kg).toFixed(1) + '" r="3" fill="#0fa958"/>';
+    var raw = pts.map(function (p, i) { return (i ? "L" : "M") + x(p.day).toFixed(1) + " " + y(+p.weight_kg).toFixed(1); }).join(" ");
+    var tl = trend.map(function (p, i) { return (i ? "L" : "M") + x(p.day).toFixed(1) + " " + y(p.v).toFixed(1); }).join(" ");
+    var area = tl + " L" + x(pts[pts.length - 1].day).toFixed(1) + " " + (H - padB) + " L" + x(pts[0].day).toFixed(1) + " " + (H - padB) + " Z";
+    var dots = pts.map(function (p) {
+      return '<circle cx="' + x(p.day).toFixed(1) + '" cy="' + y(+p.weight_kg).toFixed(1) + '" r="' + (pts.length > 60 ? 2 : 3) + '" class="wc-dot"><title>' +
+        esc(fmtShortDate(p.day) + ": " + fmtKg(+p.weight_kg) + " kg") + '</title></circle>';
     }).join("");
 
     var goalLine = "";
-    if (goal) {
+    if (goal && goal >= lo && goal <= hi) {
       var gy = y(goal).toFixed(1);
-      goalLine = '<line x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '" stroke="#e8557a" stroke-width="1.5" stroke-dasharray="5 4"/>' +
-        '<text x="' + (W - padR) + '" y="' + (+gy - 5) + '" text-anchor="end" font-size="11" fill="#e8557a" font-weight="700">Ziel ' + goal + '</text>';
+      goalLine = '<line x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '" class="wc-goal" stroke-dasharray="5 4"/>' +
+        '<text x="' + (W - padR) + '" y="' + (+gy - 5) + '" text-anchor="end" class="wc-goal-t">Ziel ' + fmtKg(goal) + '</text>';
     }
-    // y-Achsen-Beschriftung (3 Werte)
     var yAxis = "";
     [0, 0.5, 1].forEach(function (t) {
       var v = hi - t * span; var yy = y(v).toFixed(1);
-      yAxis += '<text x="4" y="' + (+yy + 4) + '" font-size="10" fill="#9aa8a0">' + v.toFixed(0) + '</text>' +
-        '<line x1="' + padL + '" y1="' + yy + '" x2="' + (W - padR) + '" y2="' + yy + '" stroke="#eef3ef" stroke-width="1"/>';
+      yAxis += '<text x="4" y="' + (+yy + 4) + '" class="wc-ax">' + fmtKg(v) + '</text>' +
+        '<line x1="' + padL + '" y1="' + yy + '" x2="' + (W - padR) + '" y2="' + yy + '" class="wc-grid"/>';
     });
+    var xAxis = "";
+    if (!single) {
+      [0, 0.5, 1].forEach(function (t, k) {
+        var dn = d0 + Math.round(t * dspan);
+        var dt = new Date(dn * 864e5);
+        var lbl = dt.getUTCDate() + "." + (dt.getUTCMonth() + 1) + ".";
+        xAxis += '<text x="' + (padL + t * (W - padL - padR)).toFixed(1) + '" y="' + (H - 8) + '" class="wc-ax" text-anchor="' + (k === 0 ? "start" : (k === 2 ? "end" : "middle")) + '">' + lbl + '</text>';
+      });
+    }
+    var tr = trend.length > 1 ? trend[trend.length - 1].v - trend[0].v : 0;
+    var caption = '<div class="wc-caption"><span><i class="wc-sw raw"></i>Messung</span><span><i class="wc-sw trend"></i>Trend (7 Tage)</span>' +
+      (trend.length > 1 ? '<b>' + (tr > 0 ? "+" : "") + fmtKg(tr) + ' kg im Zeitraum</b>' : '') + '</div>';
 
-    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Gewichtsverlauf">' +
       '<defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">' +
       '<stop offset="0" stop-color="#0fa958" stop-opacity=".22"/><stop offset="1" stop-color="#0fa958" stop-opacity="0"/>' +
       '</linearGradient></defs>' +
-      yAxis + goalLine +
+      yAxis + xAxis + goalLine +
       '<path d="' + area + '" fill="url(#wg)"/>' +
-      '<path d="' + line + '" fill="none" stroke="#0fa958" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-      dots + '</svg>';
+      '<path d="' + raw + '" class="wc-raw"/>' +
+      '<path d="' + tl + '" class="wc-trend"/>' +
+      dots + '</svg>' + caption;
   }
 
   /* ======================================================================
      SHEET-SYSTEM
      ====================================================================== */
+  var _sheetCloseT = null, _reloadPending = false;
   function openSheet(title, html, onMount) {
+    if (_sheetCloseT) { clearTimeout(_sheetCloseT); _sheetCloseT = null; }   // laufendes Schließen nicht das neue Sheet leeren lassen
     $("#sheetTitle").textContent = title;
     $("#sheetContent").innerHTML = html;
     var back = $("#sheetBack"); back.hidden = false; requestAnimationFrame(function () { back.classList.add("on"); });
@@ -1805,7 +1921,11 @@
     var back = $("#sheetBack"); back.classList.remove("on");
     stopCamera();
     if (S.pedometer) { S.pedometer.stop(); S.pedometer = null; }   // Schrittzähler-Listener abräumen
-    setTimeout(function () { back.hidden = true; $("#sheetContent").innerHTML = ""; }, 200);
+    if (_sheetCloseT) clearTimeout(_sheetCloseT);
+    _sheetCloseT = setTimeout(function () {
+      _sheetCloseT = null; back.hidden = true; $("#sheetContent").innerHTML = "";
+      if (_reloadPending) location.reload();   // aufgeschobenes Versions-Update
+    }, 200);
     document.body.style.overflow = "";
   }
   function stopCamera() {
@@ -2134,7 +2254,7 @@
     host.innerHTML = foods.slice(0, 40).map(function (f, i) {
       var nf = normFood(f);
       var pts = nf.free ? 0 : (nf.points != null && !nf.kcal ? nf.points : PK.pointsFor(nf));
-      var meta = (nf.cat ? nf.cat + " · " : "") + "je " + nf.base_g + " " + (nf.unit || "g");
+      var meta = (nf.cat ? nf.cat + " · " : "") + perLabel(nf);
       // Kompakter, POSITIVER Marker: 🌱 vegan, sonst 🥕 vegetarisch (nie „nicht vegan").
       var dietMark = nf.vegan ? ' <span class="diet-tag" title="Vegan">🌱</span>'
         : (nf.vegetarian ? ' <span class="diet-tag" title="Vegetarisch">🥕</span>' : '');
@@ -2158,7 +2278,10 @@
     var amount = nf.base_g;      // g bei Nährwert-Foods
     var portions = 1;            // Anzahl bei portionMode
 
-    var unitLabel = portionMode ? "Portion(en)" : (nf.unit || "g");
+    // Stück-/Scheiben-/EL-Einheiten: Eingabe in Anzahl, base_g = Gramm je Einheit.
+    var countMode = !portionMode && isCountUnit(nf.unit);
+    var step = portionMode ? 0.5 : (countMode ? 0.5 : 10);
+    var unitLabel = portionMode ? "Portion(en)" : (countMode ? nf.unit + (" · 1 = " + fmtNum(nf.base_g) + " g") : (nf.unit || "g"));
 
     openSheet(nf.name,
       (nf.photo_url ? '<img class="food-photo" src="' + esc(nf.photo_url) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
@@ -2184,12 +2307,14 @@
       '<label>Menge (' + esc(unitLabel) + ')</label>' +
       '<div class="stepper">' +
       '<button type="button" id="dMinus">−</button>' +
-      '<input type="number" id="dAmount" inputmode="decimal" value="' + (portionMode ? 1 : nf.base_g) + '" step="' + (portionMode ? 0.5 : 10) + '" min="0">' +
+      '<input type="number" id="dAmount" inputmode="decimal" value="' + ((portionMode || countMode) ? 1 : nf.base_g) + '" step="' + step + '" min="0">' +
       '<button type="button" id="dPlus">+</button>' +
       '</div>' +
       (portionMode ? '' :
         '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
-        [50, 100, 150, 200].map(function (g) { return '<button class="chip" data-preset="' + g + '">' + g + ' g</button>'; }).join("") +
+        (countMode ? [0.5, 1, 2, 3] : [50, 100, 150, 200]).map(function (g) {
+          return '<button class="chip" data-preset="' + g + '">' + (countMode ? fmtNum(g) + ' ' + esc(nf.unit) : g + ' ' + esc(nf.unit || "g")) + '</button>';
+        }).join("") +
         '</div>') +
       '<div class="detail-points" id="dPtsBox"><span class="coin" id="dPts">0</span><span id="dPtsLbl">Punkte für diese Menge</span></div>' +
       '<div class="free-warn" id="dFreeWarn">⚠️ Größere Mengen kosten hier Punkte – in üblicher Portion bleibt es bei 0.</div>' +
@@ -2212,7 +2337,8 @@
 
         function suggestFor(v) {
           if (portionMode) return Math.max(0, Math.round((nf.points || 0) * v));
-          return PK.pointsForAmount(nf, v);
+          if (v <= 0) return 0;
+          return PK.pointsForAmount(nf, countMode ? v * nf.base_g : v);
         }
         function recalc() {
           var pts = suggestFor(parseFloat(amtEl.value) || 0);
@@ -2223,10 +2349,10 @@
         }
         amtEl.addEventListener("input", recalc);
         $("#dMinus", root).addEventListener("click", function () {
-          amtEl.value = Math.max(0, (parseFloat(amtEl.value) || 0) - (portionMode ? 0.5 : 10)); recalc();
+          amtEl.value = Math.max(0, (parseFloat(amtEl.value) || 0) - step); recalc();
         });
         $("#dPlus", root).addEventListener("click", function () {
-          amtEl.value = (parseFloat(amtEl.value) || 0) + (portionMode ? 0.5 : 10); recalc();
+          amtEl.value = (parseFloat(amtEl.value) || 0) + step; recalc();
         });
         $$("[data-preset]", root).forEach(function (c) {
           c.addEventListener("click", function () { amtEl.value = c.dataset.preset; recalc(); });
@@ -2248,8 +2374,9 @@
             ref_code: nf.barcode || String(nf.id || "")
           };
           if (portionMode) { entry.qty = v; entry.unit = "Portion"; entry.kcal = 0; }
+          else if (countMode) { entry.qty = v; entry.unit = nf.unit; entry.kcal = Math.round((nf.kcal || 0) * v); }
           else { entry.qty = v; entry.unit = nf.unit || "g"; entry.kcal = Math.round((nf.kcal || 0) * v / (nf.base_g || 100)); }
-          if (S.day !== S.today) entry.day = S.day;
+          entry.day = S.day;   // Tag immer explizit (nie implizit „heute")
           var btn = this; btn.disabled = true;
           var r = await guardWrite(function () { return API.data.diaryAdd(entry); });
           if (r) { pushRecent(food); closeSheet(); await refreshDay(); toast("Hinzugefügt · " + pts + " P"); }
@@ -2283,7 +2410,7 @@
         // Eine Zeile bauen (Thumb + Name + „je …" + Diät-Tag + 0-Münze). `attr` trennt
         // Recents (data-ri -> out._recents) von der Kategorieliste (data-fi -> out._foods).
         function rowHTML(nf, attr, i) {
-          var meta = "je " + nf.base_g + " " + (nf.unit || "g");
+          var meta = perLabel(nf);
           var dietMark = nf.vegan ? ' <span class="diet-tag" title="Vegan">🌱</span>'
             : (nf.vegetarian ? ' <span class="diet-tag" title="Vegetarisch">🥕</span>' : '');
           return '<button class="food-item" data-' + attr + '="' + i + '">' +
@@ -2380,7 +2507,7 @@
           // Einträge abwählen, statt immer den ganzen Tag zu übernehmen.
           var html = '<div class="cp-bar"><span id="cpCount"></span><button type="button" id="cpToggle">Keine</button></div>';
           MEALS.forEach(function (m) {
-            var items = entries.filter(function (e) { return (e.meal || "snack") === m.key; });
+            var items = entries.filter(function (e) { return mealKeyOf(e) === m.key; });
             if (!items.length) return;
             html += '<div class="qf-head">' + m.em + ' ' + m.label + '</div>';
             items.forEach(function (e) {
@@ -2431,11 +2558,11 @@
           for (var i = 0; i < picked.length; i++) {
             var e = picked[i];
             var payload = {
-              name: e.name, meal: e.meal || "snack", points: +e.points || 0,
+              name: e.name, meal: mealKeyOf(e), points: +e.points || 0,
               qty: e.qty, unit: e.unit, kcal: +e.kcal || 0,
               source: e.source || "db", ref_code: e.ref_code || ""
             };
-            if (target !== S.today) payload.day = target;
+            payload.day = target;
             var r = await guardWrite(function () { return API.data.diaryAdd(payload); });
             if (!r) break;               // guardWrite hat Zugang/Netz bereits gemeldet
             added++; pts += (+e.points || 0);
@@ -2461,7 +2588,7 @@
     var isPortion = unit === "Portion";
     var gramLike = unit === "g" || unit === "ml";
     var unitLabel = unit || "Menge";
-    var step = isPortion ? 0.5 : 10;
+    var step = (isPortion || (unit && !gramLike)) ? 0.5 : 10;
 
     openSheet(entry.name,
       '<label>Mahlzeit</label>' +
@@ -2631,14 +2758,14 @@
           var kg = parseFloat($("#wKg", root).value);
           if (!(kg >= 30 && kg <= 400)) return toast("Bitte ein Gewicht zwischen 30 und 400 kg.");
           this.disabled = true;
-          var r = await guardWrite(function () { return API.data.weightSet(kg, S.day !== S.today ? S.day : undefined); });
+          var r = await guardWrite(function () { return API.data.weightSet(kg, S.day); });
           if (r) { closeSheet(); await refreshDay(); toast("Gewicht gespeichert."); }
           else this.disabled = false;
         });
         var del = $("#wDel", root);
         if (del) del.addEventListener("click", async function () {
           this.disabled = true;
-          var r = await guardWrite(function () { return API.data.weightDel(S.day !== S.today ? S.day : undefined); });
+          var r = await guardWrite(function () { return API.data.weightDel(S.day); });
           if (r) { closeSheet(); await refreshDay(); toast("Eintrag gelöscht."); }
           else this.disabled = false;
         });
@@ -2778,7 +2905,7 @@
         });
         $("#aSave", root).addEventListener("click", async function () {
           var pts = recalc();
-          var day = (S.day !== S.today) ? S.day : null;
+          var day = S.day;
           var apiCall;
           if (kind === "steps") {
             var steps = +$("#aStepsN", root).value || 0;
@@ -3443,7 +3570,7 @@
         return '<div class="rc-item" data-i="' + i + '">' +
           '<button type="button" class="rc-tap" data-edit="' + i + '"><span class="info">' +
           '<span class="nm">' + esc(it.name) + '</span><span class="meta">' + esc(amtTxt) + '</span></span>' +
-          '<span class="' + coinCls + '">' + it.points + '</span></button>' +
+          '<span class="' + coinCls + '">' + (+it.points || 0) + '</span></button>' +
           '<button class="rrm" type="button" data-rm="' + i + '" aria-label="Entfernen">' + X_SVG + '</button>' +
           '</div>';
       }).join("");
@@ -3542,7 +3669,7 @@
           var coinCls = pts === 0 ? "coin zero" : "coin";
           var diet = f.vegan ? ' <span class="diet-tag" title="Vegan">🌱</span>'
             : (f.vegetarian ? ' <span class="diet-tag" title="Vegetarisch">🥕</span>' : '');
-          var meta = "je " + f.base_g + " " + (f.unit || "g");
+          var meta = perLabel(f);
           store[i] = f;
           return '<button class="food-item" data-zi="' + i + '"><div class="info"><div class="nm">' + esc(f.name) +
             '</div><div class="meta">' + esc(meta) + diet + '</div></div><span class="' + coinCls + '">' + pts + '</span></button>';
@@ -3742,7 +3869,7 @@
       '<button data-s="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Profil & Ziel bearbeiten</button>' +
       '<button data-s="goals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Budget neu berechnen</button>' +
       '<button data-s="password"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Passwort ändern</button>' +
-      '<a href="konto.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg> Abo & Zahlung</a>' +
+      '<a href="konto.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg> Zugang & Zahlung</a>' +
       '<a href="datenschutz.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Datenschutz</a>' +
       '<a href="impressum.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg> Impressum</a>' +
       '<a href="agb.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> AGB</a>' +
@@ -3750,7 +3877,7 @@
       '</div>' +
       '<div class="backup-block">' +
       '<h4>Sicherung &amp; Umzug</h4>' +
-      '<p style="color:var(--muted);font-size:.82rem;margin:.2rem 0 .6rem">Dein Tagebuch, Gewicht und deine eigenen Produkte liegen nur auf diesem Gerät. Speichere sie regelmäßig als Datei — und spiele diese Datei auf einem neuen Gerät wieder ein. Funktioniert auch offline.</p>' +
+      '<p style="color:var(--muted);font-size:.82rem;margin:.2rem 0 .6rem">Tagebuch, Gewicht und Aktivitäten werden mit deinem Konto synchronisiert. Deine eigenen, fotografierten Produkte liegen dagegen nur auf diesem Gerät. Eine Sicherungsdatei enthält alles — praktisch für einen Gerätewechsel. Funktioniert auch offline.</p>' +
       '<div class="settings-links">' +
       '<button data-s="export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Sicherung als Datei speichern</button>' +
       '<button data-s="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg> Sicherung aus Datei einspielen</button>' +
@@ -3816,6 +3943,7 @@
       var text = await file.text();
       var obj = JSON.parse(text);
       var res = await PKBackup.apply(obj, { replace: false });
+      try { await API.data.sync.enqueueImported(res.records); } catch (e) {}
       closeSheet();
       await refreshDay();
       try { await refreshLocalProducts(); renderProductMine(); } catch (e) {}
@@ -3937,9 +4065,24 @@
       });
   }
 
+  /* Abmelden: erst offene Änderungen hochladen, dann alles Kontobezogene vom Gerät
+     entfernen (Tagebuch, Outbox, Konto-Cache). So sieht ein anderes Konto auf diesem
+     Gerät nie fremde Einträge. Bleiben Änderungen offline hängen, wird nachgefragt. */
   async function doLogout() {
+    var uid = S.user && S.user.id ? String(S.user.id) : "";
+    try { if (API.data.sync) await API.data.sync.flush(); } catch (e) { /* offline */ }
+    var pending = 0;
+    try { pending = await PKDiary.outboxCount(); } catch (e) { pending = 0; }
+    if (pending > 0 && !confirm(pending + (pending === 1 ? " Änderung ist" : " Änderungen sind") +
+        " noch nicht hochgeladen (offline?). Beim Abmelden gehen sie auf diesem Gerät verloren.\n\nTrotzdem abmelden?")) return;
     try { await API.auth.logout(); } catch (e) { /* egal */ }
     API.clearToken();
+    try { await PKDiary.wipeAll(); } catch (e) { /* egal */ }
+    try {
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(OWNER_KEY);
+      if (uid) resetSyncMarks(uid);
+    } catch (e) { /* egal */ }
     location.replace("anmelden.html");
   }
 
@@ -4072,7 +4215,7 @@
       var nItems = (r.items && r.items.length) || 0;
       return '<div class="mini-list-item">' +
         '<div class="info"><div class="nm">' + esc(r.name) + '</div>' +
-        '<div class="meta">' + r.servings + ' Portionen · ' + nItems + ' Zutaten · ' + (r.points_per_serving != null ? r.points_per_serving + " P/Portion" : "–") + '</div></div>' +
+        '<div class="meta">' + (+r.servings || 1) + ' Portionen · ' + nItems + ' Zutaten · ' + (r.points_per_serving != null ? (+r.points_per_serving || 0) + " P/Portion" : "–") + '</div></div>' +
         '<button class="btn ghost small" data-add-recipe="' + i + '">+ Tag</button>' +
         '<button class="edit" data-edit-recipe="' + i + '" aria-label="Bearbeiten">' + EDIT_SVG + '</button>' +
         '<button class="del" data-del-recipe="' + esc(r.id) + '" aria-label="Löschen"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>' +
@@ -4373,8 +4516,18 @@
       }
       var del = e.target.closest("[data-del-entry]");
       if (del) {
-        var r = await guardWrite(function () { return API.data.diaryDel(del.dataset.delEntry); });
-        if (r) { await refreshDay(); toast("Entfernt."); }
+        var delId = del.dataset.delEntry;
+        var old = (S.data.diary || []).filter(function (x) { return String(x.id) === String(delId); })[0];
+        var r = await guardWrite(function () { return API.data.diaryDel(delId); });
+        if (r) {
+          await refreshDay();
+          if (old) toastAction("„" + old.name + "“ entfernt.", "Rückgängig", async function () {
+            var back = Object.assign({}, old); delete back.id;
+            var r2 = await guardWrite(function () { return API.data.diaryAdd(back); });
+            if (r2) { await refreshDay(); toast("Wiederhergestellt."); }
+          });
+          else toast("Entfernt.");
+        }
         return;
       }
       var add = e.target.closest("[data-add-meal]");
@@ -4383,10 +4536,20 @@
 
     $("#activityList").addEventListener("click", async function (e) {
       var del = e.target.closest("[data-del-activity]");
-      if (del) { var r = await guardWrite(function () { return API.data.activityDel(del.dataset.delActivity); }); if (r) { await refreshDay(); toast("Entfernt."); } }
+      if (del) {
+        if (!confirm("Diese Aktivität löschen?")) return;
+        var r = await guardWrite(function () { return API.data.activityDel(del.dataset.delActivity); }); if (r) { await refreshDay(); toast("Entfernt."); }
+      }
     });
 
     $("#btnAddWeight").addEventListener("click", openWeightSheet);
+    $$("#weightRange button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        $$("#weightRange button").forEach(function (x) { x.classList.toggle("on", x === b); });
+        S.weightRange = b.dataset.r === "all" ? "all" : +b.dataset.r;
+        renderProgress();
+      });
+    });
     $("#btnAddActivity").addEventListener("click", openActivitySheet);
 
     // Essen-Tab
@@ -4503,7 +4666,16 @@
     navigator.serviceWorker.addEventListener("controllerchange", function () {
       if (!hadController || swReloaded) return;
       swReloaded = true;
-      location.reload();
+      // Nie mitten in einer Eingabe neu laden: ist ein Sheet offen, erst nach
+      // dem Schließen (oder wenn die App in den Hintergrund geht).
+      if ($("#sheetBack") && !$("#sheetBack").hidden) {
+        _reloadPending = true;
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "hidden") location.reload();
+        });
+      } else {
+        location.reload();
+      }
     });
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js").then(function (reg) {
