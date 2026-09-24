@@ -107,6 +107,7 @@ jobs:
                      -not -name 'deploy-local.log' \
                      -not -name 'README.md' \
                      -not -name '.gitignore' \
+                   | grep -E '\.(html|js|css|json|png|svg|webmanifest|wasm|gz|txt|ico|webp|jpg|woff2)$|/\.htaccess$' \
                    | sed 's|^\./||' | sort)
           n=${#FILES[@]}; echo "Dateien: $n"
           printf '  %s\n' "${FILES[@]}"

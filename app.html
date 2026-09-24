@@ -918,6 +918,10 @@
     if (!e) return "Etwas ist schiefgelaufen.";
     if (e.code === "network") return "Keine Verbindung. Bitte Internet prüfen.";
     if (isNoAccess(e)) return "Dein Zugang ist abgelaufen. Bitte verlängern.";
+    if (e.code === "bad_credentials") return "Das Passwort stimmt nicht.";
+    if (e.code === "password_too_long") return "Das Passwort ist zu lang (max. 72 Zeichen).";
+    if (e.code === "weak_password") return "Das Passwort ist zu kurz (mind. 8 Zeichen).";
+    if (e.code === "rate_limited" || e.status === 429) return "Zu viele Versuche. Bitte warte ein paar Minuten.";
     if (e.status === 401) return "Sitzung abgelaufen. Bitte neu anmelden.";
     return "Etwas ist schiefgelaufen. Bitte erneut versuchen.";
   }
@@ -1195,9 +1199,13 @@
     if (!owner) { try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {} return false; }
     await PKDiary.wipeAll();
     resetSyncMarks(uid);
-    try { ["pk_milestones_v1", "pk_budget_hint_v1", "pk_water_v1", "pk_meals_v1", "pk_portions_v1", "pk_measure_v1"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
+    wipeLocalExtras();
     try { localStorage.setItem(OWNER_KEY, uid); } catch (e) {}
     return true;
+  }
+  /* Geräte-lokale Extras (nicht synchronisiert) – gehören immer zum aktuellen Konto. */
+  function wipeLocalExtras() {
+    try { ["pk_milestones_v1", "pk_budget_hint_v1", "pk_water_v1", "pk_meals_v1", "pk_portions_v1", "pk_measure_v1"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
   }
   /* Sync-Cursor zurücksetzen -> der nächste Abgleich holt die ganze Server-Historie. */
   function resetSyncMarks(uid) {
@@ -4311,6 +4319,7 @@
       '<a href="impressum.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg> Impressum</a>' +
       '<a href="agb.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> AGB</a>' +
       '<button data-s="logout" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg> Abmelden</button>' +
+      '<button data-s="delete" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg> Konto löschen</button>' +
       '</div>' +
       '<div class="backup-block">' +
       '<h4>Sicherung &amp; Umzug</h4>' +
@@ -4334,6 +4343,7 @@
             var s = b.dataset.s;
             if (s === "logout") doLogout();
             else if (s === "password") openPasswordSheet();
+            else if (s === "delete") openDeleteSheet();
             else if (s === "profile") openProfileSheet();
             else if (s === "goals") openGoalsSheet();
             else if (s === "export") exportBackup();
@@ -4489,15 +4499,55 @@
           var cur = $("#pwCur", root).value, nw = $("#pwNew", root).value;
           var msg = $("#pwMsg", root);
           if (nw.length < 8) { msg.innerHTML = '<div class="alert err">Neues Passwort: mindestens 8 Zeichen.</div>'; return; }
+          if (new TextEncoder().encode(nw).length > 72) { msg.innerHTML = '<div class="alert err">Neues Passwort: höchstens 72 Zeichen.</div>'; return; }
           this.disabled = true;
           try {
             await API.auth.changePassword(cur, nw);
-            msg.innerHTML = '<div class="alert ok">Passwort geändert.</div>';
-            setTimeout(closeSheet, 1200);
+            msg.innerHTML = '<div class="alert ok">Passwort geändert. Andere Geräte wurden abgemeldet.</div>';
+            setTimeout(closeSheet, 1600);
           } catch (e) {
             this.disabled = false;
-            msg.innerHTML = '<div class="alert err">' + (e.code === "invalid_credentials" ? "Aktuelles Passwort stimmt nicht." : esc(humanErr(e))) + '</div>';
+            msg.innerHTML = '<div class="alert err">' + (e.code === "bad_credentials" || e.code === "invalid_credentials" ? "Aktuelles Passwort stimmt nicht." : esc(humanErr(e))) + '</div>';
           }
+        });
+      });
+  }
+
+  /* Konto endgültig löschen (DSGVO Art. 17): Passwort + ausdrückliche Bestätigung.
+     Danach alles Kontobezogene vom Gerät entfernen (wie beim Abmelden). */
+  function openDeleteSheet() {
+    openSheet("Konto löschen",
+      '<p style="color:var(--ink-2);margin-top:0">Dein Konto und alle zugehörigen Daten (Tagebuch, Gewicht, Aktivitäten, eigene Lebensmittel, Rezepte) werden <b>endgültig</b> gelöscht. Das lässt sich nicht rückgängig machen.</p>' +
+      '<p style="color:var(--muted);font-size:.85rem">Tipp: Lade vorher unter „Sicherung &amp; Umzug“ eine Sicherungsdatei herunter. Verbuchte Zahlungen bewahren wir aus steuerrechtlichen Gründen anonymisiert auf.</p>' +
+      '<div class="field"><label for="delPw">Passwort zur Bestätigung</label><input type="password" id="delPw" autocomplete="current-password"></div>' +
+      '<label style="display:flex;gap:10px;align-items:flex-start;font-size:.9rem;font-weight:500;margin:6px 0 12px;cursor:pointer"><input type="checkbox" id="delOk" style="width:20px;height:20px;min-height:0;flex:0 0 auto;margin:1px 0 0;padding:0"> Ja, ich möchte mein Konto endgültig löschen.</label>' +
+      '<div id="delMsg"></div>' +
+      '<button class="btn block big" id="delGo" style="background:var(--danger);color:#fff" disabled>Konto endgültig löschen</button>',
+      function (root) {
+        var ok = $("#delOk", root), go = $("#delGo", root), msg = $("#delMsg", root);
+        ok.addEventListener("change", function () { go.disabled = !ok.checked; });
+        go.addEventListener("click", async function () {
+          var pw = $("#delPw", root).value;
+          if (!pw) { msg.innerHTML = '<div class="alert err">Bitte dein Passwort eingeben.</div>'; return; }
+          if (!navigator.onLine) { msg.innerHTML = '<div class="alert err">Zum Löschen brauchst du eine Internetverbindung.</div>'; return; }
+          go.disabled = true;
+          try {
+            await API.auth.deleteAccount(pw);
+          } catch (e) {
+            go.disabled = !ok.checked;
+            msg.innerHTML = '<div class="alert err">' + esc(humanErr(e)) + '</div>';
+            return;
+          }
+          var uid = S.user && S.user.id ? String(S.user.id) : "";
+          API.clearToken();
+          try { await PKDiary.wipeAll(); } catch (e) { /* egal */ }
+          wipeLocalExtras();
+          try {
+            localStorage.removeItem(CACHE_KEY);
+            localStorage.removeItem(OWNER_KEY);
+            if (uid) resetSyncMarks(uid);
+          } catch (e) { /* egal */ }
+          location.replace("anmelden.html?deleted=1");
         });
       });
   }

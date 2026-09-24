@@ -1,5 +1,10 @@
-pk-v54-8e1d
+pk-v55-b2f7
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v55-b2f7: Konto selbst löschen (Einstellungen); verständliche Fehlermeldungen (falsches
+          Passwort, zu lang, zu viele Versuche); Passwortwechsel meldet andere Geräte ab;
+          .htaccess-Sicherheitsheader + Sperre sensibler Dateitypen; Deploy nur Web-Dateitypen.
+          Server (separat deployen): Sperre, Ratenlimits, 72-Byte-Grenze, delete_account,
+          vollständiger Export, Sync-Überlappung, Zahlungsbuchung transaktional, CORS-Liste.
 v54-8e1d: "Meine Portion" pro Lebensmittel merkbar (Schnell-Hinzufügen nutzt sie) und
           Packungsportion aus Open Food Facts; neue Karte Körpermaße (Taille/Hüfte,
           Taille÷Größe); Sicherungsdatei enthält jetzt auch Maße, Mahlzeiten, Portionen;

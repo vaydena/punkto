@@ -7,6 +7,21 @@ AddType image/svg+xml .svg
 # ArrayBuffer-Fallback bei falschem text/plain-MIME).
 AddType application/wasm .wasm
 AddDefaultCharset UTF-8
+# Was nie ausgeliefert werden darf (falls es doch einmal hochgeladen wird):
+# Betreiber-Schluessel, Skripte, Logs, Notizen, Backups.
+<FilesMatch "(\.local\.txt|\.ps1|\.py|\.sh|\.log|\.md|\.bak|\.sql|\.env|~)$">
+  Require all denied
+</FilesMatch>
+<IfModule mod_headers.c>
+  # Grundhaertung (kein CSP: die App nutzt Inline-Skripte; kommt ggf. spaeter als Report-Only)
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  # Kamera fuer Barcode/Foto-Scan nur fuer die eigene Seite; Mikrofon/Standort aus.
+  Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=(), payment=()"
+  # HSTS (Browser werten es nur ueber HTTPS aus; die Seite laeuft ausschliesslich per HTTPS)
+  Header always set Strict-Transport-Security "max-age=15552000"
+</IfModule>
 <IfModule mod_headers.c>
   # Reihenfolge wichtig: bei mehreren Treffern gewinnt die letzte Regel.
   <FilesMatch "\.(css|js|png|svg|woff2?)$">

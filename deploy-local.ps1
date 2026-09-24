@@ -135,10 +135,13 @@ Listing 'VORHER'
 # --- 2) Dateiliste (⛔ *.local.txt / supabase / gen_icons.py NIE deployen) ---
 $excludeTop = @('.git', '.github', 'supabase', 'test', 'tools', 'node_modules')
 $excludeName = @('deploy-local.ps1', 'deploy-local.log', '.gitignore', 'README.md', 'gen_icons.py')
+$allowExt = @('.html', '.js', '.css', '.json', '.png', '.svg', '.webmanifest', '.wasm', '.gz', '.txt', '.ico', '.webp', '.jpg', '.woff2')
 $files = @(Get-ChildItem -Recurse -File | Where-Object {
   $rel = $_.FullName.Substring($root.Length + 1)
   $top = ($rel -split '[\\/]')[0]
-  ($excludeTop -notcontains $top) -and ($excludeName -notcontains $_.Name) -and ($_.Name -notlike '*.local.txt')
+  ($excludeTop -notcontains $top) -and ($excludeName -notcontains $_.Name) -and ($_.Name -notlike '*.local.txt') -and
+  # Positivliste: nur Web-Dateitypen (schuetzt vor versehentlich liegengebliebenen Notizen, Backups, .env ...)
+  (($allowExt -contains $_.Extension.ToLower()) -or ($_.Name -eq '.htaccess'))
 })
 $total = $files.Count
 Log ""; Log ("== Upload: {0} Dateien in Paketen zu 6 (S1 curl TLS 1.2) ==" -f $total)

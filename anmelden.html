@@ -232,6 +232,9 @@
   }
   var hasToken = !!API.getToken();
 
+  if (qs.get('deleted') === '1') {
+    alertBox(document.getElementById('loginAlert'), 'ok', 'Dein Konto wurde gelöscht. Schade, dass du gehst – alles Gute!');
+  }
   if (qs.get('reset')) {
     // Passwort-Reset per Mail-Link — hat Vorrang.
     show('newpw');
@@ -261,7 +264,8 @@
 
   function humanErr(e){
     var c = e && e.code;
-    if (c === 'invalid_credentials' || c === 'invalid_login') return 'E-Mail oder Passwort stimmt nicht.';
+    if (c === 'password_too_long') return 'Das Passwort ist zu lang (max. 72 Zeichen).';
+    if (c === 'bad_credentials' || c === 'invalid_credentials' || c === 'invalid_login') return 'E-Mail oder Passwort stimmt nicht.';
     if (c === 'email_taken' || c === 'email_exists') return 'Diese E-Mail ist bereits registriert. Melde dich an.';
     if (c === 'weak_password') return 'Das Passwort ist zu kurz (mind. 8 Zeichen).';
     if (c === 'bad_email') return 'Bitte gib eine gültige E-Mail ein.';

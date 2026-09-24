@@ -4,8 +4,17 @@
 import postgres from "npm:postgres@3";
 import QRCode from "npm:qrcode@1";
 
+// CORS: nur bekannte Urspruenge (Browser). Zusaetzliche per Secret PK_ALLOWED_ORIGINS
+// (kommagetrennt), z. B. fuer lokale Tests. Aufrufe ohne Origin (Server/CLI) unberuehrt.
+const ORIGINS = new Set(["https://punkto.vaydena.de",
+  ...String(Deno.env.get("PK_ALLOWED_ORIGINS") || "").split(",").map((x) => x.trim()).filter(Boolean)]);
+function withCors(req: Request, res: Response) {
+  const o = req.headers.get("origin") || "";
+  res.headers.set("Access-Control-Allow-Origin", ORIGINS.has(o) ? o : "https://punkto.vaydena.de");
+  res.headers.set("Vary", "Origin");
+  return res;
+}
 const cors = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -104,7 +113,8 @@ async function auth(req: Request) {
            sb.status as sub_status, sb.plan as sub_plan,
            sb.trial_ends_at, sb.current_period_end,
            greatest(coalesce(sb.trial_ends_at,'epoch'::timestamptz), coalesce(sb.current_period_end,'epoch'::timestamptz)) as ends_at,
-           (now() < greatest(coalesce(sb.trial_ends_at,'epoch'::timestamptz), coalesce(sb.current_period_end,'epoch'::timestamptz))) as access
+           (sb.status is distinct from 'blocked'
+             and now() < greatest(coalesce(sb.trial_ends_at,'epoch'::timestamptz), coalesce(sb.current_period_end,'epoch'::timestamptz))) as access
       from punkto.sessions s
       join punkto.users u on u.id = s.user_id
       left join punkto.subscriptions sb on sb.user_id = u.id
@@ -152,7 +162,8 @@ async function mintToken(u: any): Promise<string | null> {
   try {
     const key = await tokenKey();
     if (!key) return null;
-    const endsMs = u.ends_at ? new Date(u.ends_at).getTime() : 0;
+    // Gesperrt (Betreiber) -> Token sofort abgelaufen (App wird schreibgeschuetzt, Daten bleiben lesbar).
+    const endsMs = (u.ends_at && u.sub_status !== "blocked") ? new Date(u.ends_at).getTime() : 0;
     const exp = Number.isFinite(endsMs) ? Math.floor(endsMs / 1000) : 0;
     const iat = Math.floor(Date.now() / 1000);
     const payload = { v: 1, uid: String(u.id), exp, iat, status: u.sub_status || null, plan: u.sub_plan || null };
@@ -190,7 +201,7 @@ const WRITE = new Set([
   "sync_push", // Dual-Write-Batch: schreibt Tagebuch/Gewicht/Aktivitaet -> Zugang noetig
 ]);
 
-Deno.serve(async (req: Request) => {
+const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   let body: Record<string, any>;
@@ -616,18 +627,28 @@ Deno.serve(async (req: Request) => {
       // abgelaufenem/pausiertem Abo abrufbar, damit niemand von seinen EIGENEN
       // Alt-Daten ausgesperrt wird. Feld-Shapes exakt wie PKDiary.importAll erwartet
       // (day::text als YYYY-MM-DD, sonst spaltengleich zu diary_add/weight_set/activity_add).
-      const [entries, weights, activities] = await Promise.all([
+      const [entries, weights, activities, foods, recipes] = await Promise.all([
         sql`select id, day::text as day, meal, name, points, qty, unit, kcal, source, ref_code, created_at
               from punkto.diary_entries where user_id = ${u.id} and deleted_at is null order by day, created_at`,
         sql`select day::text as day, weight_kg
               from punkto.weight_logs where user_id = ${u.id} and deleted_at is null order by day`,
         sql`select id, day::text as day, kind, steps, minutes, bonus_points, note, created_at
               from punkto.activity_logs where user_id = ${u.id} and deleted_at is null order by day, created_at`,
+        sql`select id, name, brand, per, kcal, sat_fat_g, sugar_g, protein_g, fiber_g, points, barcode, created_at
+              from punkto.custom_foods where user_id = ${u.id} order by created_at`,
+        sql`select id, name, servings, items, points_total, points_per_serving, created_at
+              from punkto.recipes where user_id = ${u.id} order by created_at`,
       ]);
+      // Vollstaendige Auskunft (DSGVO Art. 15/20): Profil, Abo, Zahlungen, eigene
+      // Lebensmittel und Rezepte zusaetzlich zur Tagebuch-Historie. Zusatzfelder sind
+      // optional -> aeltere Clients (importAll) ignorieren sie.
+      const pays = await sql`select amount_cents, method, months, created_at from punkto.payments where user_id = ${u.id} order by created_at`;
       return json({
         ok: true,
-        counts: { entries: entries.length, weights: weights.length, activities: activities.length },
+        exported_at: new Date().toISOString(),
+        counts: { entries: entries.length, weights: weights.length, activities: activities.length, foods: foods.length, recipes: recipes.length },
         entries, weights, activities,
+        profile: pubUser(u), subscription: subView(u), payments: pays, custom_foods: foods, recipes,
       });
     }
 
@@ -754,7 +775,11 @@ Deno.serve(async (req: Request) => {
               from punkto.activity_logs
              where user_id = ${u.id} and (${since}::timestamptz is null or updated_at > ${since}::timestamptz)
              order by updated_at asc limit ${LIM}`,
-        sql`select to_char(now() at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now`,
+        // Cursor mit Sicherheitsabstand: updated_at = now() ist die STARTzeit der schreibenden
+        // Transaktion. Ein Push, der vor diesem Pull begann, aber erst danach committet, traegt
+        // einen aelteren Zeitstempel und fiele sonst dauerhaft durchs Raster. 15 s Ueberlappung;
+        // doppelt gelieferte Zeilen sind clientseitig idempotent (Upsert per id/Tag).
+        sql`select to_char((now() - interval '15 seconds') at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now`,
       ]);
       const serverNow = nowRow[0].now;
       // Tie-sichere Cursor-Bestimmung: fuellt eine Tabelle die Seite (== LIM), koennten
@@ -792,4 +817,5 @@ Deno.serve(async (req: Request) => {
     try { console.error("punkto-data", action, String((e as Error)?.message || e)); } catch (_e) { /* ignore */ }
     return json({ error: "server_error" }, 500);
   }
-});
+};
+Deno.serve(async (req: Request) => withCors(req, await handler(req)));

@@ -100,6 +100,7 @@
     changePassword(current, password) {
       return call("auth", "change_password", { current: current, password: password });
     },
+    deleteAccount(password) { return call("auth", "delete_account", { password: password }); },
     requestReset(email) { return call("auth", "request_reset", { email: email }, { token: null }); },
     reset(token, password) { return call("auth", "reset", { token: token, password: password }, { token: null }); }
   };

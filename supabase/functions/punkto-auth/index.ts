@@ -4,8 +4,17 @@
 // als postgres-Owner ueber SUPABASE_DB_URL.
 import postgres from "npm:postgres@3";
 
+// CORS: nur bekannte Urspruenge (Browser). Zusaetzliche per Secret PK_ALLOWED_ORIGINS
+// (kommagetrennt), z. B. fuer lokale Tests. Aufrufe ohne Origin (Server/CLI) unberuehrt.
+const ORIGINS = new Set(["https://punkto.vaydena.de",
+  ...String(Deno.env.get("PK_ALLOWED_ORIGINS") || "").split(",").map((x) => x.trim()).filter(Boolean)]);
+function withCors(req: Request, res: Response) {
+  const o = req.headers.get("origin") || "";
+  res.headers.set("Access-Control-Allow-Origin", ORIGINS.has(o) ? o : "https://punkto.vaydena.de");
+  res.headers.set("Vary", "Origin");
+  return res;
+}
 const cors = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -17,6 +26,25 @@ const SITE = "https://punkto.vaydena.de";
 const TRIAL_DAYS = 14;
 const SESSION_DAYS = 120;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// bcrypt wertet nur die ersten 72 Byte aus -> laengere Passwoerter ablehnen statt still kuerzen.
+const pwTooLong = (p: string) => new TextEncoder().encode(p).length > 72;
+function bearer(req: Request) {
+  return ((req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1] || "").trim();
+}
+// Einfaches Ratenlimit ueber punkto.auth_attempts (kind frei waehlbar).
+async function tooMany(kind: string, by: { email?: string; ip?: string | null }, max: number, minutes: number, onlyFails = true) {
+  if (by.email == null && !by.ip) return false;
+  const r = by.email != null
+    ? await sql`select count(*)::int c from punkto.auth_attempts where email = ${by.email} and kind = ${kind}
+                 and (${!onlyFails} or ok = false) and at > now() - make_interval(mins => ${minutes})`
+    : await sql`select count(*)::int c from punkto.auth_attempts where ip = ${by.ip!} and kind = ${kind}
+                 and (${!onlyFails} or ok = false) and at > now() - make_interval(mins => ${minutes})`;
+  return r[0].c >= max;
+}
+async function logAttempt(kind: string, email: string | null, ok: boolean, ip: string | null) {
+  try { await sql`insert into punkto.auth_attempts (email, kind, ok, ip) values (${email}, ${kind}, ${ok}, ${ip})`; }
+  catch (_e) { /* reines Protokoll */ }
+}
 
 async function sha256hex(s: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -102,7 +130,8 @@ async function subFor(user_id: string) {
   const r = await sql`
     select status, plan, trial_ends_at, current_period_end,
       greatest(coalesce(trial_ends_at,'epoch'::timestamptz), coalesce(current_period_end,'epoch'::timestamptz)) as ends_at,
-      (now() < greatest(coalesce(trial_ends_at,'epoch'::timestamptz), coalesce(current_period_end,'epoch'::timestamptz))) as access
+      (status is distinct from 'blocked'
+        and now() < greatest(coalesce(trial_ends_at,'epoch'::timestamptz), coalesce(current_period_end,'epoch'::timestamptz))) as access
     from punkto.subscriptions where user_id = ${user_id} limit 1`;
   return r[0] || null;
 }
@@ -118,7 +147,7 @@ async function sessionUser(req: Request) {
   return r[0] || null;
 }
 
-Deno.serve(async (req: Request) => {
+const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   let body: Record<string, any>;
@@ -132,6 +161,9 @@ Deno.serve(async (req: Request) => {
       const name = (String(body.display_name || "").trim().slice(0, 40)) || email.split("@")[0].slice(0, 40);
       if (!EMAIL_RE.test(email)) return json({ error: "bad_email" }, 400);
       if (password.length < 8) return json({ error: "weak_password" }, 400);
+      if (pwTooLong(password)) return json({ error: "password_too_long" }, 400);
+      const ip = clientIp(req);
+      if (await tooMany("register", { ip }, 5, 60, false)) return json({ error: "rate_limited" }, 429);
       const dup = await sql`select 1 from punkto.users where lower(email) = ${email} limit 1`;
       if (dup.length) return json({ error: "email_taken" }, 409);
       const ins = await sql`
@@ -144,6 +176,7 @@ Deno.serve(async (req: Request) => {
       const token = newToken(); const th = await sha256hex(token);
       await sql`insert into punkto.sessions (token_hash, user_id, expires_at, user_agent)
                 values (${th}, ${u.id}, now() + make_interval(days => ${SESSION_DAYS}), ${String(req.headers.get("user-agent") || "").slice(0, 200)})`;
+      await logAttempt("register", email, true, ip);
       mailWelcome(email, name).catch(() => {});
       return json({ ok: true, token, user: pubUser(u), subscription: await subFor(u.id) });
     }
@@ -155,6 +188,7 @@ Deno.serve(async (req: Request) => {
       const fails = await sql`select count(*)::int c from punkto.auth_attempts
         where email = ${email} and kind = 'login' and ok = false and at > now() - interval '15 minutes'`;
       if (fails[0].c >= 10) return json({ error: "rate_limited" }, 429);
+      if (await tooMany("login", { ip: clientIp(req) }, 30, 15)) return json({ error: "rate_limited" }, 429);
       const r = await sql`select * from punkto.users where lower(email) = ${email} limit 1`;
       const u = r[0];
       let good = false;
@@ -172,7 +206,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Ab hier: Session erforderlich ────────────────────────────────────────
-    if (action === "me" || action === "logout" || action === "update_profile" || action === "change_password") {
+    if (action === "me" || action === "logout" || action === "update_profile" || action === "change_password" || action === "delete_account") {
       const u = await sessionUser(req);
       if (!u) return json({ error: "unauthorized" }, 401);
 
@@ -180,8 +214,7 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true, user: pubUser(u), subscription: await subFor(u.id) });
       }
       if (action === "logout") {
-        const auth = req.headers.get("authorization") || "";
-        const token = (auth.match(/^Bearer\s+(.+)$/i)?.[1] || "").trim();
+        const token = bearer(req);
         if (token) await sql`delete from punkto.sessions where token_hash = ${await sha256hex(token)}`;
         return json({ ok: true });
       }
@@ -210,16 +243,63 @@ Deno.serve(async (req: Request) => {
       if (action === "change_password") {
         const cur = String(body.current || ""); const nw = String(body.password || "");
         if (nw.length < 8) return json({ error: "weak_password" }, 400);
+        if (pwTooLong(nw)) return json({ error: "password_too_long" }, 400);
+        if (await tooMany("change_password", { email: u.email }, 5, 15)) return json({ error: "rate_limited" }, 429);
         const chk = await sql`select (extensions.crypt(${cur}, ${u.pass_hash}) = ${u.pass_hash}) as ok`;
-        if (!chk[0].ok) return json({ error: "bad_credentials" }, 401);
-        await sql`update punkto.users set pass_hash = extensions.crypt(${nw}, extensions.gen_salt('bf', 10)) where id = ${u.id}`;
+        if (!chk[0].ok) { await logAttempt("change_password", u.email, false, clientIp(req)); return json({ error: "bad_credentials" }, 401); }
+        const keep = await sha256hex(bearer(req));
+        await sql.begin(async (tx) => {
+          await tx`update punkto.users set pass_hash = extensions.crypt(${nw}, extensions.gen_salt('bf', 10)) where id = ${u.id}`;
+          // Alle ANDEREN Sitzungen beenden (z. B. ein verlorenes Handy); diese bleibt aktiv.
+          await tx`delete from punkto.sessions where user_id = ${u.id} and token_hash <> ${keep}`;
+        });
         return json({ ok: true });
+      }
+      if (action === "delete_account") {
+        // Konto endgueltig loeschen (DSGVO Art. 17). Passwort-Bestaetigung Pflicht.
+        // Gibt es verbuchte Zahlungen, muessen diese (Aufbewahrungspflicht, § 147 AO)
+        // bleiben: dann werden alle Nutzungsdaten geloescht und das Konto anonymisiert;
+        // sonst wird der Nutzer komplett entfernt (FKs: ON DELETE CASCADE).
+        const cur = String(body.password || "");
+        if (await tooMany("delete_account", { email: u.email }, 5, 15)) return json({ error: "rate_limited" }, 429);
+        const chk = await sql`select (extensions.crypt(${cur}, ${u.pass_hash}) = ${u.pass_hash}) as ok`;
+        if (!chk[0].ok) { await logAttempt("delete_account", u.email, false, clientIp(req)); return json({ error: "bad_credentials" }, 401); }
+        const oldEmail = String(u.email || "").toLowerCase();
+        let mode = "deleted";
+        await sql.begin(async (tx) => {
+          const pay = await tx`select 1 from punkto.payments where user_id = ${u.id} limit 1`;
+          await tx`update punkto.community_products set submitted_by = null where submitted_by = ${u.id}`;
+          if (!pay.length) {
+            await tx`delete from punkto.users where id = ${u.id}`;
+          } else {
+            mode = "anonymized";
+            await tx`delete from punkto.diary_entries where user_id = ${u.id}`;
+            await tx`delete from punkto.weight_logs where user_id = ${u.id}`;
+            await tx`delete from punkto.activity_logs where user_id = ${u.id}`;
+            await tx`delete from punkto.custom_foods where user_id = ${u.id}`;
+            await tx`delete from punkto.recipes where user_id = ${u.id}`;
+            await tx`delete from punkto.sessions where user_id = ${u.id}`;
+            await tx`delete from punkto.reset_tokens where user_id = ${u.id}`;
+            await tx`update punkto.users set email = ${"geloescht-" + u.id + "@invalid"},
+                pass_hash = extensions.crypt(${newToken()}, extensions.gen_salt('bf', 10)), display_name = 'Geloescht',
+                sex = null, birth_year = null, height_cm = null, start_weight_kg = null, goal_weight_kg = null,
+                activity_level = null, daily_budget = null, onboarded = false, email_verified = false, last_active_on = null
+              where id = ${u.id}`;
+            await tx`update punkto.subscriptions set status = 'canceled', updated_at = now() where user_id = ${u.id}`;
+          }
+          await tx`delete from punkto.auth_attempts where lower(email) = ${oldEmail}`;
+        });
+        return json({ ok: true, mode });
       }
     }
 
     if (action === "request_reset") {
       const email = String(body.email || "").trim().toLowerCase();
-      if (EMAIL_RE.test(email)) {
+      const ip = clientIp(req);
+      const limited = (EMAIL_RE.test(email) && await tooMany("reset_req", { email }, 3, 60, false))
+        || await tooMany("reset_req", { ip }, 10, 60, false);
+      if (EMAIL_RE.test(email) && !limited) {
+        await logAttempt("reset_req", email, true, ip);
         const r = await sql`select id, display_name from punkto.users where lower(email) = ${email} limit 1`;
         if (r.length) {
           const token = newToken(); const th = await sha256hex(token);
@@ -235,13 +315,19 @@ Deno.serve(async (req: Request) => {
       const token = String(body.token || "").trim();
       const password = String(body.password || "");
       if (!token || password.length < 8) return json({ error: "weak_password" }, 400);
+      if (pwTooLong(password)) return json({ error: "password_too_long" }, 400);
+      const ip = clientIp(req);
+      if (await tooMany("reset", { ip }, 10, 15)) return json({ error: "rate_limited" }, 429);
       const th = await sha256hex(token);
-      const r = await sql`select * from punkto.reset_tokens where token_hash = ${th} and used_at is null and expires_at > now() limit 1`;
-      if (!r.length) return json({ error: "invalid_token" }, 400);
+      // Token atomar verbrauchen (kein doppeltes Einloesen bei parallelen Aufrufen).
+      const r = await sql`update punkto.reset_tokens set used_at = now()
+                           where token_hash = ${th} and used_at is null and expires_at > now() returning user_id`;
+      if (!r.length) { await logAttempt("reset", null, false, ip); return json({ error: "invalid_token" }, 400); }
       const rt = r[0];
-      await sql`update punkto.users set pass_hash = extensions.crypt(${password}, extensions.gen_salt('bf', 10)) where id = ${rt.user_id}`;
-      await sql`update punkto.reset_tokens set used_at = now() where token_hash = ${th}`;
-      await sql`delete from punkto.sessions where user_id = ${rt.user_id}`;
+      await sql.begin(async (tx) => {
+        await tx`update punkto.users set pass_hash = extensions.crypt(${password}, extensions.gen_salt('bf', 10)) where id = ${rt.user_id}`;
+        await tx`delete from punkto.sessions where user_id = ${rt.user_id}`;
+      });
       return json({ ok: true });
     }
 
@@ -250,4 +336,5 @@ Deno.serve(async (req: Request) => {
     try { console.error("punkto-auth", action, String((e as Error)?.message || e)); } catch (_e) { /* ignore */ }
     return json({ error: "server_error" }, 500);
   }
-});
+};
+Deno.serve(async (req: Request) => withCors(req, await handler(req)));
