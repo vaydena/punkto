@@ -1,5 +1,9 @@
-pk-v48-a12b
+pk-v49-c7d1
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v49-c7d1: NÄHRWERT-SCANNER robuster: eine einzelne Fehllesung in der Wertespalte (z. B. „-6,8g"
+          als „1689") verwirft nicht mehr die ganze Zuordnung; große Zahlen gelten nicht mehr
+          pauschal als Fußnote, kcal wird immer übernommen, überzählige Zeilen werden toleriert.
+          Fix: neues Foto ALDI Latte Macchiato (vorher nur Zucker/Eiweiß, jetzt alle Werte).
 v48-a12b: NÄHRWERT-SCANNER v3: Wertespalte „je 100 g/ml" wird zusätzlich als eigener Streifen
           aus dem Original gelesen und über die feste EU-Reihenfolge zugeordnet (Kombination
           der Lesarten nach Nährwertlogik/Energiebilanz). Tabellen-Ortung über Zahlenspalten,

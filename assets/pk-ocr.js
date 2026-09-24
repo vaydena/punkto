@@ -648,7 +648,8 @@
 
   /* Wertespalte in Lesereihenfolge -> Kandidaten ueber die EU-Reihenfolge.
      Anker ist die Energiezeile (kcal/kJ); danach zaehlen nur Zeilen mit einer
-     Zahl. 6 Werte = ohne, 7 = mit Ballaststoffen; sonst keine Zuordnung. */
+     Zahl. 6 Werte = ohne, 7 = mit Ballaststoffen; bei mehr (Fehllesungen)
+     werden beide Reihenfolgen probiert. kcal zaehlt auch ohne Zuordnung. */
   var SEQ6 = ["fat", "sat", "carbs", "sugar", "protein", "salt"];
   var SEQ7 = ["fat", "sat", "carbs", "sugar", "fiber", "protein", "salt"];
   var EN_RE = /k\s*c?a[l1i]|kaal|keal|kcai|kcel|\bk\s*[j)]|[0-9]\s*kj|kl\b|k1\b/;
@@ -663,36 +664,47 @@
       var m = R[a].match(/(\d{1,4})\s*(?:\)|\/|\|)?\s*\(?\s*(?:kcal|kca[l1i]?|kaal|keal|kcai|kcel|kc[l1]|kal)\b/);
       if (m) { var v = parseInt(m[1], 10); if (v >= 1 && v <= 900) kc = v; }
     }
+    if (kc != null) cands.kcal.push({ v: kc, w: 1 });
     var vals = [];
     for (var j = anchor + 1; j < R.length; j++) {
+      if (/referenz|erwachs|portion|packung|enthalt/.test(R[j])) break; // Fussnote
       var nums = valueNums(R[j]);
       if (!nums.length) continue;
-      if (/^\d{3,}$/.test(nums[0].tok) && !nums[0].hasG && parseInt(nums[0].tok, 10) > 1000) break; // Fussnote/Barcode
+      if (/^\d{6,}$/.test(nums[0].tok)) break; // Barcode
       vals.push(nums[0]);
     }
-    var seq = vals.length === 6 ? SEQ6 : vals.length === 7 ? SEQ7 : null;
-    if (!seq) return cands;
-    // Lesarten je Wert kombinieren; gewaehlt wird die Folge, die die
-    // Naehrwertlogik erfuellt (ges. FS <= Fett, Zucker <= KH, Energiebilanz).
-    var opts = seq.map(function (k, n) { return numCands(vals[n].tok, vals[n].hasG, k).slice(0, 3); });
-    if (opts.some(function (o) { return !o.length; })) return cands;
-    var best = null, bestSc = -1e9, cur = {};
-    (function rec(n, sc) {
-      if (n === seq.length) {
-        if (cur.sat > cur.fat + 0.05) sc -= 3;
-        if (cur.sugar > cur.carbs + 0.05) sc -= 3;
-        var ok = energyOk({ kcal: kc, fat: cur.fat, carbs: cur.carbs, protein: cur.protein, fiber: cur.fiber });
-        if (ok === true) sc += 3; else if (ok === false) sc -= 2;
-        if (sc > bestSc) { bestSc = sc; best = { ok: ok, v: JSON.parse(JSON.stringify(cur)) }; }
-        return;
-      }
-      opts[n].forEach(function (c) { cur[seq[n]] = c.v; rec(n + 1, sc + c.w); });
-    })(0, 0);
-    var w = best.ok === true ? 1.5 : 0.5;
-    if (best.v.sat > best.v.fat + 0.05 || best.v.sugar > best.v.carbs + 0.05) w = 0.3;
-    if (seq === SEQ7 && !fiberSeen) w *= 0.6;
-    if (kc != null) cands.kcal.push({ v: kc, w: 1 });
-    seq.forEach(function (k) { cands[k].push({ v: best.v[k], w: w }); });
+    // 6 Werte = ohne, 7 = mit Ballaststoffen; bei mehr Zeilen beide Deutungen pruefen
+    var seqs = [];
+    if (vals.length === 6 || vals.length > 7) seqs.push(SEQ6);
+    if (vals.length >= 7) seqs.push(SEQ7);
+    var best = null, bestSc = -1e9;
+    seqs.forEach(function (seq) {
+      // Lesarten je Wert; eine fuehrende „1" ist oft der Strich von „- davon"
+      var opts = seq.map(function (k, n) {
+        var t = vals[n].tok, o = numCands(t, vals[n].hasG, k).slice(0, 3);
+        if (/^1\d{2,3}$/.test(t)) numCands(t.slice(1), vals[n].hasG, k).slice(0, 2).forEach(function (c) { o.push({ v: c.v, w: c.w * 0.7 }); });
+        return o.length ? o : [{ v: null, w: -1 }];
+      });
+      var pen = seq === SEQ7 && !fiberSeen ? -1.5 : 0, cur = {};
+      // Kombination waehlen, die die Naehrwertlogik erfuellt
+      // (ges. FS <= Fett, Zucker <= KH, Energiebilanz)
+      (function rec(n, sc) {
+        if (n === seq.length) {
+          if (cur.sat > cur.fat + 0.05) sc -= 3;
+          if (cur.sugar > cur.carbs + 0.05) sc -= 3;
+          var ok = energyOk({ kcal: kc, fat: cur.fat, carbs: cur.carbs, protein: cur.protein, fiber: cur.fiber });
+          if (ok === true) sc += 3; else if (ok === false) sc -= 2;
+          if (sc > bestSc) { bestSc = sc; best = { ok: ok, seq: seq, v: JSON.parse(JSON.stringify(cur)) }; }
+          return;
+        }
+        opts[n].forEach(function (c) { cur[seq[n]] = c.v; rec(n + 1, sc + c.w); });
+      })(0, pen);
+    });
+    if (!best) return cands;
+    var w = best.ok === true ? 1.5 : 0.5, bv = best.v;
+    if (bv.sat > bv.fat + 0.05 || bv.sugar > bv.carbs + 0.05) w = 0.3;
+    if (best.seq === SEQ7 && !fiberSeen) w *= 0.6;
+    best.seq.forEach(function (k) { if (bv[k] != null) cands[k].push({ v: bv[k], w: w }); });
     return cands;
   }
 
