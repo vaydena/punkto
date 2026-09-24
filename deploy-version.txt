@@ -1,5 +1,10 @@
-pk-v47-3b9e
+pk-v48-a12b
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v48-a12b: NÄHRWERT-SCANNER v3: Wertespalte „je 100 g/ml" wird zusätzlich als eigener Streifen
+          aus dem Original gelesen und über die feste EU-Reihenfolge zugeordnet (Kombination
+          der Lesarten nach Nährwertlogik/Energiebilanz). Tabellen-Ortung über Zahlenspalten,
+          wenn keine Stichwörter lesbar sind; „kaal" als kcal; ml aus „250mi". Fix für
+          gewölbte 3-Spalten-Becher (ALDI Latte Macchiato: vorher nur kcal, jetzt alle Werte).
 v47-3b9e: NÄHRWERT-SCANNER deutlich verbessert (pk-ocr.js neu): zweistufig — erst Tabelle per
           Stichworten orten und zuschneiden, dann auf normierte Zeilenhöhe hochrechnen und mit
           mehreren Vorverarbeitungen (adaptiv/Graustufen/min-Kanal/Kontrast) lesen; Zeilen
