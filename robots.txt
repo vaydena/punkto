@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /betreiber.html
+Disallow: /supabase/
+
+Sitemap: https://punkto.vaydena.de/sitemap.xml

@@ -3,15 +3,76 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Punkto — Abnehmen mit dem Punkte-Prinzip</title>
-<meta name="description" content="Punkto ist die freundliche App fürs Abnehmen mit einem einfachen Punkte-System. Iss, was du magst — behalte den Überblick mit deinem Tagesbudget. 14 Tage kostenlos testen.">
+<title>Punkto – Abnehmen mit Punkten | Abnehm-App &amp; Punkterechner</title>
+<meta name="description" content="Abnehmen ohne Kalorienzählen: Punkto ist die Abnehm-App mit Punktesystem, Punkterechner und Barcode-Scanner. Diät ohne Verbote – 14 Tage kostenlos testen.">
+<meta name="keywords" content="Abnehmen, Abnehm-App, Abnehmen mit Punkten, Diät, Diät-App, Punkterechner, Punkte-Rechner, Punkte berechnen, Punkte zählen, Punktesystem, Punkte-Diät, Punktetabelle, 0-Punkte-Lebensmittel, Kalorien zählen, Kalorienrechner, Kaloriendefizit, Ernährungstagebuch, Abnehmtagebuch, Ernährungsumstellung, Wunschgewicht, Gewicht verlieren, Abnehmen ohne Hungern, Rezepte Punkte berechnen, Barcode-Scanner Lebensmittel">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="author" content="Vaydena">
 <meta name="theme-color" content="#0fa958">
 <link rel="canonical" href="https://punkto.vaydena.de/">
+<link rel="alternate" hreflang="de" href="https://punkto.vaydena.de/">
+<link rel="alternate" hreflang="x-default" href="https://punkto.vaydena.de/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Punkto — Abnehmen mit dem Punkte-Prinzip">
-<meta property="og:description" content="Ein Punktwert pro Lebensmittel, ein Tagesbudget, dein Fortschritt. Freundlich, alltagstauglich, ohne Verbote.">
+<meta property="og:locale" content="de_DE">
+<meta property="og:site_name" content="Punkto">
+<meta property="og:title" content="Punkto – Abnehmen mit Punkten: Abnehm-App &amp; Punkterechner">
+<meta property="og:description" content="Ein Punktwert pro Lebensmittel, ein Tagesbudget, dein Fortschritt. Abnehmen ohne Kalorienzählen und ohne Verbote – 14 Tage gratis.">
 <meta property="og:url" content="https://punkto.vaydena.de/">
-<meta property="og:image" content="https://punkto.vaydena.de/icon-512.png">
+<meta property="og:image" content="https://punkto.vaydena.de/assets/og-punkto.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Punkto – Abnehmen mit Punkten. Abnehm-App mit Punkterechner.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Punkto – Abnehmen mit Punkten: Abnehm-App &amp; Punkterechner">
+<meta name="twitter:description" content="Abnehmen ohne Kalorienzählen: Tagesbudget, Punkterechner, Barcode-Scanner. 14 Tage gratis.">
+<meta name="twitter:image" content="https://punkto.vaydena.de/assets/og-punkto.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://punkto.vaydena.de/#org",
+      "name": "Vaydena",
+      "url": "https://vaydena.de/",
+      "logo": "https://punkto.vaydena.de/icon-512.png"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://punkto.vaydena.de/#website",
+      "url": "https://punkto.vaydena.de/",
+      "name": "Punkto",
+      "inLanguage": "de-DE",
+      "publisher": {"@id": "https://punkto.vaydena.de/#org"}
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://punkto.vaydena.de/#app",
+      "name": "Punkto",
+      "url": "https://punkto.vaydena.de/",
+      "description": "Abnehm-App mit eigenem Punktesystem: Tagesbudget, Punkterechner, Barcode-Scanner, Rezept-Modus, Ernährungstagebuch und Gewichts-Trend. Installierbar als Web-App, offline nutzbar.",
+      "applicationCategory": "HealthApplication",
+      "operatingSystem": "Android, iOS, Windows, macOS (Browser)",
+      "inLanguage": "de-DE",
+      "image": "https://punkto.vaydena.de/assets/og-punkto.png",
+      "publisher": {"@id": "https://punkto.vaydena.de/#org"},
+      "featureList": [
+        "Tagesbudget und Wochenextra statt Kalorienzählen",
+        "Punkterechner für Lebensmittel und Rezepte",
+        "Barcode-Scanner mit über 300.000 Produkten",
+        "Nährwerttabelle per Foto auslesen",
+        "0-Punkte-Lebensmittel",
+        "Ernährungstagebuch und Gewichts-Trend",
+        "Offline nutzbar, ohne App-Store installierbar"
+      ],
+      "offers": [
+        {"@type": "Offer", "name": "Monatsabo", "price": "2.99", "priceCurrency": "EUR"},
+        {"@type": "Offer", "name": "Jahresabo", "price": "29.99", "priceCurrency": "EUR"}
+      ]
+    }
+  ]
+}
+</script>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -49,8 +110,98 @@
 
   /* „neu"-Badge auf neu hinzugekommenen Feature-Karten */
   .feature{position:relative}
+  .guide .feature h3{font-size:1.12rem}
+  .guide .feature p{line-height:1.6}
   .feature .fnew{position:absolute;top:16px;right:16px;font-size:.6rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--green-800);background:var(--green-tint);border:1px solid var(--green-tint-2);border-radius:999px;padding:3px 9px;line-height:1}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Ist Punkto Weight Watchers?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Nein. Punkto ist eine eigenständige App mit einem selbst entwickelten Punktesystem und eigenem Design. Wir stehen in keiner Verbindung zu WW International und verwenden keine deren Marken oder Formeln."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Wie werden die Punkte berechnet?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Punkto errechnet aus den Nährwerten einer Portion einen ganzzahligen Wert: Kalorien bilden die Grundlast, gesättigte Fette und Zucker erhöhen den Wert, Eiweiß und Ballaststoffe senken ihn. Das belohnt sättigende, nährstoffreiche Lebensmittel — ganz ohne dass du selbst rechnen musst."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Wie berechne ich die Punkte für ein Lebensmittel?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Am einfachsten per Barcode-Scanner oder Suche, dann zeigt Punkto die Punkte sofort an. Für alles andere gibt es den Punkterechner: Nährwerte von der Verpackung eintippen, Menge wählen, fertig. Der Nährstoffrechner liest die Nährwerttabelle sogar per Foto aus."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Kann ich mit Punkto abnehmen, ohne Kalorien zu zählen?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Ja, genau dafür ist Punkto gedacht. Statt Kalorien zählst du Punkte, und dein Tagesbudget ist schon so berechnet, dass es zu deinem Ziel passt. Wie schnell du abnimmst, ist allerdings individuell und hängt von vielen Faktoren ab."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Welche Lebensmittel haben 0 Punkte?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Über 40 Sorten Obst, Gemüse und eiweißreiche Lebensmittel zählen bei Punkto 0 Punkte. In der App findest du sie gesammelt unter „0 Punkte“, nach Kategorie sortiert und durchsuchbar."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Muss ich eine Kreditkarte hinterlegen?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Nein. Die 14 Tage sind ohne Zahlungsdaten. Möchtest du danach weitermachen, zahlst du per Überweisung (mit QR-Code) oder PayPal, und wir schalten deinen Zugang frei. Es wird nie automatisch etwas abgebucht."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Wie kündige ich?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Gar nicht nötig — dein Zugang ist zeitlich begrenzt und läuft automatisch aus, wenn du nicht verlängerst. Du gehst also kein laufendes Abo ein."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Kann ich Punkto wie eine echte App nutzen?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Ja. Punkto ist eine installierbare Web-App (PWA). Du kannst sie auf dem Startbildschirm ablegen und offline nutzen — ohne App-Store."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Sind meine Daten sicher, wenn ich das Handy wechsle oder verliere?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Ja. Dein Tagebuch, dein Gewicht und deine Aktivität liegen auf deinem Gerät und werden zusätzlich sicher auf dem Server in Deutschland gespeichert. Meldest du dich auf einem neuen Gerät an, sind deine Einträge wieder da — auch wenn das alte Handy weg ist."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Ersetzt Punkto eine Ernährungsberatung?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Nein. Punkto ist ein Alltags-Werkzeug zur Orientierung und kein Medizinprodukt. Bei Erkrankungen, in Schwangerschaft/Stillzeit oder bei Essstörungen sprich bitte mit Ärztin, Arzt oder einer Ernährungsfachkraft."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 
@@ -87,7 +238,7 @@
     <div class="hero-copy">
       <span class="eyebrow">🌱 14 Tage kostenlos · keine Kreditkarte</span>
       <h1>Abnehmen, das sich <span class="hl">leicht anfühlt</span>.</h1>
-      <p class="lead">Jedes Lebensmittel hat einen einfachen <b>Punktwert</b>. Du bekommst ein <b>Tagesbudget</b> — und isst, was du magst, solange es passt. Kein Kalorienzählen, keine Verbote.</p>
+      <p class="lead">Punkto ist die <b>Abnehm-App mit Punktesystem</b>: Jedes Lebensmittel hat einen einfachen <b>Punktwert</b>. Du bekommst ein <b>Tagesbudget</b> — und isst, was du magst, solange es passt. Kein Kalorienzählen, keine Verbote.</p>
       <div class="cta-row">
         <a class="btn primary big" href="anmelden.html?tab=register">Jetzt 14 Tage gratis starten</a>
         <a class="btn ghost big" href="#so">So funktioniert's</a>
@@ -184,7 +335,7 @@
   <div class="wrap">
     <div class="section-head">
       <div class="eyebrow">Ein Blick in die App</div>
-      <h2>Hinzufügen &amp; Punkte-Rechner</h2>
+      <h2>Punkterechner &amp; Hinzufügen</h2>
       <p>Ein Tippen auf <b>Hinzufügen</b> — und du wählst aus <b>zehn Wegen</b>: suchen, Barcode scannen, die <b>Nährwerttabelle abfotografieren</b>, mit <b>0&nbsp;Punkten</b> satt essen, einen <b>Tag kopieren</b>, wiegen, Aktivität eintragen, ein Produkt <b>per Foto anlegen</b>, den <b>Punkte-Rechner</b> oder den <b>Rezept-Modus</b> nutzen.</p>
     </div>
     <div class="shots">
@@ -343,6 +494,43 @@
   </div>
 </section>
 
+<!-- ============================ RATGEBER (SEO-Text) ============================ -->
+<section class="section" id="ratgeber">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Ratgeber</div>
+      <h2>Abnehmen mit Punkten: So funktioniert die Diät ohne Verbote</h2>
+      <p>Was hinter dem Punktesystem steckt, wie der Punkterechner arbeitet und warum ein Tagesbudget leichter ist als Kalorienzählen.</p>
+    </div>
+    <div class="grid g2 guide">
+      <article class="feature">
+        <h3>Abnehmen ohne Kalorienzählen</h3>
+        <p>Wer abnehmen will, muss auf Dauer etwas weniger Energie aufnehmen, als der Körper verbraucht. Kalorien zu zählen ist dafür aber mühsam: große Zahlen, viel Umrechnen, schnell Frust. Punkto fasst die Nährwerte eines Lebensmittels zu <b>einem einfachen Punktwert</b> zusammen. Dein persönliches <b>Tagesbudget</b> ergibt sich aus Größe, Gewicht, Wunschgewicht und Alltag. So behältst du dein Kaloriendefizit im Blick, ohne jede Kalorie aufzuschreiben.</p>
+      </article>
+      <article class="feature">
+        <h3>Der Punkterechner: Punkte selbst berechnen</h3>
+        <p>Mit dem <b>Punkterechner</b> berechnest du die Punkte für jedes Lebensmittel direkt aus der Nährwerttabelle: Kalorien, gesättigte Fettsäuren, Zucker, Eiweiß und Ballaststoffe eintippen, Menge wählen, Punkte ablesen. Noch schneller geht es mit dem <b>Nährstoffrechner</b>, der die Tabelle per Foto ausliest, oder mit dem <b>Barcode-Scanner</b>. Für Selbstgekochtes rechnet der <b>Rezept-Modus</b> die Punkte pro Portion aus.</p>
+      </article>
+      <article class="feature">
+        <h3>Diät ohne Verbote: 0-Punkte-Lebensmittel</h3>
+        <p>Eine Diät, bei der man ständig hungert, hält kaum jemand lange durch. Deshalb zählen bei Punkto <b>Obst, Gemüse und viele eiweißreiche Lebensmittel 0 Punkte</b>. Du darfst dich satt essen und musst trotzdem nichts streichen: Auch Schokolade, Pizza oder das Stück Kuchen haben ihren Punktwert und passen ins Budget. Für Feiern und Restaurantbesuche gibt es das <b>Wochenextra</b>.</p>
+      </article>
+      <article class="feature">
+        <h3>Ernährungstagebuch &amp; Gewichtskurve</h3>
+        <p>Das <b>Ernährungstagebuch</b> zeigt dir jeden Tag, wie viele Punkte noch übrig sind. Zuletzt gegessene Lebensmittel und Favoriten trägst du mit einem Tipp ein, ganze Tage lassen sich kopieren. Die geglättete <b>Gewichtskurve</b> blendet tägliche Schwankungen aus und zeigt den echten Trend auf dem Weg zum Wunschgewicht. Bewegung und Schritte bringen Bonuspunkte.</p>
+      </article>
+      <article class="feature">
+        <h3>Ernährungsumstellung statt Crash-Diät</h3>
+        <p>Weil sättigende, nährstoffreiche Lebensmittel weniger Punkte kosten, lenkt das Punktesystem deine Auswahl ganz nebenbei in eine gute Richtung. Das ist eher eine <b>Ernährungsumstellung</b> im Alltag als eine kurze Diät mit Jo-Jo-Effekt. Du lernst, welche Lebensmittel dir viel Genuss für wenige Punkte bringen.</p>
+      </article>
+      <article class="feature">
+        <h3>Abnehm-App für Android, iPhone &amp; PC</h3>
+        <p>Punkto läuft im Browser und lässt sich ohne App-Store als <b>App auf dem Handy</b> installieren, auf Android wie auf dem iPhone. Die Lebensmittel-Datenbank mit über 300.000 Produkten aus Open Food Facts und dem Bundeslebensmittelschlüssel funktioniert auch <b>offline</b>. Deine Einträge werden zusätzlich auf einem Server in Deutschland gesichert.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
 <!-- ============================ FAQ ============================ -->
 <section class="section tint" id="faq">
   <div class="wrap">
@@ -358,6 +546,18 @@
       <details>
         <summary>Wie werden die Punkte berechnet?</summary>
         <p>Punkto errechnet aus den Nährwerten einer Portion einen ganzzahligen Wert: Kalorien bilden die Grundlast, gesättigte Fette und Zucker erhöhen den Wert, Eiweiß und Ballaststoffe senken ihn. Das belohnt sättigende, nährstoffreiche Lebensmittel — ganz ohne dass du selbst rechnen musst.</p>
+      </details>
+      <details>
+        <summary>Wie berechne ich die Punkte für ein Lebensmittel?</summary>
+        <p>Am einfachsten per Barcode-Scanner oder Suche, dann zeigt Punkto die Punkte sofort an. Für alles andere gibt es den <b>Punkterechner</b>: Nährwerte von der Verpackung eintippen, Menge wählen, fertig. Der Nährstoffrechner liest die Nährwerttabelle sogar per Foto aus.</p>
+      </details>
+      <details>
+        <summary>Kann ich mit Punkto abnehmen, ohne Kalorien zu zählen?</summary>
+        <p>Ja, genau dafür ist Punkto gedacht. Statt Kalorien zählst du Punkte, und dein Tagesbudget ist schon so berechnet, dass es zu deinem Ziel passt. Wie schnell du abnimmst, ist allerdings individuell und hängt von vielen Faktoren ab.</p>
+      </details>
+      <details>
+        <summary>Welche Lebensmittel haben 0 Punkte?</summary>
+        <p>Über 40 Sorten Obst, Gemüse und eiweißreiche Lebensmittel zählen bei Punkto 0 Punkte. In der App findest du sie gesammelt unter „0 Punkte“, nach Kategorie sortiert und durchsuchbar.</p>
       </details>
       <details>
         <summary>Muss ich eine Kreditkarte hinterlegen?</summary>
@@ -413,6 +613,7 @@
         <a href="#so">So funktioniert's</a>
         <a href="#rechner">Punkte-Rechner</a>
         <a href="#features">Funktionen</a>
+        <a href="#ratgeber">Ratgeber: Abnehmen mit Punkten</a>
         <a href="#preis">Preis</a>
         <a href="anmelden.html?tab=register">Kostenlos testen</a>
       </div>

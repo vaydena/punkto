@@ -41,3 +41,12 @@ AddDefaultCharset UTF-8
     Header set Cache-Control "public, max-age=86400"
   </FilesMatch>
 </IfModule>
+# SEO: App-interne Seiten nicht in Suchmaschinen (Header statt Meta -> SW-Shell-Dateien bleiben byte-gleich)
+<IfModule mod_headers.c>
+  <FilesMatch "^(app|konto|anmelden|betreiber)\.html$">
+    Header set X-Robots-Tag "noindex, follow"
+  </FilesMatch>
+  <FilesMatch "^(robots\.txt|sitemap\.xml)$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+</IfModule>

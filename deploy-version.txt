@@ -1,5 +1,6 @@
-pk-v55-b2f7
+pk-v56-2b68
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v56-2b68: SEO Landingpage — Title/Description/Keywords (Abnehmen, Diät, Punkterechner …), JSON-LD (Organization/WebSite/WebApplication + FAQPage aus sichtbarer FAQ), Ratgeber-Sektion + 3 FAQ, robots.txt + sitemap.xml, OG-Bild 1200x630, X-Robots-Tag noindex für app/konto/anmelden/betreiber (.htaccess). Kein SW-Bump (index.html network-first).
 v55-b2f7: Konto selbst löschen (Einstellungen); verständliche Fehlermeldungen (falsches
           Passwort, zu lang, zu viele Versuche); Passwortwechsel meldet andere Geräte ab;
           .htaccess-Sicherheitsheader + Sperre sensibler Dateitypen; Deploy nur Web-Dateitypen.
