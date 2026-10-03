@@ -99,6 +99,19 @@
   .remind .go{flex:0 0 auto;border:0;background:var(--amber);color:var(--amber-ink);font:inherit;font-weight:800;font-size:.84rem;
     border-radius:var(--r-pill);padding:0 14px;min-height:36px;cursor:pointer;white-space:nowrap}
   .remind .x{flex:0 0 auto;width:36px;height:36px;border:0;background:none;color:var(--muted);font-size:1.2rem;cursor:pointer}
+  /* Essensplan (Zukunftstage) + Einkaufsliste */
+  #viewToday.plan .water-card{display:none}
+  #viewToday.plan .budget-hero{background:linear-gradient(160deg,#4d6491,#2b3857)}
+  .plan-bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .plan-bar .btn{flex:1 1 140px}
+  .sh-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-2);cursor:pointer}
+  .sh-row input{width:22px;height:22px;flex:0 0 22px;margin:0;accent-color:var(--green)}
+  .sh-row .nm{flex:1;min-width:0;line-height:1.3}
+  .sh-row.done .nm{text-decoration:line-through;color:var(--muted)}
+  .sh-row .sh-del{flex:0 0 auto;border:0;background:none;color:var(--muted);font-size:1.2rem;width:36px;height:36px;cursor:pointer}
+  .sh-add{display:flex;gap:8px;margin:12px 0}
+  .sh-add input,.sh-add select{flex:1;min-width:0;margin:0}
+  .sh-add .por{flex:0 0 68px}
   /* „Wie gestern" je leerer Mahlzeit. */
   .meal-again{display:block;width:100%;margin-top:6px;border:1.4px dashed var(--line);background:none;color:var(--green-700);
     font:inherit;font-size:.86rem;font-weight:700;border-radius:12px;min-height:40px;cursor:pointer}
@@ -949,6 +962,7 @@
   function fmtDayLabel(iso) {
     if (iso === S.today) return "Heute";
     if (iso === addDays(S.today, -1)) return "Gestern";
+    if (iso === addDays(S.today, 1)) return "Morgen";
     var d = parseISO(iso);
     var wd = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][d.getDay()];
     return wd + ", " + d.getDate() + "." + (d.getMonth() + 1) + ".";
@@ -1106,6 +1120,9 @@
       acct = pickAccount(S.data);                    // vorhandene Kontobits weiter nutzen, kein Netz
     }
     var local = await PKDiary.dayState(localDay);     // Tag-Bits stets lokal
+    // Essensplan: Zukunftstage zeigen die gerätelokal geplanten Einträge (nie im Tagebuch/Sync).
+    planPrune();
+    if (isPlanDay(localDay)) local.diary = (local.diary || []).concat(planGet(localDay));
     S.data = composeState(acct, local);
     S.user = acct.user; S.sub = acct.subscription; S.day = localDay;
     await applyToken(acct.token);                      // Abo-Token offline prüfen -> S.tokenGate
@@ -1287,7 +1304,7 @@
   }
   /* Geräte-lokale Extras (nicht synchronisiert) – gehören immer zum aktuellen Konto. */
   function wipeLocalExtras() {
-    try { ["pk_milestones_v1", "pk_budget_hint_v1", "pk_water_v1", "pk_meals_v1", "pk_portions_v1", "pk_measure_v1"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
+    try { ["pk_milestones_v1", "pk_budget_hint_v1", "pk_water_v1", "pk_meals_v1", "pk_portions_v1", "pk_measure_v1", "pk_plan_v1", "pk_shop_v1"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
   }
   /* Sync-Cursor zurücksetzen -> der nächste Abgleich holt die ganze Server-Historie. */
   function resetSyncMarks(uid) {
@@ -1347,7 +1364,7 @@
       if (now === S.today) return;
       var wasToday = (S.day === S.today);
       S.today = now;
-      if (wasToday) gotoDay(now); else { renderToday(); }
+      if (wasToday) gotoDay(now); else gotoDay(S.day);   // auch Plan-Ansicht neu laden (Plan-Tag kann „heute" geworden sein)
     } catch (e) { /* best effort */ }
   }
   setInterval(checkDayRollover, 60000);
@@ -1866,7 +1883,9 @@
     renderWater();
     $("#dayLabel").textContent = fmtDayLabel(S.day);
     $("#heroDate").textContent = fmtLongDate(S.day);
-    $("#dayNext").disabled = (S.day >= S.today);
+    var plan = isPlanDay(S.day);
+    $("#dayNext").disabled = (S.day >= addDays(S.today, PLAN_DAYS));
+    $("#viewToday").classList.toggle("plan", plan);
 
     // Ring
     var frac = budget > 0 ? PK.clamp(eaten / budget, 0, 1) : 0;
@@ -1874,7 +1893,10 @@
     fill.setAttribute("stroke-dashoffset", (RING_CIRC * (1 - frac)).toFixed(1));
     fill.setAttribute("stroke", remain < 0 ? "#ffd27a" : "#fff");
     $("#ringRemain").textContent = Math.abs(remain);
-    $("#ringLbl").textContent = remain < 0 ? (remain === -1 ? "Punkt drüber" : "Punkte drüber") : (remain === 1 ? "Punkt übrig" : "Punkte übrig");
+    $("#ringLbl").textContent = remain < 0 ? (remain === -1 ? "Punkt drüber" : "Punkte drüber")
+      : (remain === 1 ? "Punkt " : "Punkte ") + (plan ? "frei" : "übrig");
+    var eatLbl = $("#metaEaten").previousElementSibling;
+    if (eatLbl) eatLbl.textContent = plan ? "Geplant" : "Gegessen";
 
     $("#metaBudget").textContent = budget;
     $("#metaEaten").textContent = eaten;
@@ -1883,7 +1905,7 @@
     // Wochenextra: aufgelaufene Überschreitungen der Woche ziehen daraus.
     var overflow = 0;
     // Nur Tage bis einschließlich des angezeigten Tages (keine Einträge aus der Zukunft).
-    (d.week || []).forEach(function (w) { if (w.day > S.day) return; var over = (+w.points || 0) - budget; if (over > 0) overflow += over; });
+    weekPlus(d).forEach(function (w) { if (w.day > S.day) return; var over = (+w.points || 0) - budget; if (over > 0) overflow += over; });
     var bonusWeek = (d.week_bonus || []).reduce(function (s, w) { return s + (+w.bonus || 0); }, 0);
     var pool = weekly + bonusWeek;
     var usedPct = pool > 0 ? PK.clamp((overflow / pool) * 100, 0, 100) : 0;
@@ -1929,12 +1951,23 @@
 
     if (!anyEntry) {
       var hint = document.createElement("div"); hint.className = "empty";
-      hint.innerHTML = '<div class="em">🍽️</div><div>Noch nichts gegessen heute.<br>Tippe unten auf <b>+</b>, um zu starten.</div>' +
-        '<button class="btn ghost" id="copyPrevDay" style="margin-top:14px">📋 Vom Vortag übernehmen</button>';
+      hint.innerHTML = plan
+        ? '<div class="em">🗓️</div><div>Für diesen Tag ist noch nichts geplant.<br>Tippe unten auf <b>+</b>, um etwas einzuplanen.</div>' +
+          '<button class="btn ghost" id="copyPrevDay" style="margin-top:14px">📋 Von einem anderen Tag übernehmen</button>'
+        : '<div class="em">🍽️</div><div>Noch nichts gegessen heute.<br>Tippe unten auf <b>+</b>, um zu starten.</div>' +
+          '<button class="btn ghost" id="copyPrevDay" style="margin-top:14px">📋 Vom Vortag übernehmen</button>';
       host.appendChild(hint);
       var cpBtn = $("#copyPrevDay", hint);
-      if (cpBtn) cpBtn.addEventListener("click", function () { openCopyDaySheet(addDays(S.day, -1)); });
+      if (cpBtn) cpBtn.addEventListener("click", function () { openCopyDaySheet(plan ? S.today : addDays(S.day, -1)); });
     }
+    // Leiste unter den Mahlzeiten: Einstieg in Essensplan und Einkaufsliste.
+    var pb = '', pbtn = function (act, label) { return '<button type="button" class="btn ghost" data-plan-act="' + act + '">' + label + '</button>'; };
+    if (plan) pb = pbtn("shop", "🛒 Einkaufsliste") + pbtn("today", "Zu heute");
+    else if (S.day === S.today) {
+      var tpn = planGet(S.today).length;
+      pb = (tpn ? pbtn("adopt", "🗓️ Geplantes übernehmen (" + tpn + ")") : "") + pbtn("tomorrow", "🗓️ Morgen planen") + pbtn("shop", "🛒 Einkaufsliste");
+    }
+    if (pb) { var bar = document.createElement("div"); bar.className = "plan-bar"; bar.innerHTML = pb; host.appendChild(bar); }
     renderMealAgain();
     renderReminders();
   }
@@ -1994,12 +2027,21 @@
     var host = $("#reminders"); if (!host) return;
     var cfg = remindGet(), today = S.today, items = [];
     if (!S.user || !S.user.onboarded) { host.innerHTML = ""; return; }
+    if (isPlanDay(S.day)) {
+      host.innerHTML = '<div class="remind past" data-k="back"><span aria-hidden="true">🗓️</span><span class="tx">Essensplan für <b>' +
+        esc(fmtDayLabel(S.day)) + '</b> – zählt erst, wenn du es an dem Tag übernimmst.</span>' +
+        '<button type="button" class="go">Zu heute</button></div>';
+      return;
+    }
     if (S.day !== today) {
       host.innerHTML = '<div class="remind past" data-k="back"><span aria-hidden="true">📝</span><span class="tx">Du trägst für <b>' +
         esc(fmtDayLabel(S.day)) + '</b> nach (' + esc(fmtShortDate(S.day)) + ').</span>' +
         '<button type="button" class="go">Zu heute</button></div>';
       return;
     }
+    var tp = planGet(today);
+    if (tp.length && cfg.off.plan !== today)
+      items.push({ k: "plan", ic: "🗓️", t: "Für heute geplant: " + tp.length + (tp.length === 1 ? " Eintrag" : " Einträge") + " · " + PK.sumPoints(tp) + " P", b: "Übernehmen" });
     if (cfg.weigh && cfg.off.weigh !== today) {
       var ws = (S.data.weights || []).filter(function (p) { return +p.weight_kg > 0; });
       var last = ws.length ? ws[ws.length - 1].day : null;
@@ -2027,7 +2069,7 @@
     var row = ev.target.closest(".remind"); if (!row) return;
     var k = row.dataset.k;
     if (ev.target.closest(".x")) {
-      var cfg = remindGet(); cfg.off = {}; cfg.off[k === "weigh" ? "weigh" : "diary"] = S.today;
+      var cfg = remindGet(); cfg.off = {}; cfg.off[k === "weigh" ? "weigh" : (k === "plan" ? "plan" : "diary")] = S.today;
       var old = remindGet().off;                      // den jeweils anderen heutigen Wegklick behalten
       Object.keys(old).forEach(function (o) { if (old[o] === S.today && cfg.off[o] == null) cfg.off[o] = old[o]; });
       remindSet(cfg); renderReminders(); return;
@@ -2036,6 +2078,7 @@
     if (k === "weigh") openWeightSheet(S.today);
     else if (k === "yday") openDiaryDay(addDays(S.today, -1));
     else if (k === "back") gotoDay(S.today);
+    else if (k === "plan") openPlanAdoptSheet();
     else openAddSheet();
   }
   /* Tagebuch eines bestimmten Tages wirklich „aufschlagen": Tag laden, auf „Mein Tag"
@@ -2167,6 +2210,254 @@
   /* Wochenrückblick (Mo–So), per ‹ › zurückblätterbar. Liest das lokale Tagebuch
      komplett (IndexedDB) — funktioniert damit auch offline. Verglichen wird mit
      dem HEUTIGEN Tagesbudget (frühere Budgets werden nicht gespeichert). */
+  /* ===== Essensplan (gerätelokal) =====================================
+     Zukunftstage (morgen … +PLAN_DAYS) sind „Plan-Tage". Ihre Einträge liegen NUR in
+     localStorage (pk_plan_v1: { "YYYY-MM-DD": [entry…] }), nie im Tagebuch, im Sync
+     oder in der Statistik. API.data.diaryAdd/Update/Del werden einmalig umhüllt und
+     leiten Plan-Tage bzw. Plan-IDs („pl_…") hierher um – so funktionieren alle
+     bestehenden Hinzufügen-/Bearbeiten-/Löschen-Wege unverändert auch im Plan.
+     Gezählt wird erst, wenn der Plan am Tag selbst übernommen wird (openPlanAdoptSheet). */
+  var LS_PLAN = "pk_plan_v1", PLAN_DAYS = 7;
+  function planAll() {
+    var o = {};
+    try { o = JSON.parse(localStorage.getItem(LS_PLAN) || "{}") || {}; } catch (e) { o = {}; }
+    return (o && typeof o === "object" && !Array.isArray(o)) ? o : {};
+  }
+  function planSave(o) { try { localStorage.setItem(LS_PLAN, JSON.stringify(o)); } catch (e) {} }
+  function planGet(day) { var a = planAll()[day]; return Array.isArray(a) ? a : []; }
+  function planPrune() {
+    if (!S.today) return;
+    var o = planAll(), ch = false;
+    Object.keys(o).forEach(function (k) { if (k < S.today || !Array.isArray(o[k]) || !o[k].length) { delete o[k]; ch = true; } });
+    if (ch) planSave(o);
+  }
+  function isPlanDay(day) { return !!(day && S.today && day > S.today); }
+  function isPlanId(id) { return String(id).indexOf("pl_") === 0; }
+  function planSum(day) { return PK.sumPoints(planGet(day)); }
+  function planAdd(entry) {
+    var day = entry.day || S.day, o = planAll();
+    var e = Object.assign({}, entry, {
+      id: "pl_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      day: day, created_at: new Date().toISOString()
+    });
+    (o[day] = Array.isArray(o[day]) ? o[day] : []).push(e);
+    planSave(o);
+    return { ok: true, entry: e };
+  }
+  function planUpdate(patch) {
+    var o = planAll(), hit = null;
+    Object.keys(o).forEach(function (k) {
+      (o[k] || []).forEach(function (e, i) { if (String(e.id) === String(patch.id)) hit = o[k][i] = Object.assign({}, e, patch); });
+    });
+    if (hit) planSave(o);
+    return { ok: !!hit, entry: hit };
+  }
+  function planDel(id) {
+    var o = planAll(), n = 0;
+    Object.keys(o).forEach(function (k) {
+      var before = (o[k] || []).length;
+      o[k] = (o[k] || []).filter(function (e) { return String(e.id) !== String(id); });
+      n += before - o[k].length;
+      if (!o[k].length) delete o[k];
+    });
+    if (n) planSave(o);
+    return { ok: n > 0 };
+  }
+  (function wrapDiaryForPlan() {
+    var D = API && API.data; if (!D || D._planWrapped) return;
+    var add = D.diaryAdd, upd = D.diaryUpdate, del = D.diaryDel;
+    try {
+      D.diaryAdd = function (e) { return isPlanDay((e && e.day) || S.day) ? Promise.resolve(planAdd(e)) : add.call(D, e); };
+      D.diaryUpdate = function (e) { return (e && isPlanId(e.id)) ? Promise.resolve(planUpdate(e)) : upd.call(D, e); };
+      D.diaryDel = function (id) { return isPlanId(id) ? Promise.resolve(planDel(id)) : del.call(D, id); };
+      D._planWrapped = true;
+    } catch (e) { /* nicht umhüllbar -> Plan bleibt leer, Tagebuch unberührt */ }
+  })();
+  /* Wochenwerte + geplante Punkte der Zukunftstage bis zum angezeigten Plan-Tag
+     (für die Wochenextra-Anzeige/-Vorschau im Plan; d.week selbst bleibt unverändert). */
+  function weekPlus(d) {
+    var wk = (d.week || []).map(function (w) { return { day: w.day, points: +w.points || 0 }; });
+    if (!isPlanDay(S.day)) return wk;
+    var ws = weekStartOf(S.day);
+    for (var x = addDays(S.today, 1); x <= S.day; x = addDays(x, 1)) {
+      if (x < ws) continue;
+      var p = planSum(x); if (!p) continue;
+      var hit = wk.filter(function (w) { return w.day === x; })[0];
+      if (hit) hit.points += p; else wk.push({ day: x, points: p });
+    }
+    return wk;
+  }
+  /* Geplantes für heute ins echte Tagebuch übernehmen (einzeln abwählbar). */
+  function openPlanAdoptSheet() {
+    var list = planGet(S.today);
+    if (!list.length) { toast("Für heute ist nichts geplant."); return; }
+    var html = '<p class="cp-note">Diese Einträge hast du für heute geplant. Übernimm, was du wirklich isst – erst dann zählen die Punkte.</p>';
+    MEALS.forEach(function (m) {
+      var items = list.filter(function (e) { return mealKeyOf(e) === m.key; });
+      if (!items.length) return;
+      html += '<div class="qf-head">' + m.em + ' ' + m.label + '</div>';
+      items.forEach(function (e) {
+        html += '<label class="cp-row cp-pick" data-pid="' + esc(e.id) + '"><input type="checkbox" checked>' +
+          '<span class="nm">' + esc(e.name) + '</span><span class="coin sm' + ((+e.points === 0) ? " zero" : "") + '">' + (+e.points || 0) + '</span></label>';
+      });
+    });
+    html += '<button class="btn primary block big" id="paDo" style="margin-top:14px">Ausgewählte eintragen</button>' +
+      '<button class="btn ghost block" id="paDrop" style="margin-top:8px">Plan für heute verwerfen</button>';
+    openSheet("Geplant für heute", html, function (root) {
+      $("#paDo", root).addEventListener("click", async function () {
+        var ids = $$(".cp-pick", root).filter(function (l) { return l.querySelector("input").checked; }).map(function (l) { return l.dataset.pid; });
+        if (!ids.length) { toast("Nichts ausgewählt."); return; }
+        this.disabled = true;
+        var n = 0, pts = 0;
+        for (var i = 0; i < ids.length; i++) {
+          var e = list.filter(function (x) { return String(x.id) === ids[i]; })[0]; if (!e) continue;
+          var payload = Object.assign({}, e, { day: S.today }); delete payload.id; delete payload.created_at;
+          var r = await guardWrite(function () { return API.data.diaryAdd(payload); });
+          if (!r) break;
+          planDel(e.id); n++; pts += (+e.points || 0);
+        }
+        closeSheet();
+        await refreshDay();
+        if (n) toast(n + (n === 1 ? " Eintrag" : " Einträge") + " eingetragen · " + pts + " P");
+      });
+      $("#paDrop", root).addEventListener("click", function () {
+        if (!confirm("Den Plan für heute verwerfen?")) return;
+        list.forEach(function (e) { planDel(e.id); });
+        closeSheet(); renderToday(); toast("Plan verworfen.");
+      });
+    });
+  }
+
+  /* ===== Einkaufsliste (gerätelokal) ==================================
+     pk_shop_v1: [{ id, name, amount (Zahl|null), unit, done, src }]. src „plan" =
+     aus dem Essensplan erzeugt (wird beim erneuten Füllen ersetzt statt verdoppelt),
+     „r" = aus einem Rezept, „" = selbst getippt. Mengen stammen 1:1 aus den
+     Rezept-Zutaten bzw. Plan-Einträgen (nur auf Portionen umgerechnet). */
+  var LS_SHOP = "pk_shop_v1";
+  function shopAll() {
+    var a = [];
+    try { a = JSON.parse(localStorage.getItem(LS_SHOP) || "[]") || []; } catch (e) { a = []; }
+    return Array.isArray(a) ? a : [];
+  }
+  function shopSave(a) { try { localStorage.setItem(LS_SHOP, JSON.stringify(a)); } catch (e) {} }
+  function shopMerge(list, items) {
+    items.forEach(function (it) {
+      var name = String(it.name || "").trim(); if (!name) return;
+      var unit = it.unit || "", src = it.src || "", amt = (+it.amount > 0) ? +it.amount : null;
+      var hit = list.filter(function (x) {
+        return !x.done && (x.src || "") === src && String(x.name).toLowerCase() === name.toLowerCase() && (x.unit || "") === unit &&
+          ((x.amount == null) === (amt == null));
+      })[0];
+      if (hit) { if (amt != null) hit.amount = Math.round((hit.amount + amt) * 10) / 10; }
+      else list.push({ id: "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name: name, amount: amt, unit: unit, done: false, src: src });
+    });
+    return list;
+  }
+  function shopFromRecipe(r, portions, src) {
+    var sv = +r.servings > 0 ? +r.servings : 1, f = (+portions > 0 ? +portions : sv) / sv;
+    return (r.items || []).map(function (it) {
+      var a = (+it.amount > 0 && it.unit) ? Math.round(it.amount * f * 10) / 10 : null;
+      return { name: it.name, amount: a, unit: a != null ? it.unit : "", src: src || "r" };
+    });
+  }
+  function shopFromPlan() {
+    var o = planAll(), out = [], recipes = (S.data && S.data.recipes) || [];
+    Object.keys(o).sort().forEach(function (day) {
+      if (S.today && day < S.today) return;
+      (o[day] || []).forEach(function (e) {
+        var r = recipes.filter(function (x) { return e.unit === "Portion" && String(x.id) === String(e.ref_code) && x.name === e.name; })[0];
+        if (r) { out = out.concat(shopFromRecipe(r, +e.qty || 1, "plan")); return; }
+        var real = (+e.qty > 0 && e.unit && e.unit !== "Portion");
+        out.push({ name: e.name, amount: real ? +e.qty : null, unit: real ? e.unit : "", src: "plan" });
+      });
+    });
+    return out;
+  }
+  function shopLine(it) {
+    return (it.amount != null ? (Math.round(it.amount * 10) / 10).toLocaleString("de-DE") + " " + it.unit + " " : "") + it.name;
+  }
+  function shopText(list) {
+    var open = list.filter(function (x) { return !x.done; });
+    return "🛒 Einkaufsliste\n" + open.map(function (x) { return "• " + shopLine(x); }).join("\n");
+  }
+  function openShopSheet() {
+    var recipes = (S.data && S.data.recipes) || [];
+    openSheet("Einkaufsliste",
+      '<div id="shList"></div>' +
+      '<div class="sh-add"><input type="text" id="shNew" maxlength="80" placeholder="Etwas hinzufügen …" autocomplete="off">' +
+      '<button type="button" class="btn primary" id="shAdd">Dazu</button></div>' +
+      '<button type="button" class="btn ghost block" id="shPlan">🗓️ Aus dem Essensplan füllen</button>' +
+      (recipes.length
+        ? '<div class="qf-head">Zutaten eines Rezepts</div><div class="sh-add"><select id="shRec">' +
+          recipes.map(function (r, i) { return '<option value="' + i + '">' + esc(r.name) + '</option>'; }).join("") +
+          '</select><input type="number" class="por" id="shPor" min="1" max="99" step="1" inputmode="numeric" aria-label="Portionen">' +
+          '<button type="button" class="btn ghost" id="shRecAdd">Dazu</button></div>'
+        : '') +
+      '<div class="share-row"><button type="button" class="btn ghost" id="shShare">Teilen</button>' +
+      '<button type="button" class="btn ghost" id="shClean">Erledigte entfernen</button></div>' +
+      '<button type="button" class="btn ghost block" id="shClear" style="margin-top:8px;color:var(--danger)">Liste leeren</button>' +
+      '<p class="cp-note" style="margin-top:12px">Die Liste liegt nur auf diesem Gerät.</p>',
+      function (root) {
+        var host = $("#shList", root);
+        function draw() {
+          var list = shopAll();
+          host.innerHTML = list.length ? list.map(function (it) {
+            return '<label class="sh-row' + (it.done ? " done" : "") + '" data-id="' + esc(it.id) + '"><input type="checkbox"' + (it.done ? " checked" : "") + '>' +
+              '<span class="nm">' + esc(shopLine(it)) + '</span>' +
+              '<button type="button" class="sh-del" aria-label="Entfernen">×</button></label>';
+          }).join("") : '<div class="list-empty">Noch nichts auf der Liste.</div>';
+        }
+        host.addEventListener("click", function (ev) {
+          var row = ev.target.closest(".sh-row"); if (!row) return;
+          if (ev.target.closest(".sh-del")) {
+            ev.preventDefault();
+            shopSave(shopAll().filter(function (x) { return x.id !== row.dataset.id; })); draw();
+          }
+        });
+        host.addEventListener("change", function (ev) {
+          var row = ev.target.closest(".sh-row"); if (!row) return;
+          var list = shopAll();
+          list.forEach(function (x) { if (x.id === row.dataset.id) x.done = !!ev.target.checked; });
+          shopSave(list); draw();
+        });
+        function addFree() {
+          var el = $("#shNew", root), v = el.value.trim(); if (!v) return;
+          shopSave(shopMerge(shopAll(), [{ name: v }])); el.value = ""; draw();
+        }
+        $("#shAdd", root).addEventListener("click", addFree);
+        $("#shNew", root).addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); addFree(); } });
+        $("#shPlan", root).addEventListener("click", function () {
+          var items = shopFromPlan();
+          if (!items.length) { toast("Im Essensplan steht noch nichts."); return; }
+          // Früher aus dem Plan erzeugte, noch offene Posten ersetzen (kein Verdoppeln beim erneuten Füllen).
+          var list = shopAll().filter(function (x) { return !(x.src === "plan" && !x.done); });
+          shopSave(shopMerge(list, items)); draw(); toast("Aus dem Essensplan übernommen.");
+        });
+        var rec = $("#shRec", root), por = $("#shPor", root);
+        if (rec) {
+          var syncPor = function () { var r = recipes[+rec.value]; por.value = (r && +r.servings > 0) ? +r.servings : 1; };
+          syncPor(); rec.addEventListener("change", syncPor);
+          $("#shRecAdd", root).addEventListener("click", function () {
+            var r = recipes[+rec.value]; if (!r) return;
+            var items = shopFromRecipe(r, +por.value || 0, "r");
+            if (!items.length) { toast("Dieses Rezept hat keine Zutaten."); return; }
+            shopSave(shopMerge(shopAll(), items)); draw(); toast("Zutaten hinzugefügt.");
+          });
+        }
+        $("#shShare", root).addEventListener("click", function () {
+          var list = shopAll().filter(function (x) { return !x.done; });
+          if (!list.length) { toast("Die Liste ist leer."); return; }
+          shareOut({ title: "Einkaufsliste", text: shopText(shopAll()) });
+        });
+        $("#shClean", root).addEventListener("click", function () { shopSave(shopAll().filter(function (x) { return !x.done; })); draw(); });
+        $("#shClear", root).addEventListener("click", function () {
+          if (!shopAll().length || !confirm("Die ganze Einkaufsliste leeren?")) return;
+          shopSave([]); draw();
+        });
+        draw();
+      });
+  }
+
   /* ===== Vorschau: Was bleibt nach diesem Eintrag? =====================
      Gleiche Rechnung wie die Wochenextra-Anzeige auf „Mein Tag": Überschreitungen
      der bisherigen Wochentage ziehen aus dem Wochenextra. `minus` = Punkte, die ein
@@ -2182,7 +2473,7 @@
     var weekly = +S.user.weekly_extra || PK.weeklyExtra(budget);
     var eaten = Math.max(0, PK.sumPoints(d.diary) - (+minus || 0));
     var others = 0;
-    (d.week || []).forEach(function (w) { if (w.day >= S.day) return; var o = (+w.points || 0) - budget; if (o > 0) others += o; });
+    weekPlus(d).forEach(function (w) { if (w.day >= S.day) return; var o = (+w.points || 0) - budget; if (o > 0) others += o; });
     var pool = weekly + (d.week_bonus || []).reduce(function (a, w) { return a + (+w.bonus || 0); }, 0);
     var c = budgetAfterCalc(budget, eaten, others, pool, +pts || 0);
     if (c.remain >= 0) return { html: "Danach noch <b>" + c.remain + "</b> " + pWord(c.remain) + " im Tagesbudget.", cls: "" };
@@ -2670,7 +2961,7 @@
 
   /* ---------------------- ADD-SHEET (FAB) ---------------------- */
   function openAddSheet() {
-    openSheet("Hinzufügen",
+    openSheet(isPlanDay(S.day) ? "Einplanen · " + fmtDayLabel(S.day) : "Hinzufügen",
       quickStripHTML() +
       '<div class="quick-grid">' +
       '<button class="quick-act" data-q="search"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg></span>Essen suchen</button>' +
@@ -2686,8 +2977,11 @@
       '<button class="quick-act c" data-q="capture"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>Produkt anlegen</button>' +
       '<button class="quick-act v" data-q="calc"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6.5h8M8 11h.01M12 11h.01M16 11h.01M8 14.5h.01M12 14.5h.01M16 14.5h.01M8 18h.01M12 18h.01M16 18h.01"/></svg></span>Punkte-Rechner</button>' +
       '<button class="quick-act r" data-q="recipe"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 9h5M8 13h8M8 17h8"/></svg></span>Rezept-Modus</button>' +
+      '<button class="quick-act z" data-q="shop"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.4a1 1 0 0 0 1 .8h9.3a1 1 0 0 0 1-.8L21 7H6"/></svg></span>Einkaufsliste</button>' +
       '</div>',
       function (root) {
+        // Im Essensplan gibt es nichts zu wiegen oder zu bewegen -> diese Knöpfe ganz entfernen.
+        if (isPlanDay(S.day)) $$('[data-q="weight"],[data-q="activity"]', root).forEach(function (b) { b.remove(); });
         // „Schnell eintragen"-Chips -> direkt ins Detail-Sheet (gegen Live-Daten aufgelöst).
         var strip = quickStripItems();
         $$(".qf-chip", root).forEach(function (b) {
@@ -2711,6 +3005,7 @@
             else if (q === "copyday") openCopyDaySheet();
             else if (q === "meals") openMealTemplatesSheet();
             else if (q === "text") openFreeTextSheet();
+            else if (q === "shop") openShopSheet();
           });
         });
       });
@@ -5903,10 +6198,19 @@
     $("#dayPrev").addEventListener("click", function () { gotoDay(addDays(S.day, -1)); });
     $("#waterPlus").addEventListener("click", function () { waterSet(S.day, (+waterGet()[S.day] || 0) + 1); });
     $("#waterMinus").addEventListener("click", function () { waterSet(S.day, (+waterGet()[S.day] || 0) - 1); });
-    $("#dayNext").addEventListener("click", function () { if (S.day < S.today) gotoDay(addDays(S.day, 1)); });
+    $("#dayNext").addEventListener("click", function () { if (S.day < addDays(S.today, PLAN_DAYS)) gotoDay(addDays(S.day, 1)); });
 
     // Delegierte Klicks für dynamische Löschen/Hinzufügen im Tag
     $("#mealGroups").addEventListener("click", async function (e) {
+      var pa = e.target.closest("[data-plan-act]");
+      if (pa) {
+        var act = pa.dataset.planAct;
+        if (act === "shop") openShopSheet();
+        else if (act === "today") gotoDay(S.today);
+        else if (act === "tomorrow") gotoDay(addDays(S.today, 1));
+        else if (act === "adopt") openPlanAdoptSheet();
+        return;
+      }
       var ed = e.target.closest("[data-edit-entry]");
       if (ed) {
         var entry = (S.data.diary || []).filter(function (x) { return String(x.id) === String(ed.dataset.editEntry); })[0];
