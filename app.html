@@ -112,6 +112,12 @@
   .sh-add{display:flex;gap:8px;margin:12px 0}
   .sh-add input,.sh-add select{flex:1;min-width:0;margin:0}
   .sh-add .por{flex:0 0 68px}
+  /* Unterwegs-Schätzer: antippbare Zeile mit Portions-Spanne + Punkte-Spanne. */
+  .out-row{width:100%;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+  .out-row .nm small{display:block;font-weight:500;font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+  .out-row .rng{flex:0 0 auto;font-weight:800;font-size:.95rem;color:var(--green-700);white-space:nowrap}
+  .out-row .rng small{font-weight:600;font-size:.72rem;color:var(--muted);margin-left:3px}
+  .est-note{color:var(--muted);font-size:.8rem;line-height:1.4;margin:8px 2px 0}
   /* „Wie gestern" je leerer Mahlzeit. */
   .meal-again{display:block;width:100%;margin-top:6px;border:1.4px dashed var(--line);background:none;color:var(--green-700);
     font:inherit;font-size:.86rem;font-weight:700;border-radius:12px;min-height:40px;cursor:pointer}
@@ -2458,6 +2464,65 @@
       });
   }
 
+  /* ===== Unterwegs-Schätzer ============================================
+     Typische Gerichte aus Imbiss/Restaurant/Café. Die Nährwerte je 100 g kommen
+     unverändert aus dem BLS-Katalog (über den BLS-Schlüssel), die Punkte aus der
+     Punkto-Formel. Der BLS kennt KEINE Portionsgewichte: die Gramm-Spannen
+     [min, max] sind grobe Schätzungen von Punkto und in der App so gekennzeichnet.
+     Einträge, deren Schlüssel im Katalog fehlt, werden übersprungen. */
+  var OUT_GROUPS = [
+    { t: "Imbiss", i: [["Y921062", "Döner (Kalb/Rind)", 300, 450], ["Y921162", "Döner (Geflügel)", 300, 450], ["Y9A1040", "Döner vegetarisch", 300, 400], ["Y9A1060", "Falafel im Fladenbrot", 250, 350], ["Y9A1050", "Falafel (frittiert, pur)", 100, 200], ["Y9A1090", "Lahmacun mit Salat und Sauce", 250, 350], ["Y9A1080", "Lahmacun mit Grillfleisch", 250, 350], ["Y943032", "Currywurst mit Ketchup", 150, 250], ["Y943062", "Currywurst mit Brötchen", 200, 300], ["Y944062", "Currywurst mit Pommes", 300, 450], ["Y910030", "Pommes mit Ketchup", 150, 250], ["Y910060", "Pommes mit Mayonnaise", 150, 250], ["Y942062", "Bratwurst im Brötchen", 150, 200], ["Y021512", "Hot Dog", 120, 180], ["Y911260", "Cheeseburger, doppelt", 150, 220], ["Y911360", "Doppeldecker-Burger", 200, 250], ["Y9A1010", "Fischburger", 130, 170], ["Y610712", "Backfisch-Brötchen", 150, 220], ["Y693932", "Fish and Chips", 300, 450], ["Y560312", "Grillhähnchen", 200, 350], ["Y599112", "Wrap mit Hähnchen und Salat", 200, 300], ["Y912060", "Frikadelle im Brötchen", 150, 200], ["Y026022", "Leberkäse (gebraten, pur)", 100, 180], ["X041910", "Leberkäs-Brötchen", 130, 180], ["Y946162", "Schaschlik mit Pommes", 300, 450], ["Y384112", "Gyros (pur)", 150, 250], ["Y9A1020", "Gyros-Burger", 200, 300]] },
+    { t: "Pizza & Pasta", i: [["X912033", "Pizza Margherita", 300, 450], ["X914133", "Pizza Salami", 300, 450], ["X912412", "Pizza Schinken", 300, 450], ["X9A5010", "Pizza Hawaii", 300, 450], ["X912133", "Pizza Funghi", 300, 450], ["X915233", "Pizza Thunfisch", 300, 450], ["X912233", "Pizza vier Käse", 300, 450], ["X9A5020", "Pizza Spezial", 300, 450], ["X730033", "Lasagne", 300, 450], ["X740433", "Nudeln Bolognese", 300, 450], ["X740733", "Nudeln Carbonara", 300, 450], ["X703112", "Nudeln mit Pesto", 250, 400], ["X740933", "Nudeln mit Tomatensauce", 300, 450], ["X7A1020", "Spaghetti Aglio e olio", 250, 400], ["X742233", "Nudeln mit vier Käse", 300, 450], ["X760533", "Cannelloni überbacken", 300, 400], ["X934412", "Flammkuchen", 250, 400], ["X850353", "Gemüserisotto", 300, 400]] },
+    { t: "Gasthaus", i: [["Y231322", "Wiener Schnitzel (pur)", 150, 250], ["Y332132", "Schweineschnitzel paniert (pur)", 150, 250], ["Y362023", "Schweinshaxe mit Sauce", 250, 400], ["Y162212", "Sauerbraten mit Sauce", 150, 250], ["Y151112", "Rinderroulade mit Sauce", 150, 250], ["Y141123", "Rindergulasch", 200, 300], ["Y036333", "Königsberger Klopse", 200, 300], ["X711412", "Käsespätzle", 250, 400], ["X760112", "Maultaschen", 200, 350], ["X651343", "Bratkartoffeln mit Speck", 150, 250], ["X1A2020", "Kartoffelsalat mit Mayonnaise", 150, 250], ["X655022", "Reibekuchen", 150, 250], ["X640053", "Kartoffelgratin", 150, 250], ["X456133", "Gulaschsuppe", 250, 400], ["X462513", "Linsensuppe", 300, 400], ["X469753", "Chili con Carne", 300, 400], ["X203850", "Griechischer Salat", 200, 350], ["Y576133", "Ente gebraten mit Sauce", 150, 250]] },
+    { t: "International", i: [["Y627112", "Sushi mit Lachs", 150, 300], ["X8A1090", "Sushi vegan", 150, 300], ["X922143", "Frühlingsrollen", 100, 200], ["X9A3030", "Frühlingsrollen vegetarisch", 100, 200], ["X891133", "Nasi Goreng", 300, 450], ["X891212", "Bami Goreng", 300, 450], ["X890933", "Paella", 300, 450], ["X6A3020", "Moussaka", 300, 400], ["Y446123", "Lammcurry (pur)", 200, 300]] },
+    { t: "Süßes & Gebäck", i: [["D540200", "Apfelstrudel", 120, 200], ["D480200", "Käsekuchen", 120, 180], ["D300600", "Schwarzwälder Kirschtorte", 120, 180], ["Y8D5010", "Tiramisu", 100, 180], ["S241000", "Vanilleeis", 50, 200], ["S242000", "Schokoladeneis", 50, 200], ["Y890342", "Kaiserschmarren", 250, 400], ["X985162", "Germknödel", 200, 300], ["D771600", "Croissant", 50, 70], ["D7A6200", "Berliner", 60, 90], ["D741600", "Donut", 50, 80], ["X061410", "Butterbrezel", 80, 120], ["Y893162", "Crêpes Suzette", 100, 200], ["D400400", "Schoko-Muffin", 80, 130]] }
+  ];
+  function outRange(food, a, b) {
+    var lo = PK.pointsForAmount(food, a), hi = PK.pointsForAmount(food, b);
+    return lo === hi ? String(lo) : lo + "–" + hi;
+  }
+  function outNorm(t) { return String(t || "").toLowerCase().replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss"); }
+  function openOutSheet() {
+    openSheet("Unterwegs essen",
+      '<p class="cp-note">Typische Gerichte mit Punkte-Spanne für eine kleine bis große Portion. Antippen, Menge anpassen, eintragen.</p>' +
+      '<input type="search" id="outQ" placeholder="Gericht filtern, z. B. Pizza" autocomplete="off" style="margin-bottom:6px">' +
+      '<div id="outList"><div class="list-empty">Lade Nährwerte …</div></div>' +
+      '<p class="est-note">Nährwerte je 100 g: Bundeslebensmittelschlüssel (BLS) 4.0 · Max Rubner-Institut (2025) · CC BY 4.0. Die Portionsgrößen (≈ g) sind grobe Schätzungen von Punkto und stammen nicht aus dem BLS – echte Portionen weichen teils deutlich ab.</p>' +
+      '<button class="btn ghost block" id="outSearch" style="margin-top:12px">Nicht dabei? Zur Suche</button>',
+      function (root) {
+        var list = $("#outList", root), q = $("#outQ", root), rows = null, picks = [];
+        $("#outSearch", root).addEventListener("click", function () { openSearchSheet(); });
+        function draw() {
+          if (!rows) return;
+          var nq = outNorm(q.value.trim()), html = "";
+          picks = [];
+          OUT_GROUPS.forEach(function (g) {
+            var part = "";
+            g.i.forEach(function (it) {
+              var r = rows[it[0]];
+              if (!r || (nq && outNorm(it[1]).indexOf(nq) < 0)) return;
+              var f = blsToFood(r);
+              picks.push({ food: f, est: { min: it[2], max: it[3] } });
+              part += '<button type="button" class="cp-row out-row" data-oi="' + (picks.length - 1) + '">' +
+                '<span class="nm">' + esc(it[1]) + '<small>≈ ' + it[2] + '–' + it[3] + ' g</small></span>' +
+                '<span class="rng">' + outRange(f, it[2], it[3]) + '<small>P</small></span></button>';
+            });
+            if (part) html += '<div class="qf-head">' + esc(g.t) + '</div>' + part;
+          });
+          list.innerHTML = html || '<div class="list-empty">Kein passendes Gericht – probier die Suche.</div>';
+          $$(".out-row", list).forEach(function (b) {
+            b.addEventListener("click", function () { var p = picks[+b.dataset.oi]; if (p) openFoodDetail(p.food, null, p.est); });
+          });
+        }
+        q.addEventListener("input", draw);
+        var codes = [];
+        OUT_GROUPS.forEach(function (g) { g.i.forEach(function (it) { codes.push(it[0]); }); });
+        var fail = function () { list.innerHTML = '<div class="list-empty">Die Nährwertdaten konnten nicht geladen werden. Bitte einmal mit Internet öffnen – oder die Suche nutzen.</div>'; };
+        if (!window.PKBls || !PKBls.byCodes) { fail(); return; }
+        PKBls.byCodes(codes).then(function (m) { rows = m || {}; if (!Object.keys(rows).length) fail(); else draw(); }, fail);
+      });
+  }
+
   /* ===== Vorschau: Was bleibt nach diesem Eintrag? =====================
      Gleiche Rechnung wie die Wochenextra-Anzeige auf „Mein Tag": Überschreitungen
      der bisherigen Wochentage ziehen aus dem Wochenextra. `minus` = Punkte, die ein
@@ -2978,6 +3043,7 @@
       '<button class="quick-act v" data-q="calc"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6.5h8M8 11h.01M12 11h.01M16 11h.01M8 14.5h.01M12 14.5h.01M16 14.5h.01M8 18h.01M12 18h.01M16 18h.01"/></svg></span>Punkte-Rechner</button>' +
       '<button class="quick-act r" data-q="recipe"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 9h5M8 13h8M8 17h8"/></svg></span>Rezept-Modus</button>' +
       '<button class="quick-act z" data-q="shop"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.4a1 1 0 0 0 1 .8h9.3a1 1 0 0 0 1-.8L21 7H6"/></svg></span>Einkaufsliste</button>' +
+      '<button class="quick-act a" data-q="out"><span class="qi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2v8a2 2 0 0 0 4 0V2M9 2v20M17 2c-2 2-3 4.5-3 8h3v12"/></svg></span>Unterwegs</button>' +
       '</div>',
       function (root) {
         // Im Essensplan gibt es nichts zu wiegen oder zu bewegen -> diese Knöpfe ganz entfernen.
@@ -3006,6 +3072,7 @@
             else if (q === "meals") openMealTemplatesSheet();
             else if (q === "text") openFreeTextSheet();
             else if (q === "shop") openShopSheet();
+            else if (q === "out") openOutSheet();
           });
         });
       });
@@ -3367,7 +3434,7 @@
   }
 
   /* ---------------------- FOOD-DETAIL (Menge + Mahlzeit) ---------------------- */
-  function openFoodDetail(food, preMeal) {
+  function openFoodDetail(food, preMeal, est) {
     var nf = normFood(food);
     var portionMode = (nf.points != null && !nf.kcal); // eigenes/Rezept ohne Nährwerte -> Portionen
     var meal = preMeal || mealFor(S.day);
@@ -3380,7 +3447,10 @@
     var unitLabel = portionMode ? "Portion(en)" : (countMode ? nf.unit + (" · 1 = " + fmtNum(nf.base_g) + " g") : (nf.unit || "g"));
     var mine = myPortion(nf);
     var u0 = nf.unit || "g";
-    var startV = mine || ((portionMode || countMode) ? 1 : nf.base_g);
+    // est = { min, max } in g: grobe Portions-Schätzung (Unterwegs-Schätzer). „Meine Portion" hat Vorrang.
+    if (est && (portionMode || countMode || !(est.min > 0) || !(est.max > est.min))) est = null;
+    var estMid = est ? Math.round((est.min + est.max) / 20) * 10 : 0;
+    var startV = mine || ((portionMode || countMode) ? 1 : (estMid || nf.base_g));
     function presetLbl(v) { return countMode ? fmtNum(v) + ' ' + esc(nf.unit) : fmtNum(v) + ' ' + esc(u0); }
 
     openSheet(nf.name,
@@ -3414,10 +3484,14 @@
         '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
         (mine ? '<button class="chip portion-chip" data-preset="' + mine + '">★ Meine Portion · ' + presetLbl(mine) + '</button>' : '') +
         (!countMode && nf.serving_g && nf.serving_g !== mine ? '<button class="chip portion-chip" data-preset="' + nf.serving_g + '">1 Portion (Packung) · ' + presetLbl(nf.serving_g) + '</button>' : '') +
+        (est ? [["klein", est.min], ["mittel", estMid], ["groß", est.max]].map(function (c) {
+          return '<button class="chip" data-preset="' + c[1] + '">' + c[0] + ' · ' + presetLbl(c[1]) + '</button>';
+        }).join("") :
         (countMode ? [0.5, 1, 2, 3] : [50, 100, 150, 200]).map(function (g) {
           return '<button class="chip" data-preset="' + g + '">' + presetLbl(g) + '</button>';
-        }).join("") +
+        }).join("")) +
         '</div>' +
+        (est ? '<p class="est-note">Die Portionsgrößen sind grobe Schätzungen von Punkto (nicht aus dem BLS). Wenn möglich: wiegen oder die Menge anpassen.</p>' : '') +
         '<button type="button" class="mine-btn" id="dMine"></button>') +
       '<div class="detail-points" id="dPtsBox"><span class="coin" id="dPts">0</span><span id="dPtsLbl">Punkte für diese Menge</span></div>' +
       '<div class="pts-after" id="dAfter" aria-live="polite"></div>' +

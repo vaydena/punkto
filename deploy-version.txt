@@ -1,5 +1,6 @@
-pk-v61-9a4f
+pk-v62-5e1c
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v62-5e1c: Unterwegs-Schätzer (Imbiss/Restaurant/Café): typische Gerichte mit Punkte-Spanne; Nährwerte je 100 g aus dem BLS, Portionsgrößen als gekennzeichnete Schätzung.
 v61-9a4f: Essensplan (bis 7 Tage voraus planen, gerätelokal, zählt erst nach „Übernehmen" am Tag) + Einkaufsliste (abhakbar, aus Plan/Rezepten füllen, teilen).
 v60-3d8e: Vorschau „Danach noch … Punkte / … aus dem Wochenextra" im Hinzufügen- und Bearbeiten-Sheet; Teilen: Wochenrückblick als Bild/Text (Gewicht nur auf Wunsch), Rezepte als Text.
 v59-7c2b: „Nachtragen" im Hinweis öffnet jetzt sichtbar das Tagebuch von gestern (springt zur Mahlzeitenliste, Markierung, Hinweisleiste „Du trägst für Gestern nach" + „Zu heute").

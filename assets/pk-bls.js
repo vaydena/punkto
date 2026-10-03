@@ -87,5 +87,23 @@
     return _rows ? Promise.resolve(run(_rows)) : load().then(run);
   }
 
-  root.PKBls = { load: load, search: search, attribution: attribution, ready: ready };
+  /* Datensätze gezielt über den BLS-Schlüssel holen (Unterwegs-Schätzer).
+     Liefert ein Objekt code -> Datensatz; unbekannte Schlüssel fehlen einfach. */
+  function byCodes(codes) {
+    var run = function (rows) {
+      var want = {}, out = {}, i, r;
+      for (i = 0; i < (codes || []).length; i++) want[codes[i]] = 1;
+      for (i = 0; i < (rows || []).length; i++) {
+        r = rows[i];
+        if (want[r.bls] === 1) out[r.bls] = {
+          bls: r.bls, name: r.name, kcal: r.kcal, sat_fat_g: r.sat_fat_g,
+          sugar_g: r.sugar_g, protein_g: r.protein_g, fiber_g: r.fiber_g
+        };
+      }
+      return out;
+    };
+    return _rows ? Promise.resolve(run(_rows)) : load().then(run);
+  }
+
+  root.PKBls = { load: load, search: search, byCodes: byCodes, attribution: attribution, ready: ready };
 })(typeof window !== "undefined" ? window : globalThis);
