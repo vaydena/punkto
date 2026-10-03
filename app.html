@@ -62,6 +62,10 @@
   .wday.empty{border-style:dashed}
   .wday.empty .kg{color:var(--muted);font-weight:700;font-size:.8rem}
   .wday.flash{animation:wdflash 1.6s ease}
+  #mealGroups{scroll-margin-top:72px;border-radius:var(--r)}
+  #mealGroups.flash{animation:wdflash 1.8s ease}
+  .remind.past{background:var(--green-tint);border-color:var(--green)}
+  .remind.past .go{background:var(--green);color:#fff}
   @keyframes wdflash{0%,55%{box-shadow:0 0 0 3px var(--amber)}100%{box-shadow:0 0 0 0 transparent}}
   /* Kartenkopf: bei schmalen Displays (320 px) Button unter die Überschrift umbrechen statt an den Rand zu stoßen. */
   .card-h{flex-wrap:wrap;row-gap:8px}
@@ -1980,7 +1984,13 @@
   async function renderReminders() {
     var host = $("#reminders"); if (!host) return;
     var cfg = remindGet(), today = S.today, items = [];
-    if (S.day !== today || !S.user || !S.user.onboarded) { host.innerHTML = ""; return; }
+    if (!S.user || !S.user.onboarded) { host.innerHTML = ""; return; }
+    if (S.day !== today) {
+      host.innerHTML = '<div class="remind past" data-k="back"><span aria-hidden="true">📝</span><span class="tx">Du trägst für <b>' +
+        esc(fmtDayLabel(S.day)) + '</b> nach (' + esc(fmtShortDate(S.day)) + ').</span>' +
+        '<button type="button" class="go">Zu heute</button></div>';
+      return;
+    }
     if (cfg.weigh && cfg.off.weigh !== today) {
       var ws = (S.data.weights || []).filter(function (p) { return +p.weight_kg > 0; });
       var last = ws.length ? ws[ws.length - 1].day : null;
@@ -2015,8 +2025,23 @@
     }
     if (!ev.target.closest(".go")) return;
     if (k === "weigh") openWeightSheet(S.today);
-    else if (k === "yday") gotoDay(addDays(S.today, -1));
+    else if (k === "yday") openDiaryDay(addDays(S.today, -1));
+    else if (k === "back") gotoDay(S.today);
     else openAddSheet();
+  }
+  /* Tagebuch eines bestimmten Tages wirklich „aufschlagen": Tag laden, auf „Mein Tag"
+     wechseln und zur Mahlzeitenliste springen (sie liegt sonst unterhalb des Bildschirms). */
+  async function openDiaryDay(iso) {
+    await gotoDay(iso);
+    if (S.day !== iso) return;                         // Laden fehlgeschlagen -> gotoDay hat schon gemeldet
+    var v = $("#viewToday");
+    if (v && !v.classList.contains("on")) switchTab("viewToday");
+    var mg = $("#mealGroups");
+    if (mg) {
+      try { mg.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) { mg.scrollIntoView(); }
+      mg.classList.remove("flash"); void mg.offsetWidth; mg.classList.add("flash");
+    }
+    toast("Tagebuch für " + fmtDayLabel(iso) + " (" + fmtShortDate(iso) + ") geöffnet.");
   }
   function openRemindSheet() {
     var cfg = remindGet();
