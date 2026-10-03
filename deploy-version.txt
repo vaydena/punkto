@@ -1,5 +1,6 @@
-pk-v57-7c41
+pk-v58-4e9a
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v58-4e9a: Sechs Verbesserungen – Hinweise auf „Mein Tag“ (Wiegen nach 7 Tagen, Tagebuch nachtragen; abschaltbar, kein Push), Gewichtsverlauf mit Hochrechnung zum Ziel + BMI + antippbaren Diagrammpunkten, CSV-Export (Tagebuch/Gewicht/Aktivität), Wochenrückblick mit Blättern, „Wie gestern“ je Mahlzeit, Kartenkopf bricht bei 320 px um. SW pk-app-v53.
 v57-7c41: Gewichtsverlauf Tag für Tag — wischbare Tagesleiste (Datum + Gewicht + Differenz) unter dem Diagramm; Tag antippen = Gewicht für genau diesen Tag eintragen/korrigieren/löschen; Datumsfeld im Gewicht-Sheet zum Nachtragen beliebiger zurückliegender Tage. SW pk-app-v52.
 v56-2b68: SEO Landingpage — Title/Description/Keywords (Abnehmen, Diät, Punkterechner …), JSON-LD (Organization/WebSite/WebApplication + FAQPage aus sichtbarer FAQ), Ratgeber-Sektion + 3 FAQ, robots.txt + sitemap.xml, OG-Bild 1200x630, X-Robots-Tag noindex für app/konto/anmelden/betreiber (.htaccess). Kein SW-Bump (index.html network-first).
 v55-b2f7: Konto selbst löschen (Einstellungen); verständliche Fehlermeldungen (falsches

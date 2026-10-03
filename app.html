@@ -61,6 +61,39 @@
   .wday.today{border-color:var(--green)}
   .wday.empty{border-style:dashed}
   .wday.empty .kg{color:var(--muted);font-weight:700;font-size:.8rem}
+  .wday.flash{animation:wdflash 1.6s ease}
+  @keyframes wdflash{0%,55%{box-shadow:0 0 0 3px var(--amber)}100%{box-shadow:0 0 0 0 transparent}}
+  /* Kartenkopf: bei schmalen Displays (320 px) Button unter die Überschrift umbrechen statt an den Rand zu stoßen. */
+  .card-h{flex-wrap:wrap;row-gap:8px}
+  .card-h .btn{white-space:nowrap}
+  /* Diagrammpunkte: unsichtbare, fingerfreundliche Trefferfläche. */
+  .wc-hit{fill:transparent;cursor:pointer}
+  /* Hochrechnung + BMI unter der Tagesleiste. */
+  .insight{margin-top:12px;display:grid;gap:8px}
+  .insight .ins{background:var(--card-2);border:1px solid var(--line-2);border-radius:12px;padding:10px 12px;font-size:.9rem;color:var(--ink-2);line-height:1.4}
+  .insight .ins b{color:var(--ink)}
+  .insight .ins small{display:block;color:var(--muted);font-size:.76rem;margin-top:3px}
+  /* Wochenrückblick: Wochen-Umschalter im Kartenkopf. */
+  .wk-nav{display:flex;align-items:center;gap:6px;font-size:.84rem;font-weight:700;color:var(--ink-2)}
+  .wk-nav span{min-width:7.5em;text-align:center}
+  .wk-nav button{width:36px;height:36px;border-radius:50%;border:1.6px solid var(--line);background:var(--field);color:var(--ink);
+    font:inherit;font-size:1.15rem;line-height:1;cursor:pointer}
+  .wk-nav button:disabled{opacity:.35;cursor:default}
+  #weekSummary .krow{border-color:var(--line-2)}
+  /* Hinweise auf „Mein Tag" (Wiegen / Tagebuch nachtragen). */
+  .remind{display:flex;align-items:center;gap:10px;background:var(--amber-tint);border:1.4px solid var(--amber);border-radius:var(--r);
+    padding:8px 6px 8px 12px;margin-bottom:10px;font-size:.9rem;color:var(--ink)}
+  .remind .tx{flex:1;min-width:0;line-height:1.3}
+  .remind .go{flex:0 0 auto;border:0;background:var(--amber);color:var(--amber-ink);font:inherit;font-weight:800;font-size:.84rem;
+    border-radius:var(--r-pill);padding:0 14px;min-height:36px;cursor:pointer;white-space:nowrap}
+  .remind .x{flex:0 0 auto;width:36px;height:36px;border:0;background:none;color:var(--muted);font-size:1.2rem;cursor:pointer}
+  /* „Wie gestern" je leerer Mahlzeit. */
+  .meal-again{display:block;width:100%;margin-top:6px;border:1.4px dashed var(--line);background:none;color:var(--green-700);
+    font:inherit;font-size:.86rem;font-weight:700;border-radius:12px;min-height:40px;cursor:pointer}
+  .meal-again:disabled{opacity:.5}
+  .opt-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--line-2);cursor:pointer}
+  .opt-row input{width:22px;height:22px;flex:0 0 22px;margin-top:2px;accent-color:var(--green)}
+  .opt-row span{display:block;color:var(--muted);font-size:.84rem;margin-top:2px}
   .app-loading .spin{width:34px;height:34px;border:3px solid var(--green-tint-2);border-top-color:var(--green);
     border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -638,6 +671,7 @@
         </button>
       </div>
 
+      <div id="reminders"></div>
       <div class="budget-hero">
         <div class="date" id="heroDate">Dein Tag</div>
         <div class="flex">
@@ -692,6 +726,7 @@
         <div class="chart-wrap" id="weightChart"></div>
         <div class="wday-h"><span>Tag für Tag</span><small>wischen · Tag antippen</small></div>
         <div class="wdays" id="weightDays" role="list" aria-label="Gewicht je Tag"></div>
+        <div class="insight" id="weightInsight"></div>
       </div>
 
       <div class="card" style="margin-top:16px">
@@ -707,7 +742,9 @@
       </div>
 
       <div class="card" style="margin-top:16px">
-        <div class="card-h"><h3>Diese Woche</h3></div>
+        <div class="card-h"><h3>Wochenrückblick</h3>
+          <div class="wk-nav"><button type="button" id="wkPrev" aria-label="Vorherige Woche">‹</button><span id="wkLbl">Diese Woche</span><button type="button" id="wkNext" aria-label="Nächste Woche" disabled>›</button></div>
+        </div>
         <div class="budget-meta" id="weekSummary" style="color:var(--ink-2)"></div>
       </div>
 
@@ -1885,6 +1922,121 @@
       var cpBtn = $("#copyPrevDay", hint);
       if (cpBtn) cpBtn.addEventListener("click", function () { openCopyDaySheet(addDays(S.day, -1)); });
     }
+    renderMealAgain();
+    renderReminders();
+  }
+
+  /* „Wie gestern": hat eine Mahlzeit heute noch keine Einträge, am Vortag aber
+     schon, bietet ein Knopf an, genau diese Einträge mit einem Tipp zu übernehmen. */
+  async function renderMealAgain() {
+    if (!window.PKDiary || !PKDiary.dayState) return;
+    var day = S.day, st;
+    try { st = await PKDiary.dayState(addDays(day, -1)); } catch (e) { return; }
+    if (S.day !== day) return;
+    var prev = (st && st.diary) || []; if (!prev.length) return;
+    $$("#mealGroups [data-add-meal]").forEach(function (btn) {
+      var k = btn.dataset.addMeal, g = btn.parentNode;
+      if (!g || g.querySelector(".meal-again")) return;
+      var items = prev.filter(function (e) { return mealKeyOf(e) === k; });
+      if (!items.length) return;
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "meal-again"; b.dataset.againMeal = k;
+      b.textContent = "↻ Wie " + (day === S.today ? "gestern" : "am Vortag") + " · " + items.length +
+        (items.length === 1 ? " Eintrag" : " Einträge") + " · " + PK.sumPoints(items) + " P";
+      g.appendChild(b);
+    });
+  }
+  async function copyMealFromPrev(k, btn) {
+    var target = S.day, st;
+    if (btn) btn.disabled = true;
+    try { st = await PKDiary.dayState(addDays(target, -1)); } catch (e) { st = null; }
+    var items = ((st && st.diary) || []).filter(function (e) { return mealKeyOf(e) === k; });
+    var added = 0, pts = 0;
+    for (var i = 0; i < items.length; i++) {
+      var e = items[i];
+      var payload = {
+        name: e.name, meal: k, points: +e.points || 0, qty: e.qty, unit: e.unit, kcal: +e.kcal || 0,
+        source: e.source || "db", ref_code: e.ref_code || "", day: target
+      };
+      var r = await guardWrite(function () { return API.data.diaryAdd(payload); });
+      if (!r) break;
+      added++; pts += (+e.points || 0);
+    }
+    if (added) { await refreshDay(); toast(added + " übernommen · " + pts + " P"); }
+    else if (btn) btn.disabled = false;
+  }
+
+  /* Hinweise beim Öffnen der App (kein Push — die App kann sich bei geschlossenem
+     Fenster nicht melden): Wiegen nach 7 Tagen ohne Messung, gestern ohne
+     Tagebuch-Eintrag bzw. abends ein noch leerer heutiger Tag. Je Hinweis-Art
+     ausschaltbar (Einstellungen) und pro Tag wegklickbar; rein gerätelokal. */
+  var LS_REMIND = "pk_remind_v1";
+  function remindGet() {
+    var o = {};
+    try { o = JSON.parse(localStorage.getItem(LS_REMIND) || "{}") || {}; } catch (e) { o = {}; }
+    return { diary: o.diary !== false, weigh: o.weigh !== false, off: (o.off && typeof o.off === "object") ? o.off : {} };
+  }
+  function remindSet(o) { try { localStorage.setItem(LS_REMIND, JSON.stringify(o)); } catch (e) {} }
+  async function renderReminders() {
+    var host = $("#reminders"); if (!host) return;
+    var cfg = remindGet(), today = S.today, items = [];
+    if (S.day !== today || !S.user || !S.user.onboarded) { host.innerHTML = ""; return; }
+    if (cfg.weigh && cfg.off.weigh !== today) {
+      var ws = (S.data.weights || []).filter(function (p) { return +p.weight_kg > 0; });
+      var last = ws.length ? ws[ws.length - 1].day : null;
+      var n = last ? dayNum(today) - dayNum(last) : null;
+      if (last == null) items.push({ k: "weigh", ic: "⚖️", t: "Noch kein Gewicht eingetragen.", b: "Eintragen" });
+      else if (n >= 7) items.push({ k: "weigh", ic: "⚖️", t: "Letzte Messung vor " + n + " Tagen.", b: "Eintragen" });
+    }
+    if (cfg.diary && cfg.off.diary !== today) {
+      var days = [];
+      try { days = (window.PKDiary && PKDiary.loggedDays) ? await PKDiary.loggedDays() : []; } catch (e) { days = []; }
+      if (S.day !== today) { host.innerHTML = ""; return; }
+      var y = addDays(today, -1);
+      if (days.length && days[0] < y && days.indexOf(y) < 0)
+        items.push({ k: "yday", ic: "📝", t: "Gestern fehlt noch im Tagebuch.", b: "Nachtragen" });
+      else if (!(S.data.diary || []).length && new Date().getHours() >= 18)
+        items.push({ k: "today", ic: "🍽️", t: "Heute noch nichts eingetragen.", b: "Eintragen" });
+    }
+    host.innerHTML = items.map(function (it) {
+      return '<div class="remind" data-k="' + it.k + '"><span aria-hidden="true">' + it.ic + '</span><span class="tx">' + esc(it.t) + '</span>' +
+        '<button type="button" class="go">' + it.b + '</button>' +
+        '<button type="button" class="x" aria-label="Hinweis für heute ausblenden">×</button></div>';
+    }).join("");
+  }
+  function onReminderClick(ev) {
+    var row = ev.target.closest(".remind"); if (!row) return;
+    var k = row.dataset.k;
+    if (ev.target.closest(".x")) {
+      var cfg = remindGet(); cfg.off = {}; cfg.off[k === "weigh" ? "weigh" : "diary"] = S.today;
+      var old = remindGet().off;                      // den jeweils anderen heutigen Wegklick behalten
+      Object.keys(old).forEach(function (o) { if (old[o] === S.today && cfg.off[o] == null) cfg.off[o] = old[o]; });
+      remindSet(cfg); renderReminders(); return;
+    }
+    if (!ev.target.closest(".go")) return;
+    if (k === "weigh") openWeightSheet(S.today);
+    else if (k === "yday") gotoDay(addDays(S.today, -1));
+    else openAddSheet();
+  }
+  function openRemindSheet() {
+    var cfg = remindGet();
+    openSheet("Erinnerungen",
+      '<p style="color:var(--muted);font-size:.88rem;margin-top:-4px">Die Hinweise erscheinen oben auf „Mein Tag“, sobald du Punkto öffnest. ' +
+      'Benachrichtigungen bei geschlossener App gibt es nicht.</p>' +
+      '<label class="opt-row"><input type="checkbox" id="rmDiary"' + (cfg.diary ? " checked" : "") + '><div><b>Tagebuch</b>' +
+      '<span>Wenn gestern nichts eingetragen wurde – oder heute ab 18 Uhr noch nichts.</span></div></label>' +
+      '<label class="opt-row"><input type="checkbox" id="rmWeigh"' + (cfg.weigh ? " checked" : "") + '><div><b>Wiegen</b>' +
+      '<span>Wenn die letzte Messung 7 Tage oder länger her ist.</span></div></label>' +
+      '<button class="btn primary block big" id="rmOk" style="margin-top:16px">Fertig</button>',
+      function (root) {
+        function save() {
+          var c = remindGet(); c.diary = $("#rmDiary", root).checked; c.weigh = $("#rmWeigh", root).checked;
+          remindSet(c); renderReminders();
+        }
+        $("#rmDiary", root).addEventListener("change", save);
+        $("#rmWeigh", root).addEventListener("change", save);
+        $("#rmOk", root).addEventListener("click", closeSheet);
+      });
   }
 
   function profileFromUser() {
@@ -1918,20 +2070,129 @@
 
     $("#weightChart").innerHTML = weightChartSVG(weights, start, goal);
     renderWeightDays(weights);
-
-    // Wochen-Zusammenfassung
-    var budget = currentBudget();
-    var week = d.week || [];
-    var totalWeek = week.reduce(function (s, w) { return s + (+w.points || 0); }, 0);
-    var daysLogged = week.filter(function (w) { return (+w.points || 0) > 0; }).length;
-    var onBudget = week.filter(function (w) { return (+w.points || 0) > 0 && (+w.points || 0) <= budget; }).length;
-    var avg = daysLogged ? Math.round(totalWeek / daysLogged) : 0;
-    $("#weekSummary").innerHTML =
-      '<div class="measure-row"><span>Punkte gesamt</span><b>' + Math.round(totalWeek) + '</b></div>' +
-      '<div class="measure-row"><span>Ø pro erfasstem Tag</span><b>' + avg + '</b></div>' +
-      '<div class="krow" style="border-color:var(--line-2);border-bottom:0"><span>Tage im Budget</span><b>' + onBudget + ' / ' + daysLogged + '</b></div>';
+    renderWeightInsight(weights, start, goal);
+    renderWeekReview();
 
     renderActivityList();
+  }
+
+  /* Hochrechnung zum Zielgewicht: lineare Regression über die Messungen der
+     letzten 28 Tage (mind. 3 Messungen über mind. 14 Tage). Reine Rechnung aus
+     den eigenen Messwerten — keine Zusage, keine medizinische Aussage. */
+  function weightForecast(weights, goal) {
+    var all = (weights || []).filter(function (p) { return +p.weight_kg > 0; });
+    if (!goal || !all.length) return null;
+    var last = all[all.length - 1], cur = +last.weight_kg, need = goal - cur;
+    if (Math.abs(need) < 0.05) return { state: "done" };
+    var from = dayNum(S.today) - 27;
+    var pts = all.filter(function (p) { return dayNum(p.day) >= from; });
+    if (pts.length < 3 || dayNum(pts[pts.length - 1].day) - dayNum(pts[0].day) < 13) return { state: "few" };
+    var n = pts.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    pts.forEach(function (p) { var x = dayNum(p.day) - from, y = +p.weight_kg; sx += x; sy += y; sxx += x * x; sxy += x * y; });
+    var den = n * sxx - sx * sx;
+    if (!den) return { state: "few" };
+    var slope = (n * sxy - sx * sy) / den;            // kg pro Tag
+    var perWeek = slope * 7;
+    if (Math.abs(slope) < 0.01 || (slope > 0) !== (need > 0)) return { state: "flat", perWeek: perWeek };
+    var days = Math.ceil(need / slope);
+    if (days > 730) return { state: "far", perWeek: perWeek };
+    return { state: "ok", perWeek: perWeek, date: addDays(last.day, days) };
+  }
+  function renderWeightInsight(weights, start, goal) {
+    var host = $("#weightInsight"); if (!host) return;
+    var html = "", sgn = function (v) { return (v > 0 ? "+" : (v < 0 ? "−" : "±")) + fmtKg(Math.abs(v)); };
+    var f = weightForecast(weights, goal);
+    if (f) {
+      var t;
+      if (f.state === "done") t = '🏆 <b>Ziel erreicht.</b>';
+      else if (f.state === "few") t = 'Für eine Hochrechnung zum Ziel braucht es mindestens <b>3 Messungen über 2 Wochen</b> (innerhalb der letzten 4 Wochen).';
+      else if (f.state === "flat") t = 'Trend der letzten 4 Wochen: <b>' + sgn(f.perWeek) + ' kg pro Woche</b> – daraus lässt sich aktuell kein Zieldatum hochrechnen.';
+      else if (f.state === "far") t = 'Trend der letzten 4 Wochen: <b>' + sgn(f.perWeek) + ' kg pro Woche</b> – bei diesem Tempo läge das Ziel mehr als 2 Jahre entfernt.';
+      else t = 'Bei deinem Tempo der letzten 4 Wochen (<b>' + sgn(f.perWeek) + ' kg pro Woche</b>) wäre dein Ziel etwa am <b>' + esc(fmtShortDate(f.date)) + '</b> erreicht.';
+      html += '<div class="ins">' + t + (f.state === "ok" ? '<small>Reine Hochrechnung aus deinen Messwerten – keine Zusage.</small>' : '') + '</div>';
+    }
+    var h = +S.user.height_cm, all = (weights || []).filter(function (p) { return +p.weight_kg > 0; });
+    var cur = all.length ? +all[all.length - 1].weight_kg : (+start || 0);
+    if (h >= 100 && h <= 250 && cur > 0) {
+      var m2 = (h / 100) * (h / 100), bmi = function (kg) { return fmtNum(Math.round(kg / m2 * 10) / 10, 1); };
+      html += '<div class="ins">BMI aktuell: <b>' + bmi(cur) + '</b>' + (goal > 0 ? ' · beim Zielgewicht: <b>' + bmi(goal) + '</b>' : '') +
+        '<small>Gewicht ÷ Größe² (' + Math.round(h) + ' cm). Die WHO nennt für Erwachsene 18,5–24,9 als Normalgewicht. Reine Rechengröße, keine medizinische Bewertung.</small></div>';
+    }
+    host.innerHTML = html;
+  }
+  /* Diagrammpunkt angetippt -> passendes Kärtchen in der Tagesleiste zeigen. */
+  function focusWeightDay(day) {
+    var host = $("#weightDays"), card = host && host.querySelector('[data-day="' + day + '"]');
+    if (!card) { openWeightSheet(day); return; }
+    var hr = host.getBoundingClientRect(), cr = card.getBoundingClientRect();
+    var left = host.scrollLeft + (cr.left - hr.left) - (host.clientWidth - cr.width) / 2;
+    try { host.scrollTo({ left: Math.max(0, left), behavior: "smooth" }); } catch (e) { host.scrollLeft = Math.max(0, left); }
+    card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+  }
+
+  /* Wochenrückblick (Mo–So), per ‹ › zurückblätterbar. Liest das lokale Tagebuch
+     komplett (IndexedDB) — funktioniert damit auch offline. Verglichen wird mit
+     dem HEUTIGEN Tagesbudget (frühere Budgets werden nicht gespeichert). */
+  function weekStartOf(day) { return addDays(day, -((parseISO(day).getDay() + 6) % 7)); }
+  function weekReviewData(raw, ws, we, budget) {
+    var pts = {}, steps = 0, bonus = 0, minutes = 0, seen = {};
+    (raw.entries || []).forEach(function (e) {
+      if (!e || !e.day) return;
+      seen[e.day] = 1;
+      if (e.day >= ws && e.day <= we) pts[e.day] = (pts[e.day] || 0) + (+e.points || 0);
+    });
+    (raw.activities || []).forEach(function (a) {
+      if (!a || a.day < ws || a.day > we) return;
+      steps += +a.steps || 0; bonus += +a.bonus_points || 0; minutes += +a.minutes || 0;
+    });
+    var logged = Object.keys(pts), total = 0, onBudget = 0;
+    logged.forEach(function (k) { total += pts[k]; if (pts[k] <= budget) onBudget++; });
+    // Gewicht: letzte Messung der Woche gegen die letzte davor (sonst die erste der Woche).
+    var before = null, first = null, lastIn = null;
+    (raw.weights || []).slice().sort(function (a, b) { return a.day < b.day ? -1 : 1; }).forEach(function (w) {
+      if (!(+w.weight_kg > 0)) return;
+      if (w.day < ws) before = w;
+      else if (w.day <= we) { if (!first) first = w; lastIn = w; }
+    });
+    var base = before || first, wdiff = (lastIn && base && base !== lastIn) ? (+lastIn.weight_kg - +base.weight_kg) : null;
+    // Längste Serie aufeinanderfolgender Tage mit Einträgen (gesamt).
+    var best = 0, run = 0, prev = null;
+    Object.keys(seen).sort().forEach(function (k) {
+      run = (prev != null && dayNum(k) - dayNum(prev) === 1) ? run + 1 : 1;
+      if (run > best) best = run; prev = k;
+    });
+    var all = Object.keys(seen).sort();
+    return { total: Math.round(total), logged: logged.length, onBudget: onBudget, avg: logged.length ? Math.round(total / logged.length) : 0,
+      steps: steps, bonus: bonus, minutes: minutes, wdiff: wdiff, wlast: lastIn ? +lastIn.weight_kg : null, best: best, firstDay: all[0] || null };
+  }
+  async function renderWeekReview() {
+    var host = $("#weekSummary"); if (!host || !S.today) return;
+    var off = S.weekOff || 0;
+    var ws = addDays(weekStartOf(S.today), off * 7), we = addDays(ws, 6);
+    var lbl = $("#wkLbl"), nx = $("#wkNext"), pv = $("#wkPrev");
+    var sd = function (iso) { var d = parseISO(iso); return d.getDate() + "." + (d.getMonth() + 1) + "."; };
+    if (lbl) lbl.textContent = off === 0 ? "Diese Woche" : (off === -1 ? "Letzte Woche" : sd(ws) + "–" + sd(we));
+    if (nx) nx.disabled = off >= 0;
+    var raw = null;
+    try { raw = (window.PKDiary && PKDiary.exportAll) ? await PKDiary.exportAll() : null; } catch (e) { raw = null; }
+    if ((S.weekOff || 0) !== off) return;                 // inzwischen weitergeblättert
+    if (!raw) { host.innerHTML = '<div class="list-empty">Wochenrückblick auf diesem Gerät nicht verfügbar.</div>'; return; }
+    var r = weekReviewData(raw, ws, we, currentBudget());
+    if (pv) pv.disabled = !r.firstDay || ws <= r.firstDay;
+    var daysInWeek = off === 0 ? (dayNum(S.today) - dayNum(ws) + 1) : 7;
+    var row = function (l, v) { return '<div class="krow"><span>' + l + '</span><b>' + v + '</b></div>'; };
+    var wtxt = r.wdiff == null ? (r.wlast != null ? fmtKg(r.wlast) + " kg" : "–")
+      : (r.wdiff > 0 ? "+" : (r.wdiff < 0 ? "−" : "±")) + fmtKg(Math.abs(r.wdiff)) + " kg";
+    host.innerHTML =
+      row("Erfasste Tage", r.logged + " / " + daysInWeek) +
+      row("Punkte gesamt", r.total) +
+      row("Ø pro erfasstem Tag", r.avg) +
+      row("Tage im Budget", r.onBudget + " / " + r.logged) +
+      row("Gewicht", wtxt) +
+      row("Schritte", r.steps ? fmtNum(r.steps) : "–") +
+      (r.minutes ? row("Sport", r.minutes + " min") : "") +
+      row("Bonuspunkte aus Aktivität", "+" + Math.round(r.bonus)) +
+      row("Längste Serie bisher", r.best + (r.best === 1 ? " Tag" : " Tage"));
   }
 
   /* Serie = aufeinanderfolgende Tage mit Einträgen bis heute (ein noch leerer
@@ -2155,7 +2416,8 @@
     var area = tl + " L" + x(pts[pts.length - 1].day).toFixed(1) + " " + (H - padB) + " L" + x(pts[0].day).toFixed(1) + " " + (H - padB) + " Z";
     var dots = pts.map(function (p) {
       return '<circle cx="' + x(p.day).toFixed(1) + '" cy="' + y(+p.weight_kg).toFixed(1) + '" r="' + (pts.length > 60 ? 2 : 3) + '" class="wc-dot"><title>' +
-        esc(fmtShortDate(p.day) + ": " + fmtKg(+p.weight_kg) + " kg") + '</title></circle>';
+        esc(fmtShortDate(p.day) + ": " + fmtKg(+p.weight_kg) + " kg") + '</title></circle>' +
+        '<circle cx="' + x(p.day).toFixed(1) + '" cy="' + y(+p.weight_kg).toFixed(1) + '" r="16" class="wc-hit" data-day="' + p.day + '"/>';
     }).join("");
 
     var goalLine = "";
@@ -4701,6 +4963,7 @@
       '<div class="settings-links">' +
       '<button data-s="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Profil & Ziel bearbeiten</button>' +
       '<button data-s="goals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Budget neu berechnen</button>' +
+      '<button data-s="remind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg> Erinnerungen</button>' +
       '<button data-s="password"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Passwort ändern</button>' +
       '<a href="konto.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg> Zugang & Zahlung</a>' +
       '<a href="datenschutz.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Datenschutz</a>' +
@@ -4715,6 +4978,7 @@
       '<div class="settings-links">' +
       '<button data-s="export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Sicherung als Datei speichern</button>' +
       '<button data-s="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg> Sicherung aus Datei einspielen</button>' +
+      '<button data-s="csv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg> Als Tabelle exportieren (CSV)</button>' +
       '</div>' +
       '<input type="file" id="importFile" accept="application/json,.json" hidden>' +
       '</div>' +
@@ -4735,6 +4999,8 @@
             else if (s === "profile") openProfileSheet();
             else if (s === "goals") openGoalsSheet();
             else if (s === "export") exportBackup();
+            else if (s === "csv") openCsvSheet();
+            else if (s === "remind") openRemindSheet();
             else if (s === "import") { var fi = $("#importFile", root); if (fi) fi.click(); }
           });
         });
@@ -4743,6 +5009,66 @@
           var f = this.files && this.files[0];
           if (f) importBackupFile(f);
           this.value = "";
+        });
+      });
+  }
+
+  /* ---- CSV-Export (Tagebuch / Gewicht / Aktivitäten) ----
+     Für Excel/Numbers/LibreOffice: Semikolon-getrennt, Dezimalkomma, UTF-8 mit BOM.
+     Freitext wird gegen Formel-Injektion entschärft (führendes = + - @). */
+  function csvText(v) {
+    v = v == null ? "" : String(v);
+    if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+    return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+  function csvNum(v) { return (v == null || v === "" || isNaN(+v)) ? "" : String(+v).replace(".", ","); }
+  function csvBuild(head, rows) {
+    return "\uFEFF" + [head].concat(rows).map(function (r) { return r.join(";"); }).join("\r\n") + "\r\n";
+  }
+  function downloadText(name, text, mime) {
+    var url = URL.createObjectURL(new Blob([text], { type: mime }));
+    var a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+  function csvFor(kind, raw) {
+    var byDay = function (a, b) { return a.day < b.day ? -1 : (a.day > b.day ? 1 : String(a.created_at || "").localeCompare(String(b.created_at || ""))); };
+    if (kind === "weights") {
+      return csvBuild(["Datum", "Gewicht (kg)"], (raw.weights || []).slice().sort(byDay).map(function (w) {
+        return [w.day, csvNum(w.weight_kg)];
+      }));
+    }
+    if (kind === "activities") {
+      return csvBuild(["Datum", "Art", "Schritte", "Minuten", "Bonuspunkte", "Notiz"], (raw.activities || []).slice().sort(byDay).map(function (a) {
+        return [a.day, a.kind === "steps" ? "Schritte" : "Sport", csvNum(a.steps || ""), csvNum(a.minutes || ""), csvNum(a.bonus_points), csvText(a.note)];
+      }));
+    }
+    var label = {}; MEALS.forEach(function (m) { label[m.key] = m.label; });
+    return csvBuild(["Datum", "Mahlzeit", "Name", "Menge", "Einheit", "Punkte", "kcal"], (raw.entries || []).slice().sort(byDay).map(function (e) {
+      return [e.day, csvText(label[mealKeyOf(e)] || ""), csvText(e.name), csvNum(e.qty), csvText(e.unit), csvNum(e.points), csvNum(e.kcal)];
+    }));
+  }
+  function openCsvSheet() {
+    openSheet("Als Tabelle exportieren",
+      '<p style="color:var(--muted);font-size:.88rem;margin-top:-4px">CSV-Dateien für Excel, Numbers oder LibreOffice. ' +
+      'Zum Wiederherstellen in Punkto bitte weiterhin die Sicherungsdatei verwenden.</p>' +
+      '<button class="btn ghost block" data-csv="diary">Tagebuch</button>' +
+      '<button class="btn ghost block" data-csv="weights" style="margin-top:10px">Gewichtsverlauf</button>' +
+      '<button class="btn ghost block" data-csv="activities" style="margin-top:10px">Aktivitäten</button>',
+      function (root) {
+        $$("[data-csv]", root).forEach(function (b) {
+          b.addEventListener("click", async function () {
+            var kind = b.dataset.csv, raw;
+            try { raw = await PKDiary.exportAll(); } catch (e) { return toast("Export fehlgeschlagen."); }
+            var n = ((kind === "weights" ? raw.weights : (kind === "activities" ? raw.activities : raw.entries)) || []).length;
+            if (!n) return toast("Dafür gibt es noch keine Daten.");
+            var names = { diary: "tagebuch", weights: "gewicht", activities: "aktivitaeten" };
+            try {
+              downloadText("punkto-" + names[kind] + "-" + S.today + ".csv", csvFor(kind, raw), "text/csv;charset=utf-8");
+              toast("Exportiert: " + n + (n === 1 ? " Zeile." : " Zeilen."));
+            } catch (e) { toast("Export fehlgeschlagen."); }
+          });
         });
       });
   }
@@ -5409,6 +5735,8 @@
       }
       var sv = e.target.closest("[data-save-meal]");
       if (sv) { saveMealTemplate(sv.dataset.saveMeal); return; }
+      var ag = e.target.closest("[data-again-meal]");
+      if (ag) { copyMealFromPrev(ag.dataset.againMeal, ag); return; }
       var add = e.target.closest("[data-add-meal]");
       if (add) openSearchSheet(add.dataset.addMeal);
     });
@@ -5434,6 +5762,12 @@
       });
     });
     $("#btnAddActivity").addEventListener("click", openActivitySheet);
+    $("#weightChart").addEventListener("click", function (ev) {
+      var c = ev.target.closest("[data-day]"); if (c) focusWeightDay(c.getAttribute("data-day"));
+    });
+    $("#wkPrev").addEventListener("click", function () { S.weekOff = (S.weekOff || 0) - 1; renderWeekReview(); });
+    $("#wkNext").addEventListener("click", function () { S.weekOff = Math.min(0, (S.weekOff || 0) + 1); renderWeekReview(); });
+    $("#reminders").addEventListener("click", onReminderClick);
 
     // Essen-Tab
     $$("#foodSeg button").forEach(function (b) { b.addEventListener("click", function () { switchFoodSub(b.dataset.sub); }); });
