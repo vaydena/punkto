@@ -2642,25 +2642,46 @@
     return lo === hi ? String(lo) : lo + "–" + hi;
   }
   function outNorm(t) { return String(t || "").toLowerCase().replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss"); }
+  /* Alle getippten Wörter müssen im Gerichtsnamen vorkommen (Reihenfolge egal). */
+  function outHit(label, toks) {
+    var n = outNorm(label);
+    for (var i = 0; i < toks.length; i++) if (n.indexOf(toks[i]) < 0) return false;
+    return true;
+  }
+  /* Katalogzeilen über den BLS-Schlüssel. Rückfall ohne PKBls.byCodes: ein Gerät kann kurz
+     nach einem Update noch die alte, vom Service Worker gecachte pk-bls.js fahren. */
+  function outByCodes(codes) {
+    if (window.PKBls && PKBls.byCodes) return PKBls.byCodes(codes);
+    return fetch("assets/punkto-bls.json").then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var want = {}, out = {};
+        codes.forEach(function (c) { want[c] = 1; });
+        ((j && j.foods) || []).forEach(function (t) {
+          if (want[t[6]] === 1) out[t[6]] = { bls: t[6], name: t[0], kcal: t[1], sat_fat_g: t[2], sugar_g: t[3], protein_g: t[4], fiber_g: t[5] };
+        });
+        return out;
+      });
+  }
   function openOutSheet() {
     openSheet("Unterwegs essen",
       '<p class="cp-note">Typische Gerichte mit Punkte-Spanne für eine kleine bis große Portion. Antippen, Menge anpassen, eintragen.</p>' +
-      '<input type="search" id="outQ" placeholder="Gericht filtern, z. B. Pizza" autocomplete="off" style="margin-bottom:6px">' +
+      '<input type="search" id="outQ" placeholder="Gericht suchen, z. B. Pizza" autocomplete="off" style="margin-bottom:6px">' +
       '<div id="outList"><div class="list-empty">Lade Nährwerte …</div></div>' +
       '<p class="est-note">Nährwerte je 100 g: Bundeslebensmittelschlüssel (BLS) 4.0 · Max Rubner-Institut (2025) · CC BY 4.0. Die Portionsgrößen (≈ g) sind grobe Schätzungen von Punkto und stammen nicht aus dem BLS – echte Portionen weichen teils deutlich ab.</p>' +
       '<button class="btn ghost block" id="outSearch" style="margin-top:12px">Nicht dabei? Zur Suche</button>',
       function (root) {
-        var list = $("#outList", root), q = $("#outQ", root), rows = null, picks = [];
+        var list = $("#outList", root), q = $("#outQ", root), rows = null, picks = [], seq = 0;
         $("#outSearch", root).addEventListener("click", function () { openSearchSheet(); });
         function draw() {
           if (!rows) return;
           var nq = outNorm(q.value.trim()), html = "";
+          var toks = nq.split(/\s+/).filter(Boolean), my = ++seq;
           picks = [];
           OUT_GROUPS.forEach(function (g) {
             var part = "";
             g.i.forEach(function (it) {
               var r = rows[it[0]];
-              if (!r || (nq && outNorm(it[1]).indexOf(nq) < 0)) return;
+              if (!r || !outHit(it[1], toks)) return;
               var f = blsToFood(r);
               picks.push({ food: f, est: { min: it[2], max: it[3] } });
               part += '<button type="button" class="cp-row out-row" data-oi="' + (picks.length - 1) + '">' +
@@ -2670,16 +2691,43 @@
             if (part) html += '<div class="qf-head">' + esc(g.t) + '</div>' + part;
           });
           list.innerHTML = html || '<div class="list-empty">Kein passendes Gericht – probier die Suche.</div>';
-          $$(".out-row", list).forEach(function (b) {
-            b.addEventListener("click", function () { var p = picks[+b.dataset.oi]; if (p) openFoodDetail(p.food, null, p.est); });
+          var bind = function () {
+            $$(".out-row", list).forEach(function (b) {
+              b.addEventListener("click", function () { var p = picks[+b.dataset.oi]; if (p) openFoodDetail(p.food, null, p.est); });
+            });
+          };
+          bind();
+          // Kein typisches Gericht getroffen: statt leerer Liste direkt die Katalog-Treffer zeigen
+          // (ohne Portions-Schätzung – die gibt es nur für die kuratierten Gerichte).
+          if (html || nq.length < 2) return;
+          list.innerHTML = '<div class="list-empty">Suche im Lebensmittel-Katalog …</div>';
+          var words = toks.filter(function (t) { return t.length >= 3; }).sort(function (x, y) { return y.length - x.length; });
+          blsFetch(nq).then(function (d) {
+            if ((d && d.foods && d.foods.length) || !words.length || words[0] === nq) return d;
+            return blsFetch(words[0]);
+          }).then(function (d) {
+            if (my !== seq) return;               // inzwischen weitergetippt
+            var foods = (d && d.foods) || [], part = "";
+            foods.slice(0, 20).forEach(function (r) {
+              var f = blsToFood(r);
+              picks.push({ food: f, est: null });
+              part += '<button type="button" class="cp-row out-row" data-oi="' + (picks.length - 1) + '">' +
+                '<span class="nm">' + esc(f.name) + '<small>je 100 g · ohne Portions-Schätzung</small></span>' +
+                '<span class="rng">' + PK.pointsForAmount(f, 100) + '<small>P</small></span></button>';
+            });
+            list.innerHTML = part
+              ? '<p class="est-note">Kein typisches Gericht dazu – Treffer aus dem Lebensmittel-Katalog (BLS):</p>' + part
+              : '<div class="list-empty">Nichts gefunden – probier ein anderes Wort oder die Suche.</div>';
+            bind();
+          }, function () {
+            if (my === seq) list.innerHTML = '<div class="list-empty">Kein passendes Gericht – probier die Suche.</div>';
           });
         }
         q.addEventListener("input", draw);
         var codes = [];
         OUT_GROUPS.forEach(function (g) { g.i.forEach(function (it) { codes.push(it[0]); }); });
         var fail = function () { list.innerHTML = '<div class="list-empty">Die Nährwertdaten konnten nicht geladen werden. Bitte einmal mit Internet öffnen – oder die Suche nutzen.</div>'; };
-        if (!window.PKBls || !PKBls.byCodes) { fail(); return; }
-        PKBls.byCodes(codes).then(function (m) { rows = m || {}; if (!Object.keys(rows).length) fail(); else draw(); }, fail);
+        outByCodes(codes).then(function (m) { rows = m || {}; if (!Object.keys(rows).length) fail(); else draw(); }, fail);
       });
   }
 
