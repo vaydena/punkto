@@ -43,6 +43,24 @@
      schlägt UA-Stylesheet). Ohne diese Zeile bleibt der Ladeschirm nach
      $("#loading").hidden = true SICHTBAR stehen → „ewiger Ladeschirm". */
   .app-loading[hidden]{display:none}
+  /* Gewichts-Tagesleiste: waagerecht wischbar, ein Kärtchen je Tag (neueste links). */
+  .wday-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:14px 2px 8px;
+    font-size:.74rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .wday-h small{font-weight:600;letter-spacing:0;text-transform:none;text-align:right}
+  .wdays{display:flex;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;padding:2px 2px 10px;margin:0 -2px;scrollbar-width:thin}
+  .wday{flex:0 0 84px;scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;gap:2px;
+    background:var(--card);border:1.6px solid var(--line);border-radius:12px;padding:9px 4px 8px;cursor:pointer;
+    font:inherit;color:var(--ink);text-align:center;min-height:90px}
+  .wday .wd{font-size:.72rem;font-weight:700;color:var(--muted)}
+  .wday .dt{font-size:.8rem;font-weight:600;color:var(--ink-2)}
+  .wday .kg{font-size:1rem;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px;white-space:nowrap}
+  .wday .df{font-size:.7rem;font-weight:700;color:var(--muted)}
+  .wday .df.dn{color:var(--green-700)} .wday .df.up{color:var(--berry)}
+  .wday.has{border-color:var(--green-tint-2);background:var(--green-tint)}
+  .wday.today{border-color:var(--green)}
+  .wday.empty{border-style:dashed}
+  .wday.empty .kg{color:var(--muted);font-weight:700;font-size:.8rem}
   .app-loading .spin{width:34px;height:34px;border:3px solid var(--green-tint-2);border-top-color:var(--green);
     border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -672,6 +690,8 @@
           <button data-r="30">30 Tage</button><button data-r="90" class="on">90 Tage</button><button data-r="all">Alles</button>
         </div>
         <div class="chart-wrap" id="weightChart"></div>
+        <div class="wday-h"><span>Tag für Tag</span><small>wischen · Tag antippen</small></div>
+        <div class="wdays" id="weightDays" role="list" aria-label="Gewicht je Tag"></div>
       </div>
 
       <div class="card" style="margin-top:16px">
@@ -1897,6 +1917,7 @@
     renderMeasures();
 
     $("#weightChart").innerHTML = weightChartSVG(weights, start, goal);
+    renderWeightDays(weights);
 
     // Wochen-Zusammenfassung
     var budget = currentBudget();
@@ -2061,6 +2082,43 @@
 
   /* Gleitender Trend: Mittel aller Messungen der letzten 7 Kalendertage
      (glättet Wasser-Schwankungen, ehrlicher als die Rohkurve). */
+  /* Tagesleiste unter dem Diagramm: jeder Tag ein Kärtchen (neueste links), per
+     Fingerwisch durchblätterbar. Tippen öffnet das Gewicht-Sheet für genau diesen
+     Tag — so lässt sich auch nachträglich eintragen oder korrigieren. Reicht bis
+     zum ersten Messwert zurück (mind. 30 Tage, höchstens 2 Jahre; ältere Tage
+     erreicht man über das Datumsfeld im Sheet). */
+  function renderWeightDays(weights) {
+    var host = $("#weightDays"); if (!host || !S.today) return;
+    var WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+    var map = {}, first = addDays(S.today, -29);
+    (weights || []).forEach(function (p) {
+      if (!(+p.weight_kg > 0)) return;
+      map[p.day] = +p.weight_kg;
+      if (p.day < first) first = p.day;
+    });
+    var n = Math.min(730, Math.max(30, dayNum(S.today) - dayNum(first) + 1));
+    // Differenz je Messwert zum vorherigen Messwert (chronologisch).
+    var diff = {}, prev = null;
+    Object.keys(map).sort().forEach(function (k) { if (prev != null) diff[k] = map[k] - prev; prev = map[k]; });
+    var yNow = parseISO(S.today).getFullYear(), html = "";
+    for (var i = 0; i < n; i++) {
+      var day = addDays(S.today, -i), d = parseISO(day), kg = map[day];
+      var lbl = i === 0 ? "Heute" : (i === 1 ? "Gestern" : WD[d.getDay()]);
+      var dt = d.getDate() + "." + (d.getMonth() + 1) + "." + (d.getFullYear() !== yNow ? String(d.getFullYear()).slice(2) : "");
+      var df = "";
+      if (kg != null && diff[day] != null) {
+        var r = Math.round(diff[day] * 10) / 10;
+        df = '<span class="df ' + (r < 0 ? "dn" : (r > 0 ? "up" : "")) + '">' + (r > 0 ? "+" : (r < 0 ? "−" : "±")) + fmtKg(Math.abs(r)) + '</span>';
+      }
+      html += '<button type="button" role="listitem" class="wday ' + (kg != null ? "has" : "empty") + (i === 0 ? " today" : "") + '" data-day="' + day + '"' +
+        ' aria-label="' + esc(fmtLongDate(day) + ": " + (kg != null ? fmtKg(kg) + " kg" : "kein Gewicht, eintragen")) + '">' +
+        '<span class="wd">' + lbl + '</span><span class="dt">' + dt + '</span>' +
+        (kg != null ? '<span class="kg">' + fmtKg(kg) + ' kg</span>' + df : '<span class="kg">+ eintragen</span>') +
+        '</button>';
+    }
+    host.innerHTML = html;
+  }
+
   function weightTrend(pts) {
     return pts.map(function (p, i) {
       var d0 = dayNum(p.day), sum = 0, n = 0;
@@ -3460,8 +3518,8 @@
   /* Nach dem Wiegen: Budget neu vorschlagen, wenn das aktuelle Gewicht (nur für
      „heute") ein anderes Tagesbudget ergibt. Nie automatisch — per Toast-Aktion.
      Ein abgelehnter Vorschlag wird für diesen Zielwert nicht erneut gezeigt. */
-  function suggestBudgetForWeight(kg) {
-    if (S.day !== S.today || !S.user) return false;
+  function suggestBudgetForWeight(kg, day) {
+    if ((day || S.day) !== S.today || !S.user) return false;
     var p = profileFromUser(); p.weight_kg = kg;
     var plan = PK.budgetPlan(p);
     var cur = +S.user.daily_budget || 0;
@@ -3480,28 +3538,61 @@
     return true;
   }
 
-  function openWeightSheet() {
-    var cur = S.data.weight_today || (S.user.start_weight_kg || "");
+  /* day: optionaler Tag (ISO) — sonst der im Tagebuch gewählte Tag. Das Datum ist
+     im Sheet änderbar, damit sich jeder zurückliegende Tag nachtragen lässt. */
+  function openWeightSheet(day) {
+    var ISO = /^\d{4}-\d{2}-\d{2}$/;
+    var d0 = (typeof day === "string" && ISO.test(day) && day <= S.today) ? day : S.day;
+    var map = {};
+    (S.data.weights || []).forEach(function (p) { if (+p.weight_kg > 0) map[p.day] = +p.weight_kg; });
+    if (S.data.weight_today) map[S.day] = +S.data.weight_today;
+    function lastBefore(d) {                      // jüngster Messwert bis einschließlich d (Vorschlagswert)
+      var best = null;
+      Object.keys(map).forEach(function (k) { if (k <= d && (best == null || k > best)) best = k; });
+      return best != null ? map[best] : (S.user.start_weight_kg || "");
+    }
     openSheet("Gewicht eintragen",
-      '<p style="color:var(--muted);margin-top:-4px">Für ' + esc(fmtLongDate(S.day)) + '</p>' +
+      '<div class="field"><label for="wDay">Datum</label>' +
+      '<input type="date" id="wDay" max="' + S.today + '" value="' + d0 + '"></div>' +
+      '<p id="wDayLbl" style="color:var(--muted);margin:-6px 0 10px;font-size:.88rem"></p>' +
       '<div class="field"><label for="wKg">Gewicht (kg)</label>' +
-      '<input type="number" id="wKg" inputmode="decimal" step="0.1" value="' + (cur || "") + '" min="30" max="400" placeholder="75.5"></div>' +
+      '<input type="number" id="wKg" inputmode="decimal" step="0.1" min="30" max="400" placeholder="75.5"></div>' +
       '<button class="btn primary block big" id="wSave">Speichern</button>' +
-      (S.data.weight_today ? '<button class="btn ghost block" id="wDel" style="margin-top:10px">Eintrag für diesen Tag löschen</button>' : ''),
+      '<button class="btn ghost block" id="wDel" style="margin-top:10px;display:none">Eintrag für diesen Tag löschen</button>',
       function (root) {
-        $("#wKg", root).focus();
+        var inDay = $("#wDay", root), inKg = $("#wKg", root), del = $("#wDel", root), touched = false;
+        function curDay() {
+          var v = inDay.value;
+          return (ISO.test(v) && v <= S.today) ? v : null;
+        }
+        function sync() {
+          var d = curDay();
+          $("#wDayLbl", root).textContent = d
+            ? fmtLongDate(d) + (map[d] != null ? " · bisher " + fmtKg(map[d]) + " kg" : " · noch kein Eintrag")
+            : "Bitte ein Datum bis heute wählen.";
+          del.style.display = (d && map[d] != null) ? "" : "none";   // nicht via [hidden]: .btn setzt display
+          if (d && !touched) inKg.value = map[d] != null ? map[d] : (lastBefore(d) || "");
+        }
+        inDay.addEventListener("change", sync);   // selbst getippter Wert bleibt beim Tageswechsel stehen
+        inKg.addEventListener("input", function () { touched = true; });
+        sync();
+        inKg.focus();
         $("#wSave", root).addEventListener("click", async function () {
-          var kg = parseFloat($("#wKg", root).value);
+          var d = curDay();
+          if (!d) return toast("Bitte ein Datum bis heute wählen.");
+          var kg = parseFloat(String(inKg.value).replace(",", "."));
           if (!(kg >= 30 && kg <= 400)) return toast("Bitte ein Gewicht zwischen 30 und 400 kg.");
           this.disabled = true;
-          var r = await guardWrite(function () { return API.data.weightSet(kg, S.day); });
-          if (r) { closeSheet(); await refreshDay(); if (!suggestBudgetForWeight(kg)) toast("Gewicht gespeichert."); }
-          else this.disabled = false;
+          var r = await guardWrite(function () { return API.data.weightSet(kg, d); });
+          if (r) {
+            closeSheet(); await refreshDay();
+            if (!suggestBudgetForWeight(kg, d)) toast(d === S.today ? "Gewicht gespeichert." : "Gewicht für " + fmtShortDate(d) + " gespeichert.");
+          } else this.disabled = false;
         });
-        var del = $("#wDel", root);
-        if (del) del.addEventListener("click", async function () {
+        del.addEventListener("click", async function () {
+          var d = curDay(); if (!d) return;
           this.disabled = true;
-          var r = await guardWrite(function () { return API.data.weightDel(S.day); });
+          var r = await guardWrite(function () { return API.data.weightDel(d); });
           if (r) { closeSheet(); await refreshDay(); toast("Eintrag gelöscht."); }
           else this.disabled = false;
         });
@@ -5330,7 +5421,10 @@
       }
     });
 
-    $("#btnAddWeight").addEventListener("click", openWeightSheet);
+    $("#btnAddWeight").addEventListener("click", function () { openWeightSheet(); });
+    $("#weightDays").addEventListener("click", function (ev) {
+      var b = ev.target.closest(".wday"); if (b) openWeightSheet(b.dataset.day);
+    });
     $("#btnAddMeasure").addEventListener("click", function () { openMeasureSheet(); });
     $$("#weightRange button").forEach(function (b) {
       b.addEventListener("click", function () {
