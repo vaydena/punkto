@@ -125,6 +125,12 @@
   .opt-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--line-2);cursor:pointer}
   .opt-row input{width:22px;height:22px;flex:0 0 22px;margin-top:2px;accent-color:var(--green)}
   .opt-row span{display:block;color:var(--muted);font-size:.84rem;margin-top:2px}
+  .rm-time{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}
+  .rm-time label{font-weight:700}
+  .rm-time select{font:inherit;padding:9px 12px;border:1.4px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);min-height:44px}
+  .rm-time select:disabled{opacity:.5}
+  .rm-note{color:var(--muted);font-size:.84rem;margin:8px 0 0;min-height:1.2em}
+  .rm-note.bad{color:var(--danger)}
   .app-loading .spin{width:34px;height:34px;border:3px solid var(--green-tint-2);border-top-color:var(--green);
     border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -2026,7 +2032,9 @@
   function remindGet() {
     var o = {};
     try { o = JSON.parse(localStorage.getItem(LS_REMIND) || "{}") || {}; } catch (e) { o = {}; }
-    return { diary: o.diary !== false, weigh: o.weigh !== false, off: (o.off && typeof o.off === "object") ? o.off : {} };
+    var at = Math.round(+o.at);
+    return { diary: o.diary !== false, weigh: o.weigh !== false, off: (o.off && typeof o.off === "object") ? o.off : {},
+      push: o.push === true, at: (at >= 0 && at <= 1380) ? at : 1140, sync: typeof o.sync === "string" ? o.sync : "" };
   }
   function remindSet(o) { try { localStorage.setItem(LS_REMIND, JSON.stringify(o)); } catch (e) {} }
   async function renderReminders() {
@@ -2101,24 +2109,176 @@
     }
     toast("Tagebuch für " + fmtDayLabel(iso) + " (" + fmtShortDate(iso) + ") geöffnet.");
   }
-  function openRemindSheet() {
+  /* ===== Erinnerung als Mitteilung (Web Push) =====
+     Der Browser meldet das Gerät beim Push-Dienst seines Herstellers an; der eigene
+     Server (Edge Function punkto-push) schickt zur gewählten Uhrzeit eine Mitteilung –
+     aber nur, wenn wirklich etwas fehlt. iPhone/iPad: nur als installierte App. */
+  function pushSupported() { return ("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window); }
+  function pushIsIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function pushStandalone() {
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  }
+  function pushKeyBytes(b64) {
+    var t = String(b64).replace(/-/g, "+").replace(/_/g, "/"); while (t.length % 4) t += "=";
+    var raw = atob(t), out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  function pushB64(buf) {
+    var u = new Uint8Array(buf), t = "";
+    for (var i = 0; i < u.length; i++) t += String.fromCharCode(u[i]);
+    return btoa(t).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function pushErr(code) { var e = new Error(code); e.code = code; return e; }
+  // serviceWorker.ready kann ohne registrierten Worker ewig offen bleiben -> begrenzen.
+  function pushReg() {
+    return Promise.race([navigator.serviceWorker.ready,
+      new Promise(function (res, rej) { setTimeout(function () { rej(pushErr("no_sw")); }, 8000); })]);
+  }
+  async function pushSub() { var reg = await pushReg(); return reg.pushManager.getSubscription(); }
+  async function pushSend(sub, cfg) {
+    var j = sub.toJSON ? sub.toJSON() : {}, k = j.keys || {}, tz = "Europe/Berlin";
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch (e) { /* Standard */ }
+    await API.call("push", "subscribe", { endpoint: sub.endpoint, p256dh: k.p256dh, auth: k.auth, tz: tz,
+      at_min: cfg.at, diary: cfg.diary, weigh: cfg.weigh });
+  }
+  async function pushEnable() {
+    if (!pushSupported()) throw pushErr("unsupported");
+    if (Notification.permission === "denied") throw pushErr("denied");
+    var perm = await Notification.requestPermission();
+    if (perm !== "granted") throw pushErr("denied");
+    var reg = await pushReg();
+    var key = (await API.call("push", "key")).key;
+    var sub = await reg.pushManager.getSubscription();
+    if (sub && sub.options && sub.options.applicationServerKey && pushB64(sub.options.applicationServerKey) !== key) {
+      try { await sub.unsubscribe(); } catch (e) { /* egal */ }
+      sub = null;
+    }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKeyBytes(key) });
+    await pushSend(sub, remindGet());
+    return sub;
+  }
+  async function pushDisable() {
+    var sub = await pushSub();
+    if (!sub) return;
+    try { await API.call("push", "unsubscribe", { endpoint: sub.endpoint }, { timeoutMs: 6000 }); } catch (e) { /* offline: Abo läuft serverseitig beim nächsten Versand aus */ }
+    try { await sub.unsubscribe(); } catch (e) { /* egal */ }
+  }
+  /* Einmal täglich still abgleichen: Zeitzone (Reise, Sommerzeit-Region) und Abo-Schlüssel
+     können sich ändern; fehlt das Abo inzwischen (Berechtigung entzogen), Schalter aus. */
+  async function pushResync() {
     var cfg = remindGet();
+    if (!cfg.push || !pushSupported() || cfg.sync === PKDiary.todayISO()) return;
+    try {
+      var sub = await pushSub();
+      if (!sub || Notification.permission !== "granted") { cfg.push = false; remindSet(cfg); return; }
+      await pushSend(sub, cfg);
+      cfg = remindGet(); cfg.sync = PKDiary.todayISO(); remindSet(cfg);
+    } catch (e) { /* offline -> nächster Start */ }
+  }
+  function pushTimeLabel(m) { return (m < 600 ? "0" : "") + Math.floor(m / 60) + ":" + (m % 60 ? "30" : "00"); }
+
+  function openRemindSheet() {
+    var cfg = remindGet(), sup = pushSupported(), needInstall = pushIsIOS() && !pushStandalone();
+    var opts = "";
+    for (var m = 360; m <= 1320; m += 30) opts += '<option value="' + m + '"' + (m === cfg.at ? " selected" : "") + '>' + pushTimeLabel(m) + ' Uhr</option>';
+    var pushHtml;
+    if (needInstall || !sup) {
+      pushHtml = '<p class="rm-note">' + (pushIsIOS()
+        ? 'Auf dem iPhone und iPad gibt es Mitteilungen nur, wenn Punkto auf dem Home-Bildschirm installiert ist (ab iOS 16.4): im Teilen-Menü „Zum Home-Bildschirm“ wählen und Punkto von dort öffnen.'
+        : 'Dieser Browser unterstützt keine Mitteilungen. Die Hinweise oben auf „Mein Tag“ funktionieren trotzdem.') + '</p>';
+    } else {
+      pushHtml =
+        '<label class="opt-row"><input type="checkbox" id="rmPush"' + (cfg.push ? " checked" : "") + '><div><b>Mitteilung senden</b>' +
+        '<span>Einmal täglich zur gewählten Uhrzeit – nur wenn etwas fehlt (siehe Häkchen oben).</span></div></label>' +
+        '<div class="rm-time" id="rmTimeRow"><label for="rmTime">Uhrzeit</label><select id="rmTime">' + opts + '</select></div>' +
+        '<button class="btn ghost block small" id="rmTest" style="margin-top:10px">Test-Mitteilung senden</button>' +
+        '<p class="rm-note" id="rmStat" role="status"></p>';
+    }
     openSheet("Erinnerungen",
       '<p style="color:var(--muted);font-size:.88rem;margin-top:-4px">Die Hinweise erscheinen oben auf „Mein Tag“, sobald du Punkto öffnest. ' +
-      'Benachrichtigungen bei geschlossener App gibt es nicht.</p>' +
+      'Zusätzlich kann Punkto dich per Mitteilung erinnern, auch wenn die App geschlossen ist.</p>' +
       '<label class="opt-row"><input type="checkbox" id="rmDiary"' + (cfg.diary ? " checked" : "") + '><div><b>Tagebuch</b>' +
       '<span>Wenn gestern nichts eingetragen wurde – oder heute ab 18 Uhr noch nichts.</span></div></label>' +
       '<label class="opt-row"><input type="checkbox" id="rmWeigh"' + (cfg.weigh ? " checked" : "") + '><div><b>Wiegen</b>' +
       '<span>Wenn die letzte Messung 7 Tage oder länger her ist.</span></div></label>' +
+      '<div class="qf-head" style="margin-top:16px">Mitteilung aufs Handy</div>' + pushHtml +
       '<button class="btn primary block big" id="rmOk" style="margin-top:16px">Fertig</button>',
       function (root) {
+        var chk = $("#rmPush", root), sel = $("#rmTime", root), test = $("#rmTest", root), stat = $("#rmStat", root), busy = false;
+        function say(t, bad) { if (stat) { stat.textContent = t || ""; stat.classList.toggle("bad", !!bad); } }
+        function paint() {
+          if (!chk) return;
+          var on = remindGet().push;
+          chk.checked = on; sel.disabled = !on || busy; test.disabled = !on || busy; chk.disabled = busy;
+        }
+        function why(e) {
+          var c = e && (e.code || e.message);
+          if (c === "denied") return "Mitteilungen sind für Punkto gesperrt. Bitte in den Einstellungen des Geräts bzw. Browsers erlauben.";
+          if (c === "no_sw" || c === "unsupported") return "Mitteilungen sind auf diesem Gerät gerade nicht verfügbar.";
+          if (c === "network") return "Keine Verbindung – bitte später noch einmal versuchen.";
+          return "Das hat nicht geklappt. Bitte später noch einmal versuchen.";
+        }
+        // Änderungen an Uhrzeit/Häkchen an den Server weitergeben (nur bei aktivem Abo).
+        async function push() {
+          var c = remindGet(); if (!c.push || !chk) return;
+          try { var sub = await pushSub(); if (sub) { await pushSend(sub, c); say("Gespeichert: täglich um " + pushTimeLabel(c.at) + " Uhr."); } }
+          catch (e) { say(why(e), true); }
+        }
         function save() {
           var c = remindGet(); c.diary = $("#rmDiary", root).checked; c.weigh = $("#rmWeigh", root).checked;
-          remindSet(c); renderReminders();
+          if (sel) c.at = +sel.value;
+          remindSet(c); renderReminders(); push();
         }
         $("#rmDiary", root).addEventListener("change", save);
         $("#rmWeigh", root).addEventListener("change", save);
         $("#rmOk", root).addEventListener("click", closeSheet);
+        if (!chk) return;
+        sel.addEventListener("change", save);
+        chk.addEventListener("change", async function () {
+          if (busy) return;
+          busy = true; var want = chk.checked; paint(); chk.checked = want;
+          try {
+            var c;
+            if (want) {
+              say("Einen Moment …");
+              await pushEnable();
+              c = remindGet(); c.push = true; c.sync = PKDiary.todayISO(); remindSet(c);
+              say("Aktiv: täglich um " + pushTimeLabel(c.at) + " Uhr, wenn etwas fehlt.");
+            } else {
+              await pushDisable();
+              c = remindGet(); c.push = false; c.sync = ""; remindSet(c);
+              say("Mitteilungen sind aus.");
+            }
+          } catch (e) {
+            if (want) { var c2 = remindGet(); c2.push = false; remindSet(c2); }
+            say(why(e), true);
+          }
+          busy = false; paint();
+        });
+        test.addEventListener("click", async function () {
+          if (busy) return;
+          busy = true; paint(); say("Sende …");
+          try {
+            var sub = await pushSub();
+            if (!sub) throw pushErr("gone");
+            await API.call("push", "test", { endpoint: sub.endpoint });
+            say("Gesendet – die Mitteilung sollte in wenigen Sekunden erscheinen.");
+          } catch (e) {
+            var c = e && (e.code || e.message);
+            if (c === "too_fast") say("Bitte kurz warten und dann noch einmal versuchen.", true);
+            else if (c === "gone" || c === "not_subscribed") {
+              var c3 = remindGet(); c3.push = false; remindSet(c3);
+              say("Die Anmeldung für Mitteilungen ist abgelaufen. Bitte den Schalter neu einschalten.", true);
+            } else say(why(e), true);
+          }
+          busy = false; paint();
+        });
+        paint();
+        if (Notification.permission === "denied") say("Mitteilungen sind für Punkto gesperrt. Bitte in den Einstellungen des Geräts bzw. Browsers erlauben.", true);
+        else if (remindGet().push) say("Aktiv: täglich um " + pushTimeLabel(remindGet().at) + " Uhr, wenn etwas fehlt.");
       });
   }
 
@@ -5834,6 +5994,11 @@
     try { pending = await PKDiary.outboxCount(); } catch (e) { pending = 0; }
     if (pending > 0 && !confirm(pending + (pending === 1 ? " Änderung ist" : " Änderungen sind") +
         " noch nicht hochgeladen (offline?). Beim Abmelden gehen sie auf diesem Gerät verloren.\n\nTrotzdem abmelden?")) return;
+    // Mitteilungen gehören zum Konto: beim Abmelden dieses Gerät austragen.
+    try {
+      var rc = remindGet();
+      if (rc.push) { rc.push = false; rc.sync = ""; remindSet(rc); if (pushSupported()) await pushDisable(); }
+    } catch (e) { /* egal */ }
     try { await API.auth.logout(); } catch (e) { /* egal */ }
     API.clearToken();
     try { await PKDiary.wipeAll(); } catch (e) { /* egal */ }
@@ -6343,6 +6508,7 @@
     $("#wkNext").addEventListener("click", function () { S.weekOff = Math.min(0, (S.weekOff || 0) + 1); renderWeekReview(); });
     $("#wkShare").addEventListener("click", openWeekShareSheet);
     $("#reminders").addEventListener("click", onReminderClick);
+    setTimeout(pushResync, 5000);
 
     // Essen-Tab
     $$("#foodSeg button").forEach(function (b) { b.addEventListener("click", function () { switchFoodSub(b.dataset.sub); }); });

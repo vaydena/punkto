@@ -1,5 +1,6 @@
-pk-v62-5e1c
+pk-v63-b7d2
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v63-b7d2: Erinnerungen als Mitteilung (Web Push): täglich zur gewählten Uhrzeit, nur wenn Tagebuch/Wiegen fehlt; Schalter + Uhrzeit + Test-Mitteilung unter „Erinnerungen“; iPhone/iPad nur als installierte App (ab iOS 16.4). Edge Function punkto-push, Zeitplan alle 15 min. SW pk-app-v58.
 v62-5e1c: Unterwegs-Schätzer (Imbiss/Restaurant/Café): typische Gerichte mit Punkte-Spanne; Nährwerte je 100 g aus dem BLS, Portionsgrößen als gekennzeichnete Schätzung.
 v61-9a4f: Essensplan (bis 7 Tage voraus planen, gerätelokal, zählt erst nach „Übernehmen" am Tag) + Einkaufsliste (abhakbar, aus Plan/Rezepten füllen, teilen).
 v60-3d8e: Vorschau „Danach noch … Punkte / … aus dem Wochenextra" im Hinzufügen- und Bearbeiten-Sheet; Teilen: Wochenrückblick als Bild/Text (Gewicht nur auf Wunsch), Rezepte als Text.

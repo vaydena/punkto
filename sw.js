@@ -13,7 +13,7 @@
      Rückfall auf die zuletzt gecachte Fassung (liegt via SHELL ab Install im Cache).
    - Sonstige statische Assets (CSS/JS/Icons/Manifest): Cache zuerst -> schnell; sonst Netz + nachlegen. */
 
-const CACHE = "pk-app-v57";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
+const CACHE = "pk-app-v58";   // <-- bei jedem Asset-/Code-Deploy die Zahl erhöhen (v2, v3, ...)
 const SHELL = [
   "./anmelden.html",
   "./app.html",
@@ -103,6 +103,40 @@ self.addEventListener("fetch", (event) => {
         }
         return res;
       });
+    })
+  );
+});
+
+/* Erinnerungen als Mitteilung (Web Push). Die Nutzlast kommt verschlüsselt vom eigenen
+   Server (Edge Function punkto-push) und enthält nur Titel, Text, Tag und Ziel-Adresse. */
+self.addEventListener("push", (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = {}; }
+  event.waitUntil(
+    self.registration.showNotification(String(d.title || "Punkto"), {
+      body: String(d.body || "Zeit für einen Blick ins Tagebuch."),
+      icon: "./icon-192.png",
+      badge: "./icon-192.png",
+      tag: String(d.tag || "pk-remind"),
+      data: { url: String(d.url || "./app.html") }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  // Nur Ziele auf der eigenen Herkunft öffnen.
+  let target = new URL("./app.html", self.location.href);
+  try {
+    const u = new URL((event.notification.data && event.notification.data.url) || "./app.html", self.location.href);
+    if (u.origin === self.location.origin) target = u;
+  } catch (e) { /* Standardziel */ }
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (new URL(c.url).origin === self.location.origin && "focus" in c) return c.focus();
+      }
+      return self.clients.openWindow(target.href);
     })
   );
 });
