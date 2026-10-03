@@ -1,5 +1,6 @@
-pk-v59-7c2b
+pk-v60-3d8e
 Punkto — statische PWA (Abnehmen mit Punkten), Deploy zu Hostinger /punkto/.
+v60-3d8e: Vorschau „Danach noch … Punkte / … aus dem Wochenextra" im Hinzufügen- und Bearbeiten-Sheet; Teilen: Wochenrückblick als Bild/Text (Gewicht nur auf Wunsch), Rezepte als Text.
 v59-7c2b: „Nachtragen" im Hinweis öffnet jetzt sichtbar das Tagebuch von gestern (springt zur Mahlzeitenliste, Markierung, Hinweisleiste „Du trägst für Gestern nach" + „Zu heute").
 v58-4e9a: Sechs Verbesserungen – Hinweise auf „Mein Tag“ (Wiegen nach 7 Tagen, Tagebuch nachtragen; abschaltbar, kein Push), Gewichtsverlauf mit Hochrechnung zum Ziel + BMI + antippbaren Diagrammpunkten, CSV-Export (Tagebuch/Gewicht/Aktivität), Wochenrückblick mit Blättern, „Wie gestern“ je Mahlzeit, Kartenkopf bricht bei 320 px um. SW pk-app-v53.
 v57-7c41: Gewichtsverlauf Tag für Tag — wischbare Tagesleiste (Datum + Gewicht + Differenz) unter dem Diagramm; Tag antippen = Gewicht für genau diesen Tag eintragen/korrigieren/löschen; Datumsfeld im Gewicht-Sheet zum Nachtragen beliebiger zurückliegender Tage. SW pk-app-v52.
